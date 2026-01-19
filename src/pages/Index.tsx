@@ -18,6 +18,7 @@ import { MiniChart } from '@/components/trading/MiniChart';
 import { AlertDemoPanel } from '@/components/trading/AlertDemoPanel';
 import { HistoricalChart } from '@/components/trading/HistoricalChart';
 import { AdvancedChart } from '@/components/trading/AdvancedChart';
+import { CandlestickChart } from '@/components/trading/CandlestickChart';
 import { PriceAlertsPanel } from '@/components/trading/PriceAlertsPanel';
 import { WatchlistPanel } from '@/components/trading/WatchlistPanel';
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
@@ -206,9 +207,9 @@ const Index = () => {
               <MiniChart isPositive={selectedPair.change24h >= 0} />
             </div>
 
-            <AdvancedChart symbol={selectedPair.symbol} name={selectedPair.name} />
+            <CandlestickChart symbol={selectedPair.symbol} name={selectedPair.name} />
 
-            <HistoricalChart symbol={selectedPair.symbol} name={selectedPair.name} />
+            <AdvancedChart symbol={selectedPair.symbol} name={selectedPair.name} />
 
             <TechnicalPanel />
           </div>
