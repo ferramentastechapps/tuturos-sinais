@@ -11,7 +11,13 @@ export type PatternType =
   | 'shooting_star'
   | 'hanging_man'
   | 'three_white_soldiers'
-  | 'three_black_crows';
+  | 'three_black_crows'
+  | 'bullish_harami'
+  | 'bearish_harami'
+  | 'piercing_line'
+  | 'dark_cloud_cover'
+  | 'tweezer_tops'
+  | 'tweezer_bottoms';
 
 export interface CandlestickPattern {
   type: PatternType;
@@ -159,6 +165,76 @@ const isThreeBlackCrows = (
   );
 };
 
+// Bullish Harami - small bullish candle contained within previous bearish candle
+const isBullishHarami = (prev: OHLCPoint, curr: OHLCPoint): boolean => {
+  return (
+    isBearish(prev) &&
+    isBullish(curr) &&
+    curr.open > prev.close &&
+    curr.close < prev.open &&
+    bodySize(curr) < bodySize(prev) * 0.6
+  );
+};
+
+// Bearish Harami - small bearish candle contained within previous bullish candle
+const isBearishHarami = (prev: OHLCPoint, curr: OHLCPoint): boolean => {
+  return (
+    isBullish(prev) &&
+    isBearish(curr) &&
+    curr.open < prev.close &&
+    curr.close > prev.open &&
+    bodySize(curr) < bodySize(prev) * 0.6
+  );
+};
+
+// Piercing Line - bullish reversal, opens below prev low, closes above prev midpoint
+const isPiercingLine = (prev: OHLCPoint, curr: OHLCPoint): boolean => {
+  const prevMidpoint = (prev.open + prev.close) / 2;
+  return (
+    isBearish(prev) &&
+    isBullish(curr) &&
+    curr.open < prev.low &&
+    curr.close > prevMidpoint &&
+    curr.close < prev.open
+  );
+};
+
+// Dark Cloud Cover - bearish reversal, opens above prev high, closes below prev midpoint
+const isDarkCloudCover = (prev: OHLCPoint, curr: OHLCPoint): boolean => {
+  const prevMidpoint = (prev.open + prev.close) / 2;
+  return (
+    isBullish(prev) &&
+    isBearish(curr) &&
+    curr.open > prev.high &&
+    curr.close < prevMidpoint &&
+    curr.close > prev.open
+  );
+};
+
+// Tweezer Tops - two candles with same high, first bullish, second bearish
+const isTweezerTops = (prev: OHLCPoint, curr: OHLCPoint): boolean => {
+  const tolerance = totalRange(prev) * 0.05;
+  return (
+    isBullish(prev) &&
+    isBearish(curr) &&
+    Math.abs(curr.high - prev.high) < tolerance &&
+    bodySize(prev) > totalRange(prev) * 0.3 &&
+    bodySize(curr) > totalRange(curr) * 0.3
+  );
+};
+
+// Tweezer Bottoms - two candles with same low, first bearish, second bullish
+const isTweezerBottoms = (prev: OHLCPoint, curr: OHLCPoint): boolean => {
+  const tolerance = totalRange(prev) * 0.05;
+  return (
+    isBearish(prev) &&
+    isBullish(curr) &&
+    Math.abs(curr.low - prev.low) < tolerance &&
+    bodySize(prev) > totalRange(prev) * 0.3 &&
+    bodySize(curr) > totalRange(curr) * 0.3
+  );
+};
+
 // Main detection function
 export const detectPatterns = (data: OHLCPoint[]): CandlestickPattern[] => {
   const patterns: CandlestickPattern[] = [];
@@ -238,6 +314,60 @@ export const detectPatterns = (data: OHLCPoint[]): CandlestickPattern[] => {
           index: i,
           timestamp: candle.timestamp,
         });
+      } else if (isBullishHarami(prev, candle)) {
+        patterns.push({
+          type: 'bullish_harami',
+          name: 'Harami de Alta',
+          description: 'Padrão de reversão altista. Corpo menor contido no anterior.',
+          signal: 'bullish',
+          index: i,
+          timestamp: candle.timestamp,
+        });
+      } else if (isBearishHarami(prev, candle)) {
+        patterns.push({
+          type: 'bearish_harami',
+          name: 'Harami de Baixa',
+          description: 'Padrão de reversão baixista. Corpo menor contido no anterior.',
+          signal: 'bearish',
+          index: i,
+          timestamp: candle.timestamp,
+        });
+      } else if (isPiercingLine(prev, candle)) {
+        patterns.push({
+          type: 'piercing_line',
+          name: 'Linha Perfurante',
+          description: 'Padrão de reversão altista. Abre abaixo e fecha acima do meio.',
+          signal: 'bullish',
+          index: i,
+          timestamp: candle.timestamp,
+        });
+      } else if (isDarkCloudCover(prev, candle)) {
+        patterns.push({
+          type: 'dark_cloud_cover',
+          name: 'Nuvem Negra',
+          description: 'Padrão de reversão baixista. Abre acima e fecha abaixo do meio.',
+          signal: 'bearish',
+          index: i,
+          timestamp: candle.timestamp,
+        });
+      } else if (isTweezerTops(prev, candle)) {
+        patterns.push({
+          type: 'tweezer_tops',
+          name: 'Pinça de Topo',
+          description: 'Padrão de reversão baixista. Duas velas com máximas iguais.',
+          signal: 'bearish',
+          index: i,
+          timestamp: candle.timestamp,
+        });
+      } else if (isTweezerBottoms(prev, candle)) {
+        patterns.push({
+          type: 'tweezer_bottoms',
+          name: 'Pinça de Fundo',
+          description: 'Padrão de reversão altista. Duas velas com mínimas iguais.',
+          signal: 'bullish',
+          index: i,
+          timestamp: candle.timestamp,
+        });
       }
     }
     
@@ -300,6 +430,12 @@ export const getPatternEmoji = (type: PatternType): string => {
     hanging_man: '👤',
     three_white_soldiers: '⬆️⬆️⬆️',
     three_black_crows: '⬇️⬇️⬇️',
+    bullish_harami: '🤰📈',
+    bearish_harami: '🤰📉',
+    piercing_line: '⚡📈',
+    dark_cloud_cover: '☁️📉',
+    tweezer_tops: '🔺🔺',
+    tweezer_bottoms: '🔻🔻',
   };
   return emojiMap[type] || '📊';
 };
