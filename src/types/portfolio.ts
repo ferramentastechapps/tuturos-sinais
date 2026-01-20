@@ -6,6 +6,7 @@ export interface PortfolioAsset {
   averageBuyPrice: number;
   createdAt: Date;
   updatedAt: Date;
+  totalFees?: number;
 }
 
 export interface PortfolioSummary {

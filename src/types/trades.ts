@@ -12,6 +12,10 @@ export interface Trade {
   status: TradeStatus;
   createdAt: Date;
   closedAt?: Date;
+  entryFee?: number;
+  exitFee?: number;
+  notes?: string;
+  exchange?: string;
 }
 
 export interface TradeWithMetrics extends Trade {

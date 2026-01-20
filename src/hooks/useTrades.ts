@@ -41,7 +41,10 @@ export const useTrades = () => {
     symbol: string,
     type: 'buy' | 'sell',
     entryPrice: number,
-    quantity: number
+    quantity: number,
+    entryFee: number = 0,
+    notes?: string,
+    exchange?: string
   ) => {
     const pair = livePrices?.find(p => p.symbol === symbol);
     if (!pair) return;
@@ -55,16 +58,19 @@ export const useTrades = () => {
       quantity,
       status: 'open',
       createdAt: new Date(),
+      entryFee,
+      notes,
+      exchange,
     };
 
     setTrades(prev => [newTrade, ...prev]);
   }, [livePrices]);
 
-  const closeTrade = useCallback((id: string, exitPrice: number) => {
+  const closeTrade = useCallback((id: string, exitPrice: number, exitFee: number = 0) => {
     setTrades(prev =>
       prev.map(trade =>
         trade.id === id
-          ? { ...trade, exitPrice, status: 'closed' as const, closedAt: new Date() }
+          ? { ...trade, exitPrice, exitFee, status: 'closed' as const, closedAt: new Date() }
           : trade
       )
     );
@@ -83,11 +89,17 @@ export const useTrades = () => {
     const investedValue = trade.quantity * trade.entryPrice;
     const currentValue = trade.quantity * currentPrice;
     
+    // Calculate fees
+    const totalFees = (trade.entryFee || 0) + (trade.exitFee || 0);
+    
     // For buy: profit when price goes up
     // For sell (short): profit when price goes down
-    const pnl = trade.type === 'buy' 
+    let pnl = trade.type === 'buy' 
       ? currentValue - investedValue
       : investedValue - currentValue;
+    
+    // Subtract fees from P&L
+    pnl -= totalFees;
     
     const pnlPercentage = investedValue > 0 ? (pnl / investedValue) * 100 : 0;
 

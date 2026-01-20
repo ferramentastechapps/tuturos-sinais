@@ -10,17 +10,20 @@ interface CloseTradeDialogProps {
   trade: TradeWithMetrics | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onClose: (id: string, exitPrice: number) => void;
+  onClose: (id: string, exitPrice: number, exitFee?: number) => void;
 }
 
 export const CloseTradeDialog = ({ trade, open, onOpenChange, onClose }: CloseTradeDialogProps) => {
   const [exitPrice, setExitPrice] = useState('');
+  const [exitFee, setExitFee] = useState('0');
   const { toast } = useToast();
 
   const handleSubmit = () => {
     if (!trade) return;
 
     const price = parseFloat(exitPrice);
+    const fee = parseFloat(exitFee) || 0;
+    
     if (isNaN(price) || price <= 0) {
       toast({
         title: 'Preço inválido',
@@ -30,19 +33,21 @@ export const CloseTradeDialog = ({ trade, open, onOpenChange, onClose }: CloseTr
       return;
     }
 
-    onClose(trade.id, price);
+    onClose(trade.id, price, fee);
     onOpenChange(false);
     setExitPrice('');
+    setExitFee('0');
     
     toast({
       title: 'Operação fechada',
-      description: `${trade.symbol} fechado a $${price.toFixed(2)}`,
+      description: `${trade.symbol} fechado a ${price.toFixed(2)}`,
     });
   };
 
   const handleOpenChange = (newOpen: boolean) => {
     if (newOpen && trade) {
       setExitPrice(trade.currentPrice.toString());
+      setExitFee('0');
     }
     onOpenChange(newOpen);
   };
@@ -85,6 +90,17 @@ export const CloseTradeDialog = ({ trade, open, onOpenChange, onClose }: CloseTr
               step="0.01"
               value={exitPrice}
               onChange={(e) => setExitPrice(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Taxa de Saída ($)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={exitFee}
+              onChange={(e) => setExitFee(e.target.value)}
               placeholder="0.00"
             />
           </div>

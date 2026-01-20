@@ -39,7 +39,7 @@ export const usePortfolio = () => {
     saveToStorage(assets);
   }, [assets]);
 
-  const addAsset = useCallback((symbol: string, quantity: number, buyPrice: number) => {
+  const addAsset = useCallback((symbol: string, quantity: number, buyPrice: number, fee: number = 0) => {
     const pair = livePrices?.find(p => p.symbol === symbol);
     if (!pair) return;
 
@@ -48,14 +48,21 @@ export const usePortfolio = () => {
       const now = new Date();
 
       if (existing) {
-        // Update existing: calculate new average price
+        // Update existing: calculate new average price including fees
         const totalQuantity = existing.quantity + quantity;
-        const totalValue = (existing.quantity * existing.averageBuyPrice) + (quantity * buyPrice);
+        const existingTotalFees = existing.totalFees || 0;
+        const totalValue = (existing.quantity * existing.averageBuyPrice) + (quantity * buyPrice) + fee;
         const newAvgPrice = totalValue / totalQuantity;
 
         return prev.map(a =>
           a.symbol === symbol
-            ? { ...a, quantity: totalQuantity, averageBuyPrice: newAvgPrice, updatedAt: now }
+            ? { 
+                ...a, 
+                quantity: totalQuantity, 
+                averageBuyPrice: newAvgPrice, 
+                totalFees: existingTotalFees + fee,
+                updatedAt: now 
+              }
             : a
         );
       }
@@ -66,9 +73,10 @@ export const usePortfolio = () => {
         symbol,
         name: pair.name,
         quantity,
-        averageBuyPrice: buyPrice,
+        averageBuyPrice: buyPrice + (fee / quantity), // Include fee in average price
         createdAt: now,
         updatedAt: now,
+        totalFees: fee,
       };
 
       return [...prev, newAsset];

@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Plus } from 'lucide-react';
 import { useCryptoPrices } from '@/hooks/useCryptoPrices';
 import { useToast } from '@/hooks/use-toast';
 import { TradeType } from '@/types/trades';
 
 interface AddTradeDialogProps {
-  onAdd: (symbol: string, type: TradeType, entryPrice: number, quantity: number) => void;
+  onAdd: (symbol: string, type: TradeType, entryPrice: number, quantity: number, entryFee?: number, notes?: string, exchange?: string) => void;
 }
 
 export const AddTradeDialog = ({ onAdd }: AddTradeDialogProps) => {
@@ -19,6 +20,9 @@ export const AddTradeDialog = ({ onAdd }: AddTradeDialogProps) => {
   const [type, setType] = useState<TradeType>('buy');
   const [entryPrice, setEntryPrice] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [entryFee, setEntryFee] = useState('0');
+  const [exchange, setExchange] = useState('');
+  const [notes, setNotes] = useState('');
   const { data: pairs } = useCryptoPrices();
   const { toast } = useToast();
 
@@ -42,6 +46,7 @@ export const AddTradeDialog = ({ onAdd }: AddTradeDialogProps) => {
 
     const qty = parseFloat(quantity);
     const price = parseFloat(entryPrice);
+    const fee = parseFloat(entryFee) || 0;
 
     if (isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) {
       toast({
@@ -52,12 +57,15 @@ export const AddTradeDialog = ({ onAdd }: AddTradeDialogProps) => {
       return;
     }
 
-    onAdd(symbol, type, price, qty);
+    onAdd(symbol, type, price, qty, fee, notes || undefined, exchange || undefined);
     setOpen(false);
     setSymbol('');
     setType('buy');
     setEntryPrice('');
     setQuantity('');
+    setEntryFee('0');
+    setExchange('');
+    setNotes('');
     
     toast({
       title: 'Operação registrada',
@@ -73,7 +81,7 @@ export const AddTradeDialog = ({ onAdd }: AddTradeDialogProps) => {
           Nova Operação
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Registrar Operação</DialogTitle>
         </DialogHeader>
@@ -108,25 +116,57 @@ export const AddTradeDialog = ({ onAdd }: AddTradeDialogProps) => {
             </Select>
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Preço de Entrada ($)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={entryPrice}
+                onChange={(e) => setEntryPrice(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Quantidade</Label>
+              <Input
+                type="number"
+                step="0.0001"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="0.0000"
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <Label>Preço de Entrada ($)</Label>
+            <Label>Taxa de Entrada ($)</Label>
             <Input
               type="number"
               step="0.01"
-              value={entryPrice}
-              onChange={(e) => setEntryPrice(e.target.value)}
+              value={entryFee}
+              onChange={(e) => setEntryFee(e.target.value)}
               placeholder="0.00"
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Quantidade</Label>
+            <Label>Exchange (opcional)</Label>
             <Input
-              type="number"
-              step="0.0001"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder="0.0000"
+              value={exchange}
+              onChange={(e) => setExchange(e.target.value)}
+              placeholder="Binance, Coinbase, etc."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Notas (opcional)</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Estratégia, motivo da entrada, etc."
+              rows={3}
             />
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { Settings, User, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun } from 'lucide-react';
+import { Settings, User, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun, BarChart3, Receipt, FileText } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import {
@@ -82,6 +82,30 @@ export const Header = ({
           <Link to="/portfolio">
             <Button variant="ghost" size="icon" title="Portfolio">
               <Briefcase className="w-5 h-5" />
+            </Button>
+          </Link>
+
+          <Link to="/analytics">
+            <Button variant="ghost" size="icon" title="Análise">
+              <BarChart3 className="w-5 h-5" />
+            </Button>
+          </Link>
+
+          <Link to="/transactions">
+            <Button variant="ghost" size="icon" title="Transações">
+              <Receipt className="w-5 h-5" />
+            </Button>
+          </Link>
+
+          <Link to="/tax-report">
+            <Button variant="ghost" size="icon" title="Impostos">
+              <FileText className="w-5 h-5" />
+            </Button>
+          </Link>
+
+          <Link to="/settings">
+            <Button variant="ghost" size="icon" title="Configurações">
+              <Settings className="w-5 h-5" />
             </Button>
           </Link>
 
@@ -181,10 +205,33 @@ export const Header = ({
                   </Button>
                 </Link>
 
-                <Button variant="ghost" className="w-full justify-start gap-3">
-                  <Settings className="w-5 h-5" />
-                  Configurações
-                </Button>
+                <Link to="/analytics" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-3">
+                    <BarChart3 className="w-5 h-5" />
+                    Análise
+                  </Button>
+                </Link>
+
+                <Link to="/transactions" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-3">
+                    <Receipt className="w-5 h-5" />
+                    Transações
+                  </Button>
+                </Link>
+
+                <Link to="/tax-report" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-3">
+                    <FileText className="w-5 h-5" />
+                    Impostos
+                  </Button>
+                </Link>
+
+                <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-3">
+                    <Settings className="w-5 h-5" />
+                    Configurações
+                  </Button>
+                </Link>
 
                 <Button variant="ghost" className="w-full justify-start gap-3">
                   <User className="w-5 h-5" />
