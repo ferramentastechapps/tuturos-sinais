@@ -1,12 +1,52 @@
-import { tradeSignals } from '@/data/mockData';
 import { SignalCard } from './SignalCard';
-import { Zap, Filter } from 'lucide-react';
+import { Zap, Filter, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useRealTimeSignals } from '@/hooks/useRealTimeSignals';
+import { Skeleton } from '@/components/ui/skeleton';
 
-export const SignalsPanel = () => {
-  const activeSignals = tradeSignals.filter(s => s.status === 'active');
-  const completedSignals = tradeSignals.filter(s => s.status !== 'active');
+interface SignalsPanelProps {
+  symbol?: string; // Optional: show signals for specific symbol
+}
+
+export const SignalsPanel = ({ symbol }: SignalsPanelProps) => {
+  const { data: signals, isLoading, isError } = useRealTimeSignals({ symbol });
+  
+  const activeSignals = signals?.filter(s => s.status === 'active') || [];
+  const completedSignals = signals?.filter(s => s.status !== 'active') || [];
+
+  if (isLoading) {
+    return (
+      <div className="trading-card h-full">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Sinais de Trade</h2>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="w-full h-32" />
+          <Skeleton className="w-full h-32" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="trading-card h-full">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Sinais de Trade</h2>
+          </div>
+        </div>
+        <div className="text-center py-8 text-muted-foreground">
+          <p>Erro ao carregar sinais. Tente novamente.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="trading-card h-full">

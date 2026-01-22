@@ -22,6 +22,7 @@ import { CandlestickChart } from '@/components/trading/CandlestickChart';
 import { PriceAlertsPanel } from '@/components/trading/PriceAlertsPanel';
 import { WatchlistPanel } from '@/components/trading/WatchlistPanel';
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
+import { CoinSelector } from '@/components/trading/CoinSelector';
 import { tradeSignals } from '@/data/mockData';
 import { CryptoPair } from '@/types/trading';
 import { Loader2 } from 'lucide-react';
@@ -188,6 +189,13 @@ const Index = () => {
 
           {/* Center Column - Chart & Technical */}
           <div className="lg:col-span-5 space-y-4 order-1 lg:order-2">
+            {/* Coin Selector */}
+            <CoinSelector
+              pairs={cryptoPairs}
+              selectedPair={selectedPair}
+              onSelect={setSelectedPair}
+            />
+
             {/* Selected Pair Header */}
             <div className="trading-card">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-4">
@@ -211,12 +219,12 @@ const Index = () => {
 
             <AdvancedChart symbol={selectedPair.symbol} name={selectedPair.name} />
 
-            <TechnicalPanel />
+            <TechnicalPanel symbol={selectedPair.symbol} />
           </div>
 
           {/* Right Column - Signals & Calculator */}
           <div className="lg:col-span-4 space-y-4 order-3">
-            <SignalsPanel />
+            <SignalsPanel symbol={selectedPair.symbol} />
             <RiskCalculator />
           </div>
         </div>

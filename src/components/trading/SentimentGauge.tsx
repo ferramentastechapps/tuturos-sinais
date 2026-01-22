@@ -1,8 +1,27 @@
-import { marketSentiment } from '@/data/mockData';
 import { Gauge, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useMarketSentiment } from '@/hooks/useMarketSentiment';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export const SentimentGauge = () => {
+  const { data: marketSentiment, isLoading } = useMarketSentiment();
+  
+  if (isLoading || !marketSentiment) {
+    return (
+      <div className="trading-card">
+        <div className="flex items-center gap-2 mb-4">
+          <Gauge className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-semibold text-foreground">Sentimento</h2>
+        </div>
+        <div className="flex flex-col items-center space-y-3">
+          <Skeleton className="w-32 h-16" />
+          <Skeleton className="w-20 h-10" />
+          <Skeleton className="w-32 h-8" />
+        </div>
+      </div>
+    );
+  }
+
   const { fearGreedIndex, sentiment, trend } = marketSentiment;
 
   const getSentimentLabel = () => {

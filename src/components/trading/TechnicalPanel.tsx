@@ -1,8 +1,33 @@
-import { technicalIndicators } from '@/data/mockData';
 import { TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTechnicalIndicators } from '@/hooks/useTechnicalIndicators';
+import { Skeleton } from '@/components/ui/skeleton';
 
-export const TechnicalPanel = () => {
+interface TechnicalPanelProps {
+  symbol?: string;
+}
+
+export const TechnicalPanel = ({ symbol = 'BTCUSDT' }: TechnicalPanelProps) => {
+  const { data: technicalIndicators, isLoading } = useTechnicalIndicators(symbol);
+
+  if (isLoading || !technicalIndicators) {
+    return (
+      <div className="trading-card h-full">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Análise Técnica</h2>
+          </div>
+          <span className="text-xs text-muted-foreground">{symbol}</span>
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="w-full h-20" />
+          <Skeleton className="w-full h-12" />
+          <Skeleton className="w-full h-32" />
+        </div>
+      </div>
+    );
+  }
   const getSignalIcon = (signal: string) => {
     switch (signal) {
       case 'bullish':
@@ -25,9 +50,11 @@ export const TechnicalPanel = () => {
     }
   };
 
-  const bullishCount = technicalIndicators.filter(i => i.signal === 'bullish').length;
-  const bearishCount = technicalIndicators.filter(i => i.signal === 'bearish').length;
-  const neutralCount = technicalIndicators.filter(i => i.signal === 'neutral').length;
+  const bullishCount = technicalIndicators?.filter(i => i.signal === 'bullish').length || 0;
+  const bearishCount = technicalIndicators?.filter(i => i.signal === 'bearish').length || 0;
+  const neutralCount = technicalIndicators?.filter(i => i.signal === 'neutral').length || 0;
+  
+  const overallTrend = bullishCount > bearishCount ? 'bullish' : bearishCount > bullishCount ? 'bearish' : 'neutral';
 
   return (
     <div className="trading-card h-full">
@@ -36,7 +63,7 @@ export const TechnicalPanel = () => {
           <Activity className="w-5 h-5 text-primary" />
           <h2 className="text-lg font-semibold text-foreground">Análise Técnica</h2>
         </div>
-        <span className="text-xs text-muted-foreground">BTCUSDT</span>
+        <span className="text-xs text-muted-foreground">{symbol}</span>
       </div>
 
       {/* Summary */}
@@ -56,9 +83,23 @@ export const TechnicalPanel = () => {
       </div>
 
       {/* Trend */}
-      <div className="flex items-center justify-center gap-2 p-3 mb-4 rounded-lg bg-success/10 border border-success/20">
-        <TrendingUp className="w-5 h-5 text-success" />
-        <span className="font-semibold text-success">Tendência de Alta</span>
+      <div className={cn(
+        "flex items-center justify-center gap-2 p-3 mb-4 rounded-lg border",
+        overallTrend === 'bullish' && "bg-success/10 border-success/20",
+        overallTrend === 'bearish' && "bg-destructive/10 border-destructive/20",
+        overallTrend === 'neutral' && "bg-muted border-muted-foreground/20"
+      )}>
+        {overallTrend === 'bullish' && <TrendingUp className="w-5 h-5 text-success" />}
+        {overallTrend === 'bearish' && <TrendingDown className="w-5 h-5 text-destructive" />}
+        {overallTrend === 'neutral' && <Minus className="w-5 h-5 text-muted-foreground" />}
+        <span className={cn(
+          "font-semibold",
+          overallTrend === 'bullish' && "text-success",
+          overallTrend === 'bearish' && "text-destructive",
+          overallTrend === 'neutral' && "text-muted-foreground"
+        )}>
+          {overallTrend === 'bullish' ? 'Tendência de Alta' : overallTrend === 'bearish' ? 'Tendência de Baixa' : 'Tendência Lateral'}
+        </span>
       </div>
 
       {/* Indicators List */}

@@ -1,4 +1,4 @@
-# 🚀 Melhorias Implementadas - CryptoFutures
+ # 🚀 Melhorias Implementadas - CryptoFutures
 
 ## ✅ Funcionalidades Adicionadas (Fase 1)
 
