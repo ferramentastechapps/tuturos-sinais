@@ -8,6 +8,7 @@ export interface OHLCPoint {
   high: number;
   low: number;
   close: number;
+  volume?: number; // Optional - CoinGecko OHLC endpoint doesn't return volume
 }
 
 export type OHLCTimeRange = '1d' | '7d' | '14d' | '30d';
