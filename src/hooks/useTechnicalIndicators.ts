@@ -6,6 +6,8 @@ import {
   calculateEMA, 
   calculateBollingerBands,
   calculateVWAP,
+  calculateStochastic,
+  calculateIchimoku,
   getIndicatorSignal 
 } from '@/utils/technicalIndicators';
 import { TechnicalIndicator } from '@/types/trading';
@@ -14,15 +16,16 @@ export const useTechnicalIndicators = (symbol: string) => {
   return useQuery<TechnicalIndicator[], Error>({
     queryKey: ['technical-indicators', symbol],
     queryFn: async () => {
-      // Fetch 30 days of historical data for calculations
-      const historicalData = await fetchHistoricalPrices(symbol, '30d');
+      // Fetch 90 days of historical data for Ichimoku (needs 52 periods)
+      const historicalData = await fetchHistoricalPrices(symbol, '90d');
       const prices = historicalData.prices;
 
-      if (prices.length < 50) {
+      if (prices.length < 52) {
         throw new Error('Insufficient data for technical analysis');
       }
 
       const indicators: TechnicalIndicator[] = [];
+      const currentPrice = prices[prices.length - 1].price;
 
       // RSI (14)
       const rsi = calculateRSI(prices, 14);
@@ -52,7 +55,6 @@ export const useTechnicalIndicators = (symbol: string) => {
       // EMA 20
       const ema20 = calculateEMA(prices, 20);
       const latestEMA20 = ema20[ema20.length - 1];
-      const currentPrice = prices[prices.length - 1].price;
       if (latestEMA20) {
         indicators.push({
           name: 'EMA 20',
@@ -74,15 +76,48 @@ export const useTechnicalIndicators = (symbol: string) => {
         });
       }
 
-      // EMA 200
-      const ema200 = calculateEMA(prices, 200);
-      const latestEMA200 = ema200[ema200.length - 1];
-      if (latestEMA200) {
+      // Stochastic Oscillator
+      const stochastic = calculateStochastic(prices, 14, 3);
+      const latestStoch = stochastic[stochastic.length - 1];
+      if (latestStoch) {
         indicators.push({
-          name: 'EMA 200',
-          value: parseFloat(latestEMA200.value.toFixed(2)),
-          signal: currentPrice > latestEMA200.value ? 'bullish' : 'bearish',
-          description: 'Exponential Moving Average',
+          name: 'Stochastic %K',
+          value: parseFloat(latestStoch.k.toFixed(2)),
+          signal: getIndicatorSignal('stochastic', latestStoch.k),
+          description: 'Oscilador Estocástico',
+        });
+        indicators.push({
+          name: 'Stochastic %D',
+          value: parseFloat(latestStoch.d.toFixed(2)),
+          signal: getIndicatorSignal('stochastic', latestStoch.d),
+          description: 'Linha de Sinal do Estocástico',
+        });
+      }
+
+      // Bollinger Bands
+      const bollinger = calculateBollingerBands(prices, 20, 2);
+      const latestBollinger = bollinger[bollinger.length - 1];
+      if (latestBollinger) {
+        const distanceToUpper = latestBollinger.upper - currentPrice;
+        const distanceToLower = currentPrice - latestBollinger.lower;
+        let bbSignal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+        
+        if (currentPrice > latestBollinger.upper) bbSignal = 'bearish';
+        else if (currentPrice < latestBollinger.lower) bbSignal = 'bullish';
+        else if (distanceToLower < distanceToUpper) bbSignal = 'bullish';
+        else if (distanceToUpper < distanceToLower) bbSignal = 'bearish';
+
+        indicators.push({
+          name: 'BB Superior',
+          value: parseFloat(latestBollinger.upper.toFixed(2)),
+          signal: bbSignal,
+          description: 'Banda Superior de Bollinger',
+        });
+        indicators.push({
+          name: 'BB Inferior',
+          value: parseFloat(latestBollinger.lower.toFixed(2)),
+          signal: bbSignal,
+          description: 'Banda Inferior de Bollinger',
         });
       }
 
@@ -98,31 +133,46 @@ export const useTechnicalIndicators = (symbol: string) => {
         });
       }
 
-      // Bollinger Bands
-      const bollinger = calculateBollingerBands(prices, 20, 2);
-      const latestBollinger = bollinger[bollinger.length - 1];
-      if (latestBollinger) {
-        const distanceToUpper = latestBollinger.upper - currentPrice;
-        const distanceToLower = currentPrice - latestBollinger.lower;
-        let signal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+      // Ichimoku Cloud
+      const ichimoku = calculateIchimoku(prices);
+      const latestIchimoku = ichimoku[ichimoku.length - 1];
+      if (latestIchimoku) {
+        // Tenkan-Sen vs Kijun-Sen cross
+        const tenkanKijunSignal = latestIchimoku.tenkanSen > latestIchimoku.kijunSen ? 'bullish' : 'bearish';
         
-        if (currentPrice > latestBollinger.upper) signal = 'bearish'; // Overbought
-        else if (currentPrice < latestBollinger.lower) signal = 'bullish'; // Oversold
-        else if (distanceToLower < distanceToUpper) signal = 'bullish';
-        else if (distanceToUpper < distanceToLower) signal = 'bearish';
+        indicators.push({
+          name: 'Tenkan-Sen',
+          value: parseFloat(latestIchimoku.tenkanSen.toFixed(2)),
+          signal: tenkanKijunSignal,
+          description: 'Linha de Conversão (9)',
+        });
+        indicators.push({
+          name: 'Kijun-Sen',
+          value: parseFloat(latestIchimoku.kijunSen.toFixed(2)),
+          signal: tenkanKijunSignal,
+          description: 'Linha Base (26)',
+        });
+
+        // Cloud analysis
+        const cloudTop = Math.max(latestIchimoku.senkouSpanA, latestIchimoku.senkouSpanB);
+        const cloudBottom = Math.min(latestIchimoku.senkouSpanA, latestIchimoku.senkouSpanB);
+        let cloudSignal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+        
+        if (currentPrice > cloudTop) cloudSignal = 'bullish';
+        else if (currentPrice < cloudBottom) cloudSignal = 'bearish';
 
         indicators.push({
-          name: 'Bollinger Upper',
-          value: parseFloat(latestBollinger.upper.toFixed(2)),
-          signal,
-          description: 'Bollinger Bands',
+          name: 'Nuvem Ichimoku',
+          value: parseFloat(((cloudTop + cloudBottom) / 2).toFixed(2)),
+          signal: cloudSignal,
+          description: currentPrice > cloudTop ? 'Preço acima da nuvem' : currentPrice < cloudBottom ? 'Preço abaixo da nuvem' : 'Preço dentro da nuvem',
         });
       }
 
       return indicators;
     },
-    refetchInterval: 300000, // Refresh every 5 minutes
-    staleTime: 180000, // Consider stale after 3 minutes
+    refetchInterval: 300000,
+    staleTime: 180000,
     retry: 2,
     enabled: !!symbol,
   });

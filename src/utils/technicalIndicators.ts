@@ -194,6 +194,91 @@ export const calculateVWAP = (prices: PricePoint[]): IndicatorPoint[] => {
   return result;
 };
 
+// Stochastic Oscillator
+export interface StochasticResult {
+  timestamp: number;
+  k: number; // Fast %K
+  d: number; // Slow %D (SMA of %K)
+}
+
+export const calculateStochastic = (
+  prices: PricePoint[],
+  kPeriod: number = 14,
+  dPeriod: number = 3
+): StochasticResult[] => {
+  const result: StochasticResult[] = [];
+  const kValues: number[] = [];
+  
+  for (let i = kPeriod - 1; i < prices.length; i++) {
+    const slice = prices.slice(i - kPeriod + 1, i + 1);
+    const highest = Math.max(...slice.map(p => p.price));
+    const lowest = Math.min(...slice.map(p => p.price));
+    const current = prices[i].price;
+    
+    const k = highest === lowest ? 50 : ((current - lowest) / (highest - lowest)) * 100;
+    kValues.push(k);
+    
+    if (kValues.length >= dPeriod) {
+      const d = kValues.slice(-dPeriod).reduce((a, b) => a + b, 0) / dPeriod;
+      result.push({
+        timestamp: prices[i].timestamp,
+        k,
+        d,
+      });
+    }
+  }
+  
+  return result;
+};
+
+// Ichimoku Cloud
+export interface IchimokuResult {
+  timestamp: number;
+  tenkanSen: number;    // Conversion Line (9-period)
+  kijunSen: number;     // Base Line (26-period)
+  senkouSpanA: number;  // Leading Span A
+  senkouSpanB: number;  // Leading Span B (52-period)
+  chikouSpan: number;   // Lagging Span
+}
+
+const getHighLow = (prices: PricePoint[], start: number, period: number) => {
+  const slice = prices.slice(Math.max(0, start - period + 1), start + 1);
+  const high = Math.max(...slice.map(p => p.price));
+  const low = Math.min(...slice.map(p => p.price));
+  return { high, low };
+};
+
+export const calculateIchimoku = (
+  prices: PricePoint[],
+  tenkanPeriod: number = 9,
+  kijunPeriod: number = 26,
+  senkouBPeriod: number = 52
+): IchimokuResult[] => {
+  const result: IchimokuResult[] = [];
+  
+  for (let i = senkouBPeriod - 1; i < prices.length; i++) {
+    const tenkan = getHighLow(prices, i, tenkanPeriod);
+    const kijun = getHighLow(prices, i, kijunPeriod);
+    const senkouB = getHighLow(prices, i, senkouBPeriod);
+    
+    const tenkanSen = (tenkan.high + tenkan.low) / 2;
+    const kijunSen = (kijun.high + kijun.low) / 2;
+    const senkouSpanA = (tenkanSen + kijunSen) / 2;
+    const senkouSpanB = (senkouB.high + senkouB.low) / 2;
+    
+    result.push({
+      timestamp: prices[i].timestamp,
+      tenkanSen,
+      kijunSen,
+      senkouSpanA,
+      senkouSpanB,
+      chikouSpan: prices[i].price,
+    });
+  }
+  
+  return result;
+};
+
 // Get signal interpretation
 export const getIndicatorSignal = (
   indicator: string,
@@ -211,6 +296,10 @@ export const getIndicatorSignal = (
         if (value < 0 && value < previousValue) return 'bearish';
       }
       return value > 0 ? 'bullish' : value < 0 ? 'bearish' : 'neutral';
+    case 'stochastic':
+      if (value < 20) return 'bullish'; // Oversold
+      if (value > 80) return 'bearish'; // Overbought
+      return 'neutral';
     default:
       return 'neutral';
   }
