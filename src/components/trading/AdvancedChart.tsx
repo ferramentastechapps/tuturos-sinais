@@ -11,7 +11,6 @@ import {
   Area,
   Bar,
   ReferenceLine,
-  Legend,
 } from 'recharts';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
@@ -24,6 +23,8 @@ import {
   calculateRSI,
   calculateMACD,
   calculateBollingerBands,
+  calculateStochastic,
+  calculateIchimoku,
 } from '@/utils/technicalIndicators';
 import {
   Collapsible,
@@ -55,7 +56,7 @@ const formatPrice = (price: number) => {
 };
 
 export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
-  const [range, setRange] = useState<TimeRange>('30d');
+  const [range, setRange] = useState<TimeRange>('90d');
   const { data, isLoading, error } = useHistoricalPrices(symbol, range);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -66,12 +67,14 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
   const [showBollinger, setShowBollinger] = useState(true);
   const [showRSI, setShowRSI] = useState(true);
   const [showMACD, setShowMACD] = useState(true);
+  const [showStochastic, setShowStochastic] = useState(true);
+  const [showIchimoku, setShowIchimoku] = useState(false);
 
   const isPositive = (data?.priceChangePercent || 0) >= 0;
 
   // Calculate all indicators
   const chartData = useMemo(() => {
-    if (!data?.prices || data.prices.length < 50) return [];
+    if (!data?.prices || data.prices.length < 52) return [];
 
     const prices = data.prices;
     const sma20 = calculateSMA(prices, 20);
@@ -80,6 +83,8 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
     const bollinger = calculateBollingerBands(prices, 20, 2);
     const rsi = calculateRSI(prices, 14);
     const macd = calculateMACD(prices, 12, 26, 9);
+    const stochastic = calculateStochastic(prices, 14, 3);
+    const ichimoku = calculateIchimoku(prices);
 
     // Sample data for performance
     const sampledPrices = prices.filter(
@@ -93,6 +98,8 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
       const bollingerPoint = bollinger.find((b) => b.timestamp === point.timestamp);
       const rsiPoint = rsi.find((r) => r.timestamp === point.timestamp);
       const macdPoint = macd.find((m) => m.timestamp === point.timestamp);
+      const stochPoint = stochastic.find((s) => s.timestamp === point.timestamp);
+      const ichimokuPoint = ichimoku.find((i) => i.timestamp === point.timestamp);
 
       return {
         date: point.timestamp,
@@ -107,6 +114,12 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
         macd: macdPoint?.macd,
         macdSignal: macdPoint?.signal,
         macdHistogram: macdPoint?.histogram,
+        stochK: stochPoint?.k,
+        stochD: stochPoint?.d,
+        tenkanSen: ichimokuPoint?.tenkanSen,
+        kijunSen: ichimokuPoint?.kijunSen,
+        senkouSpanA: ichimokuPoint?.senkouSpanA,
+        senkouSpanB: ichimokuPoint?.senkouSpanB,
       };
     });
   }, [data]);
@@ -123,6 +136,10 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
       rsi: latest.rsi,
       macd: latest.macd,
       macdSignal: latest.macdSignal,
+      stochK: latest.stochK,
+      stochD: latest.stochD,
+      tenkanSen: latest.tenkanSen,
+      kijunSen: latest.kijunSen,
     };
   }, [chartData]);
 
@@ -155,7 +172,7 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
           <span>Configurar Indicadores</span>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-muted/30 rounded-lg mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-muted/30 rounded-lg mb-4">
             <div className="flex items-center gap-2">
               <Switch id="sma20" checked={showSMA20} onCheckedChange={setShowSMA20} />
               <Label htmlFor="sma20" className="text-xs">SMA 20</Label>
@@ -173,12 +190,20 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
               <Label htmlFor="bollinger" className="text-xs">Bollinger</Label>
             </div>
             <div className="flex items-center gap-2">
+              <Switch id="ichimoku" checked={showIchimoku} onCheckedChange={setShowIchimoku} />
+              <Label htmlFor="ichimoku" className="text-xs">Ichimoku</Label>
+            </div>
+            <div className="flex items-center gap-2">
               <Switch id="rsi" checked={showRSI} onCheckedChange={setShowRSI} />
               <Label htmlFor="rsi" className="text-xs">RSI</Label>
             </div>
             <div className="flex items-center gap-2">
               <Switch id="macd" checked={showMACD} onCheckedChange={setShowMACD} />
               <Label htmlFor="macd" className="text-xs">MACD</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="stochastic" checked={showStochastic} onCheckedChange={setShowStochastic} />
+              <Label htmlFor="stochastic" className="text-xs">Stochastic</Label>
             </div>
           </div>
         </CollapsibleContent>
@@ -322,10 +347,58 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
                       ema20: 'EMA 20',
                       bollingerUpper: 'BB Superior',
                       bollingerLower: 'BB Inferior',
+                      tenkanSen: 'Tenkan-Sen',
+                      kijunSen: 'Kijun-Sen',
+                      senkouSpanA: 'Senkou A',
+                      senkouSpanB: 'Senkou B',
                     };
                     return [formatPrice(value), labels[name] || name];
                   }}
                 />
+
+                {/* Ichimoku Cloud */}
+                {showIchimoku && (
+                  <>
+                    <defs>
+                      <linearGradient id={`ichimoku-cloud-${symbol}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(var(--success))" stopOpacity={0.2} />
+                        <stop offset="100%" stopColor="hsl(var(--destructive))" stopOpacity={0.1} />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="senkouSpanA"
+                      stroke="hsl(var(--success))"
+                      strokeWidth={1}
+                      fill={`url(#ichimoku-cloud-${symbol})`}
+                      dot={false}
+                      opacity={0.7}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="senkouSpanB"
+                      stroke="hsl(var(--destructive))"
+                      strokeWidth={1}
+                      fill="none"
+                      dot={false}
+                      opacity={0.7}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="tenkanSen"
+                      stroke="hsl(142, 76%, 36%)"
+                      strokeWidth={1.5}
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="kijunSen"
+                      stroke="hsl(0, 84%, 60%)"
+                      strokeWidth={1.5}
+                      dot={false}
+                    />
+                  </>
+                )}
 
                 {/* Bollinger Bands */}
                 {showBollinger && (
@@ -465,6 +538,44 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
             </div>
           )}
 
+          {/* Stochastic Chart */}
+          {showStochastic && (
+            <div className="h-[80px] mb-4">
+              <p className="text-xs text-muted-foreground mb-1">Stochastic (14, 3)</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartData}>
+                  <XAxis dataKey="date" hide />
+                  <YAxis
+                    domain={[0, 100]}
+                    ticks={[20, 50, 80]}
+                    fontSize={9}
+                    stroke="hsl(var(--muted-foreground))"
+                    tickLine={false}
+                    axisLine={false}
+                    width={30}
+                  />
+                  <ReferenceLine y={80} stroke="hsl(var(--destructive))" strokeDasharray="3 3" strokeOpacity={0.5} />
+                  <ReferenceLine y={20} stroke="hsl(var(--success))" strokeDasharray="3 3" strokeOpacity={0.5} />
+                  <ReferenceLine y={50} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" strokeOpacity={0.3} />
+                  <Line
+                    type="monotone"
+                    dataKey="stochK"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={1.5}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="stochD"
+                    stroke="hsl(var(--warning))"
+                    strokeWidth={1.5}
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
           {/* Legend */}
           <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-border text-xs">
             {showSMA20 && (
@@ -485,9 +596,30 @@ export const AdvancedChart = ({ symbol, name }: AdvancedChartProps) => {
                 <span className="text-muted-foreground">Bollinger</span>
               </div>
             )}
+            {showIchimoku && (
+              <>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-0.5 rounded" style={{ backgroundColor: 'hsl(142, 76%, 36%)' }} />
+                  <span className="text-muted-foreground">Tenkan</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-0.5 rounded" style={{ backgroundColor: 'hsl(0, 84%, 60%)' }} />
+                  <span className="text-muted-foreground">Kijun</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-2 rounded opacity-30 bg-gradient-to-b from-success to-destructive" />
+                  <span className="text-muted-foreground">Cloud</span>
+                </div>
+              </>
+            )}
             {showRSI && (
               <div className="flex items-center gap-1">
                 <span className="text-muted-foreground">RSI: 30/70</span>
+              </div>
+            )}
+            {showStochastic && (
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Stoch: 20/80</span>
               </div>
             )}
           </div>
