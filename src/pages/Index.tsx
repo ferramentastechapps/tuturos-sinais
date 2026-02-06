@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useMarketMonitor } from '@/hooks/useMarketMonitor';
 import { useCryptoPrices } from '@/hooks/useCryptoPrices';
@@ -6,6 +6,8 @@ import { usePriceAlerts } from '@/hooks/usePriceAlerts';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { useTrades } from '@/hooks/useTrades';
 import { useWatchlist } from '@/hooks/useWatchlist';
+import { useTechnicalIndicators } from '@/hooks/useTechnicalIndicators';
+import { useIndicatorAlerts } from '@/hooks/useIndicatorAlerts';
 import { Header } from '@/components/trading/Header';
 import { MarketTicker } from '@/components/trading/MarketTicker';
 import { PriceCard } from '@/components/trading/PriceCard';
@@ -23,8 +25,9 @@ import { PriceAlertsPanel } from '@/components/trading/PriceAlertsPanel';
 import { WatchlistPanel } from '@/components/trading/WatchlistPanel';
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
 import { CoinSelector } from '@/components/trading/CoinSelector';
+import { IndicatorAlertsPanel } from '@/components/trading/IndicatorAlertsPanel';
 import { tradeSignals } from '@/data/mockData';
-import { CryptoPair } from '@/types/trading';
+import { CryptoPair, TechnicalIndicator } from '@/types/trading';
 import { Loader2 } from 'lucide-react';
 
 const Index = () => {
@@ -45,6 +48,23 @@ const Index = () => {
     isInWatchlist,
   } = useWatchlist();
 
+  // Indicator alerts
+  const {
+    alerts: indicatorAlerts,
+    unreadCount: indicatorUnreadCount,
+    config: indicatorAlertConfig,
+    checkIndicators,
+    markAsRead: markIndicatorAsRead,
+    markAllAsRead: markAllIndicatorAsRead,
+    clearAlerts: clearIndicatorAlerts,
+    deleteAlert: deleteIndicatorAlert,
+    updateConfig: updateIndicatorAlertConfig,
+  } = useIndicatorAlerts();
+
+  // Technical indicators for selected pair
+  const { data: technicalIndicators } = useTechnicalIndicators(selectedPair?.symbol || '');
+  const prevIndicatorsRef = useRef<TechnicalIndicator[]>([]);
+
   // Update selectedPair when prices load or change
   useEffect(() => {
     if (cryptoPairs.length > 0) {
@@ -55,6 +75,19 @@ const Index = () => {
       });
     }
   }, [cryptoPairs]);
+
+  // Check indicators for alerts when they update
+  useEffect(() => {
+    if (selectedPair && technicalIndicators && technicalIndicators.length > 0) {
+      checkIndicators(
+        selectedPair.symbol,
+        technicalIndicators,
+        selectedPair.price,
+        prevIndicatorsRef.current.length > 0 ? prevIndicatorsRef.current : undefined
+      );
+      prevIndicatorsRef.current = technicalIndicators;
+    }
+  }, [selectedPair, technicalIndicators, checkIndicators]);
 
   const {
     alerts,
@@ -189,12 +222,26 @@ const Index = () => {
 
           {/* Center Column - Chart & Technical */}
           <div className="lg:col-span-5 space-y-4 order-1 lg:order-2">
-            {/* Coin Selector */}
-            <CoinSelector
-              pairs={cryptoPairs}
-              selectedPair={selectedPair}
-              onSelect={setSelectedPair}
-            />
+            {/* Coin Selector with Indicator Alerts */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <CoinSelector
+                  pairs={cryptoPairs}
+                  selectedPair={selectedPair}
+                  onSelect={setSelectedPair}
+                />
+              </div>
+              <IndicatorAlertsPanel
+                alerts={indicatorAlerts}
+                unreadCount={indicatorUnreadCount}
+                config={indicatorAlertConfig}
+                onMarkAsRead={markIndicatorAsRead}
+                onMarkAllAsRead={markAllIndicatorAsRead}
+                onClearAlerts={clearIndicatorAlerts}
+                onDeleteAlert={deleteIndicatorAlert}
+                onUpdateConfig={updateIndicatorAlertConfig}
+              />
+            </div>
 
             {/* Selected Pair Header */}
             <div className="trading-card">
