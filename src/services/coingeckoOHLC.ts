@@ -1,6 +1,5 @@
 import { getCoinGeckoId } from './coingecko';
-
-const COINGECKO_API = 'https://api.coingecko.com/api/v3';
+import { fetchFromProxy } from './apiProxy';
 
 export interface OHLCPoint {
   timestamp: number;
@@ -8,7 +7,7 @@ export interface OHLCPoint {
   high: number;
   low: number;
   close: number;
-  volume?: number; // Optional - CoinGecko OHLC endpoint doesn't return volume
+  volume?: number;
 }
 
 export type OHLCTimeRange = '1d' | '7d' | '14d' | '30d';
@@ -32,18 +31,12 @@ export const fetchOHLCData = async (
 
   const days = DAYS_MAP[range];
   
-  const response = await fetch(
-    `${COINGECKO_API}/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`
-  );
+  const data = await fetchFromProxy(`/coins/${coinId}/ohlc`, {
+    vs_currency: 'usd',
+    days: days.toString(),
+  }) as [number, number, number, number, number][];
 
-  if (!response.ok) {
-    throw new Error(`CoinGecko API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  
-  // CoinGecko returns [timestamp, open, high, low, close]
-  return data.map((item: [number, number, number, number, number]) => ({
+  return data.map((item) => ({
     timestamp: item[0],
     open: item[1],
     high: item[2],

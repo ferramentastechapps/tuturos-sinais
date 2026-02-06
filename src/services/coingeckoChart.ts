@@ -1,6 +1,5 @@
 import { getCoinGeckoId } from './coingecko';
-
-const COINGECKO_API = 'https://api.coingecko.com/api/v3';
+import { fetchFromProxy } from './apiProxy';
 
 export interface PricePoint {
   timestamp: number;
@@ -35,17 +34,12 @@ export const fetchHistoricalPrices = async (
 
   const days = DAYS_MAP[range];
   
-  const response = await fetch(
-    `${COINGECKO_API}/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`
-  );
+  const data = await fetchFromProxy(`/coins/${coinId}/market_chart`, {
+    vs_currency: 'usd',
+    days: days.toString(),
+  }) as { prices: [number, number][] };
 
-  if (!response.ok) {
-    throw new Error(`CoinGecko API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  
-  const prices: PricePoint[] = data.prices.map(([timestamp, price]: [number, number]) => ({
+  const prices: PricePoint[] = data.prices.map(([timestamp, price]) => ({
     timestamp,
     price,
   }));
