@@ -1,6 +1,5 @@
 import { CryptoPair } from '@/types/trading';
-
-const COINGECKO_API = 'https://api.coingecko.com/api/v3';
+import { fetchFromProxy } from './apiProxy';
 
 // Map our symbols to CoinGecko IDs
 const SYMBOL_TO_ID: Record<string, string> = {
@@ -36,15 +35,13 @@ export interface CoinGeckoPrice {
 export const fetchCryptoPrices = async (): Promise<CryptoPair[]> => {
   const ids = Object.values(SYMBOL_TO_ID).join(',');
   
-  const response = await fetch(
-    `${COINGECKO_API}/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`
-  );
-
-  if (!response.ok) {
-    throw new Error(`CoinGecko API error: ${response.status}`);
-  }
-
-  const data: CoinGeckoPrice[] = await response.json();
+  const data = await fetchFromProxy('/coins/markets', {
+    vs_currency: 'usd',
+    ids,
+    order: 'market_cap_desc',
+    sparkline: 'false',
+    price_change_percentage: '24h',
+  }) as CoinGeckoPrice[];
 
   return data
     .filter((coin) => coin.current_price != null)
