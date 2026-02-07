@@ -10,7 +10,12 @@ export type IndicatorAlertType =
   | 'stoch_oversold'
   | 'stoch_overbought'
   | 'ichimoku_bullish'
-  | 'ichimoku_bearish';
+  | 'ichimoku_bearish'
+  | 'adx_bullish_cross'
+  | 'adx_bearish_cross'
+  | 'adx_strong_trend'
+  | 'atr_high_volatility'
+  | 'atr_low_volatility';
 
 export interface IndicatorAlert {
   id: string;
@@ -35,6 +40,11 @@ export interface IndicatorAlertConfig {
   enableEmaCross: boolean;
   enableBollingerTouch: boolean;
   enableIchimokuSignals: boolean;
+  enableAdxCross: boolean;
+  adxStrongTrend: number;
+  enableAtrAlerts: boolean;
+  atrHighVolatility: number;
+  atrLowVolatility: number;
 }
 
 export const DEFAULT_INDICATOR_ALERT_CONFIG: IndicatorAlertConfig = {
@@ -47,6 +57,11 @@ export const DEFAULT_INDICATOR_ALERT_CONFIG: IndicatorAlertConfig = {
   enableEmaCross: true,
   enableBollingerTouch: true,
   enableIchimokuSignals: true,
+  enableAdxCross: true,
+  adxStrongTrend: 25,
+  enableAtrAlerts: true,
+  atrHighVolatility: 3,
+  atrLowVolatility: 1,
 };
 
 export const INDICATOR_ALERT_INFO: Record<IndicatorAlertType, { 
@@ -66,4 +81,9 @@ export const INDICATOR_ALERT_INFO: Record<IndicatorAlertType, {
   stoch_overbought: { icon: '🔺', label: 'Stochastic Sobrecomprado', color: 'text-destructive' },
   ichimoku_bullish: { icon: '☁️', label: 'Ichimoku Alta', color: 'text-success' },
   ichimoku_bearish: { icon: '🌧️', label: 'Ichimoku Baixa', color: 'text-destructive' },
+  adx_bullish_cross: { icon: '📊', label: 'ADX +DI Cruzou Acima', color: 'text-success' },
+  adx_bearish_cross: { icon: '📉', label: 'ADX -DI Cruzou Acima', color: 'text-destructive' },
+  adx_strong_trend: { icon: '💪', label: 'ADX Tendência Forte', color: 'text-primary' },
+  atr_high_volatility: { icon: '⚡', label: 'ATR Alta Volatilidade', color: 'text-warning' },
+  atr_low_volatility: { icon: '😴', label: 'ATR Baixa Volatilidade', color: 'text-muted-foreground' },
 };
