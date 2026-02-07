@@ -59,6 +59,8 @@ const Index = () => {
     clearAlerts: clearIndicatorAlerts,
     deleteAlert: deleteIndicatorAlert,
     updateConfig: updateIndicatorAlertConfig,
+    requestNotificationPermission,
+    getNotificationStatus,
   } = useIndicatorAlerts();
 
   // Technical indicators for selected pair
@@ -240,6 +242,8 @@ const Index = () => {
                 onClearAlerts={clearIndicatorAlerts}
                 onDeleteAlert={deleteIndicatorAlert}
                 onUpdateConfig={updateIndicatorAlertConfig}
+                onRequestNotificationPermission={requestNotificationPermission}
+                notificationStatus={getNotificationStatus()}
               />
             </div>
 

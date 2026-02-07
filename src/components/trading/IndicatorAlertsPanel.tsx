@@ -1,4 +1,4 @@
-import { Bell, Check, Settings, Trash2, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { Bell, BellRing, Check, Settings, Trash2, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { useState } from 'react';
 import { IndicatorAlert, IndicatorAlertConfig, INDICATOR_ALERT_INFO } from '@/types/indicatorAlerts';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,8 @@ interface IndicatorAlertsPanelProps {
   onClearAlerts: () => void;
   onDeleteAlert: (id: string) => void;
   onUpdateConfig: (updates: Partial<IndicatorAlertConfig>) => void;
+  onRequestNotificationPermission: () => Promise<boolean>;
+  notificationStatus: 'granted' | 'denied' | 'default' | 'unsupported';
 }
 
 export function IndicatorAlertsPanel({
@@ -42,8 +44,21 @@ export function IndicatorAlertsPanel({
   onClearAlerts,
   onDeleteAlert,
   onUpdateConfig,
+  onRequestNotificationPermission,
+  notificationStatus,
 }: IndicatorAlertsPanelProps) {
   const [open, setOpen] = useState(false);
+
+  const handleBrowserNotificationsToggle = async (enabled: boolean) => {
+    if (enabled && notificationStatus !== 'granted') {
+      const granted = await onRequestNotificationPermission();
+      if (granted) {
+        onUpdateConfig({ browserNotifications: true });
+      }
+    } else {
+      onUpdateConfig({ browserNotifications: enabled });
+    }
+  };
 
   const formatTime = (date: Date) => {
     const now = new Date();
@@ -220,7 +235,7 @@ export function IndicatorAlertsPanel({
               <div className="space-y-6">
                 {/* Master Toggle */}
                 <Card>
-                  <CardContent className="pt-4">
+                  <CardContent className="pt-4 space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <Label className="text-base font-medium">Alertas Automáticos</Label>
@@ -231,6 +246,33 @@ export function IndicatorAlertsPanel({
                       <Switch
                         checked={config.enabled}
                         onCheckedChange={(enabled) => onUpdateConfig({ enabled })}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
+                      <div>
+                        <Label className="text-base font-medium flex items-center gap-2">
+                          <BellRing className="h-4 w-4" />
+                          Notificações Push
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Receber alertas mesmo com a aba em segundo plano
+                        </p>
+                        {notificationStatus === 'denied' && (
+                          <p className="text-xs text-destructive mt-1">
+                            Bloqueado pelo navegador. Habilite nas configurações.
+                          </p>
+                        )}
+                        {notificationStatus === 'unsupported' && (
+                          <p className="text-xs text-warning mt-1">
+                            Navegador não suporta notificações push.
+                          </p>
+                        )}
+                      </div>
+                      <Switch
+                        checked={config.browserNotifications && notificationStatus === 'granted'}
+                        onCheckedChange={handleBrowserNotificationsToggle}
+                        disabled={notificationStatus === 'denied' || notificationStatus === 'unsupported'}
                       />
                     </div>
                   </CardContent>
