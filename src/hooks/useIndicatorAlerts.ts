@@ -102,8 +102,22 @@ export function useIndicatorAlerts(options: UseIndicatorAlertsOptions = {}) {
       { description: `${symbol}: ${message}` }
     );
 
+    // Send browser notification if enabled
+    if (config.browserNotifications && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(`${info.icon} ${info.label} - ${symbol}`, {
+          body: message,
+          icon: '/favicon.ico',
+          tag: `indicator-${type}-${symbol}`,
+          requireInteraction: false,
+        });
+      } catch (e) {
+        console.error('Failed to show browser notification:', e);
+      }
+    }
+
     return newAlert;
-  }, [config.enabled, canTriggerAlert, maxAlerts]);
+  }, [config.enabled, config.browserNotifications, canTriggerAlert, maxAlerts]);
 
   const checkIndicators = useCallback((
     symbol: string,
@@ -439,6 +453,41 @@ export function useIndicatorAlerts(options: UseIndicatorAlertsOptions = {}) {
     setConfig(prev => ({ ...prev, ...updates }));
   }, []);
 
+  const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
+    if (!('Notification' in window)) {
+      toast.error('Navegador não suporta notificações');
+      return false;
+    }
+
+    if (Notification.permission === 'granted') {
+      return true;
+    }
+
+    if (Notification.permission === 'denied') {
+      toast.error('Notificações bloqueadas. Habilite nas configurações do navegador.');
+      return false;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        toast.success('Notificações ativadas!');
+        return true;
+      } else {
+        toast.error('Permissão de notificações negada');
+        return false;
+      }
+    } catch (e) {
+      console.error('Error requesting notification permission:', e);
+      return false;
+    }
+  }, []);
+
+  const getNotificationStatus = useCallback((): 'granted' | 'denied' | 'default' | 'unsupported' => {
+    if (!('Notification' in window)) return 'unsupported';
+    return Notification.permission;
+  }, []);
+
   const unreadCount = alerts.filter(a => !a.read).length;
 
   return {
@@ -451,5 +500,7 @@ export function useIndicatorAlerts(options: UseIndicatorAlertsOptions = {}) {
     clearAlerts,
     deleteAlert,
     updateConfig,
+    requestNotificationPermission,
+    getNotificationStatus,
   };
 }

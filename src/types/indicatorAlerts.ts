@@ -32,6 +32,7 @@ export interface IndicatorAlert {
 
 export interface IndicatorAlertConfig {
   enabled: boolean;
+  browserNotifications: boolean;
   rsiOversold: number;
   rsiOverbought: number;
   stochOversold: number;
@@ -49,6 +50,7 @@ export interface IndicatorAlertConfig {
 
 export const DEFAULT_INDICATOR_ALERT_CONFIG: IndicatorAlertConfig = {
   enabled: true,
+  browserNotifications: false,
   rsiOversold: 30,
   rsiOverbought: 70,
   stochOversold: 20,
