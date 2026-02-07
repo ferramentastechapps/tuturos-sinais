@@ -8,6 +8,8 @@ import {
   calculateVWAP,
   calculateStochastic,
   calculateIchimoku,
+  calculateATR,
+  calculateADX,
   getIndicatorSignal 
 } from '@/utils/technicalIndicators';
 import { TechnicalIndicator } from '@/types/trading';
@@ -166,6 +168,53 @@ export const useTechnicalIndicators = (symbol: string) => {
           value: parseFloat(((cloudTop + cloudBottom) / 2).toFixed(2)),
           signal: cloudSignal,
           description: currentPrice > cloudTop ? 'Preço acima da nuvem' : currentPrice < cloudBottom ? 'Preço abaixo da nuvem' : 'Preço dentro da nuvem',
+        });
+      }
+
+      // ATR (14)
+      const atr = calculateATR(prices, 14);
+      const latestATR = atr[atr.length - 1];
+      if (latestATR) {
+        // ATR as percentage of price for easier interpretation
+        const atrPercent = (latestATR.atr / currentPrice) * 100;
+        let atrSignal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+        
+        // High volatility > 3%, low volatility < 1%
+        if (atrPercent > 3) atrSignal = 'bearish'; // High volatility = caution
+        else if (atrPercent < 1) atrSignal = 'bullish'; // Low volatility = accumulation
+        
+        indicators.push({
+          name: 'ATR (14)',
+          value: parseFloat(latestATR.atr.toFixed(2)),
+          signal: atrSignal,
+          description: `Volatilidade: ${atrPercent.toFixed(2)}%`,
+        });
+      }
+
+      // ADX (14)
+      const adx = calculateADX(prices, 14);
+      const latestADX = adx[adx.length - 1];
+      if (latestADX) {
+        // Determine trend direction based on +DI and -DI
+        let adxSignal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+        
+        if (latestADX.adx > 25) {
+          // Strong trend
+          adxSignal = latestADX.plusDI > latestADX.minusDI ? 'bullish' : 'bearish';
+        }
+        
+        indicators.push({
+          name: 'ADX (14)',
+          value: parseFloat(latestADX.adx.toFixed(2)),
+          signal: adxSignal,
+          description: latestADX.adx > 25 ? 'Tendência Forte' : latestADX.adx > 20 ? 'Tendência Moderada' : 'Tendência Fraca',
+        });
+        
+        indicators.push({
+          name: '+DI / -DI',
+          value: parseFloat(latestADX.plusDI.toFixed(2)),
+          signal: latestADX.plusDI > latestADX.minusDI ? 'bullish' : 'bearish',
+          description: `+DI: ${latestADX.plusDI.toFixed(1)} | -DI: ${latestADX.minusDI.toFixed(1)}`,
         });
       }
 

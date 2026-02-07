@@ -279,6 +279,150 @@ export const calculateIchimoku = (
   return result;
 };
 
+// Average True Range (ATR)
+export interface ATRResult {
+  timestamp: number;
+  atr: number;
+  trueRange: number;
+}
+
+export const calculateATR = (prices: PricePoint[], period: number = 14): ATRResult[] => {
+  const result: ATRResult[] = [];
+  const trueRanges: number[] = [];
+  
+  for (let i = 1; i < prices.length; i++) {
+    const high = prices[i].price * 1.005; // Simulate high as 0.5% above close
+    const low = prices[i].price * 0.995;  // Simulate low as 0.5% below close
+    const prevClose = prices[i - 1].price;
+    
+    // True Range = max(high - low, |high - prevClose|, |low - prevClose|)
+    const tr = Math.max(
+      high - low,
+      Math.abs(high - prevClose),
+      Math.abs(low - prevClose)
+    );
+    trueRanges.push(tr);
+    
+    if (trueRanges.length >= period) {
+      // Use Wilder's smoothing method for ATR
+      if (result.length === 0) {
+        // First ATR is simple average
+        const atr = trueRanges.slice(-period).reduce((a, b) => a + b, 0) / period;
+        result.push({
+          timestamp: prices[i].timestamp,
+          atr,
+          trueRange: tr,
+        });
+      } else {
+        // Subsequent ATRs use smoothing: ATR = ((prevATR * (period - 1)) + TR) / period
+        const prevATR = result[result.length - 1].atr;
+        const atr = ((prevATR * (period - 1)) + tr) / period;
+        result.push({
+          timestamp: prices[i].timestamp,
+          atr,
+          trueRange: tr,
+        });
+      }
+    }
+  }
+  
+  return result;
+};
+
+// Average Directional Index (ADX)
+export interface ADXResult {
+  timestamp: number;
+  adx: number;
+  plusDI: number;  // +DI
+  minusDI: number; // -DI
+}
+
+export const calculateADX = (prices: PricePoint[], period: number = 14): ADXResult[] => {
+  const result: ADXResult[] = [];
+  const plusDMs: number[] = [];
+  const minusDMs: number[] = [];
+  const trueRanges: number[] = [];
+  
+  for (let i = 1; i < prices.length; i++) {
+    const high = prices[i].price * 1.005;
+    const low = prices[i].price * 0.995;
+    const prevHigh = prices[i - 1].price * 1.005;
+    const prevLow = prices[i - 1].price * 0.995;
+    const prevClose = prices[i - 1].price;
+    
+    // Calculate directional movement
+    const upMove = high - prevHigh;
+    const downMove = prevLow - low;
+    
+    let plusDM = 0;
+    let minusDM = 0;
+    
+    if (upMove > downMove && upMove > 0) {
+      plusDM = upMove;
+    }
+    if (downMove > upMove && downMove > 0) {
+      minusDM = downMove;
+    }
+    
+    plusDMs.push(plusDM);
+    minusDMs.push(minusDM);
+    
+    // True Range
+    const tr = Math.max(
+      high - low,
+      Math.abs(high - prevClose),
+      Math.abs(low - prevClose)
+    );
+    trueRanges.push(tr);
+    
+    if (trueRanges.length >= period) {
+      // Smooth the values using Wilder's method
+      const smoothedPlusDM = plusDMs.slice(-period).reduce((a, b) => a + b, 0);
+      const smoothedMinusDM = minusDMs.slice(-period).reduce((a, b) => a + b, 0);
+      const smoothedTR = trueRanges.slice(-period).reduce((a, b) => a + b, 0);
+      
+      // Calculate +DI and -DI
+      const plusDI = smoothedTR > 0 ? (smoothedPlusDM / smoothedTR) * 100 : 0;
+      const minusDI = smoothedTR > 0 ? (smoothedMinusDM / smoothedTR) * 100 : 0;
+      
+      // Calculate DX
+      const diSum = plusDI + minusDI;
+      const dx = diSum > 0 ? (Math.abs(plusDI - minusDI) / diSum) * 100 : 0;
+      
+      // Calculate ADX (smoothed DX)
+      if (result.length === 0) {
+        result.push({
+          timestamp: prices[i].timestamp,
+          adx: dx,
+          plusDI,
+          minusDI,
+        });
+      } else if (result.length < period) {
+        // Accumulate DX values for initial ADX
+        const avgDX = (result.reduce((sum, r) => sum + r.adx, 0) + dx) / (result.length + 1);
+        result.push({
+          timestamp: prices[i].timestamp,
+          adx: avgDX,
+          plusDI,
+          minusDI,
+        });
+      } else {
+        // Smooth ADX
+        const prevADX = result[result.length - 1].adx;
+        const adx = ((prevADX * (period - 1)) + dx) / period;
+        result.push({
+          timestamp: prices[i].timestamp,
+          adx,
+          plusDI,
+          minusDI,
+        });
+      }
+    }
+  }
+  
+  return result;
+};
+
 // Get signal interpretation
 export const getIndicatorSignal = (
   indicator: string,
@@ -299,6 +443,12 @@ export const getIndicatorSignal = (
     case 'stochastic':
       if (value < 20) return 'bullish'; // Oversold
       if (value > 80) return 'bearish'; // Overbought
+      return 'neutral';
+    case 'adx':
+      // ADX measures trend strength, not direction
+      // Combined with +DI/-DI for direction
+      if (value > 25) return 'bullish'; // Strong trend
+      if (value < 20) return 'neutral'; // Weak trend
       return 'neutral';
     default:
       return 'neutral';
