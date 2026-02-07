@@ -375,6 +375,95 @@ export function IndicatorAlertsPanel({
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* ADX Settings */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      📊 ADX (Average Directional Index)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-sm">Cruzamento +DI/-DI</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Alertas quando +DI cruza -DI
+                        </p>
+                      </div>
+                      <Switch
+                        checked={config.enableAdxCross}
+                        onCheckedChange={(enableAdxCross) => onUpdateConfig({ enableAdxCross })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Limiar Tendência Forte (&gt;)</Label>
+                      <Input
+                        type="number"
+                        value={config.adxStrongTrend}
+                        onChange={(e) => onUpdateConfig({ adxStrongTrend: Number(e.target.value) })}
+                        min={15}
+                        max={50}
+                        className="h-8"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        ADX acima deste valor indica tendência forte
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* ATR Settings */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      ⚡ ATR (Average True Range)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-sm">Alertas de Volatilidade</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Alertas baseados no ATR
+                        </p>
+                      </div>
+                      <Switch
+                        checked={config.enableAtrAlerts}
+                        onCheckedChange={(enableAtrAlerts) => onUpdateConfig({ enableAtrAlerts })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Alta Volatilidade (&gt; %)</Label>
+                        <Input
+                          type="number"
+                          value={config.atrHighVolatility}
+                          onChange={(e) => onUpdateConfig({ atrHighVolatility: Number(e.target.value) })}
+                          min={1}
+                          max={10}
+                          step={0.5}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Baixa Volatilidade (&lt; %)</Label>
+                        <Input
+                          type="number"
+                          value={config.atrLowVolatility}
+                          onChange={(e) => onUpdateConfig({ atrLowVolatility: Number(e.target.value) })}
+                          min={0.1}
+                          max={3}
+                          step={0.1}
+                          className="h-8"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Alta volatilidade sugere cautela; baixa volatilidade pode indicar acumulação
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             </ScrollArea>
           </TabsContent>

@@ -320,6 +320,101 @@ export function useIndicatorAlerts(options: UseIndicatorAlertsOptions = {}) {
         }
       }
     }
+
+    // ADX Alerts - +DI/-DI Crossovers
+    if (config.enableAdxCross) {
+      const adx = getIndicator('adx');
+      const diIndicator = getIndicator('+di');
+      const prevDi = getPrevIndicator('+di');
+      
+      if (adx && diIndicator && prevDi) {
+        // Parse +DI and -DI from the description (format: "+DI: XX.X | -DI: XX.X")
+        const diMatch = diIndicator.description?.match(/\+DI:\s*([\d.]+)\s*\|\s*-DI:\s*([\d.]+)/);
+        const prevDiMatch = prevDi.description?.match(/\+DI:\s*([\d.]+)\s*\|\s*-DI:\s*([\d.]+)/);
+        
+        if (diMatch && prevDiMatch) {
+          const plusDI = parseFloat(diMatch[1]);
+          const minusDI = parseFloat(diMatch[2]);
+          const prevPlusDI = parseFloat(prevDiMatch[1]);
+          const prevMinusDI = parseFloat(prevDiMatch[2]);
+          
+          // Bullish cross: +DI crosses above -DI
+          if (prevPlusDI <= prevMinusDI && plusDI > minusDI) {
+            addAlert(
+              'adx_bullish_cross',
+              symbol,
+              'ADX',
+              plusDI,
+              `+DI (${plusDI.toFixed(1)}) cruzou acima de -DI (${minusDI.toFixed(1)}) - sinal de alta`,
+              'bullish'
+            );
+          }
+          // Bearish cross: -DI crosses above +DI
+          else if (prevPlusDI >= prevMinusDI && plusDI < minusDI) {
+            addAlert(
+              'adx_bearish_cross',
+              symbol,
+              'ADX',
+              minusDI,
+              `-DI (${minusDI.toFixed(1)}) cruzou acima de +DI (${plusDI.toFixed(1)}) - sinal de baixa`,
+              'bearish'
+            );
+          }
+        }
+        
+        // Strong trend alert
+        if (adx.value >= config.adxStrongTrend) {
+          const direction = diIndicator.signal === 'bullish' ? 'bullish' : 'bearish';
+          addAlert(
+            'adx_strong_trend',
+            symbol,
+            'ADX',
+            adx.value,
+            `ADX em ${adx.value.toFixed(1)} indica tendência forte de ${direction === 'bullish' ? 'alta' : 'baixa'}`,
+            direction
+          );
+        }
+      }
+    }
+
+    // ATR Volatility Alerts
+    if (config.enableAtrAlerts) {
+      const atr = getIndicator('atr');
+      
+      if (atr && atr.description) {
+        // Parse volatility percentage from description (format: "Volatilidade: X.XX%")
+        const volMatch = atr.description.match(/Volatilidade:\s*([\d.]+)%/);
+        
+        if (volMatch) {
+          const volatilityPercent = parseFloat(volMatch[1]);
+          
+          // High volatility alert
+          if (volatilityPercent >= config.atrHighVolatility) {
+            addAlert(
+              'atr_high_volatility',
+              symbol,
+              'ATR',
+              atr.value,
+              `Volatilidade extrema de ${volatilityPercent.toFixed(2)}% - cautela recomendada`,
+              'bearish',
+              config.atrHighVolatility
+            );
+          }
+          // Low volatility alert (potential breakout)
+          else if (volatilityPercent <= config.atrLowVolatility) {
+            addAlert(
+              'atr_low_volatility',
+              symbol,
+              'ATR',
+              atr.value,
+              `Volatilidade baixa de ${volatilityPercent.toFixed(2)}% - possível acumulação antes de movimento`,
+              'bullish',
+              config.atrLowVolatility
+            );
+          }
+        }
+      }
+    }
   }, [config, addAlert]);
 
   const markAsRead = useCallback((alertId: string) => {
