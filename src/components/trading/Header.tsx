@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { Settings, User, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun, BarChart3, Receipt, FileText } from 'lucide-react';
+import { Settings, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun, BarChart3, Receipt, FileText } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/sheet';
 import { AlertsPanel } from './AlertsPanel';
 import { TradingAlert } from '@/types/alerts';
+import { UserMenu } from '@/components/auth/UserMenu';
 
 interface HeaderProps {
   alerts: TradingAlert[];
@@ -134,19 +135,7 @@ export const Header = ({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <User className="w-5 h-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>Minha Conta</DropdownMenuItem>
-              <DropdownMenuItem>Configurar API</DropdownMenuItem>
-              <DropdownMenuItem>Upgrade Premium</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">Sair</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <UserMenu />
         </div>
 
         {/* Mobile Navigation */}
@@ -233,11 +222,6 @@ export const Header = ({
                   </Button>
                 </Link>
 
-                <Button variant="ghost" className="w-full justify-start gap-3">
-                  <User className="w-5 h-5" />
-                  Minha Conta
-                </Button>
-
                 <div className="pt-4 border-t border-border">
                   <Button 
                     variant="ghost" 
@@ -249,10 +233,9 @@ export const Header = ({
                   </Button>
                 </div>
 
-                <div className="pt-4 border-t border-border">
-                  <Button variant="ghost" className="w-full justify-start gap-3 text-destructive hover:text-destructive">
-                    Sair
-                  </Button>
+                <div className="pt-4 border-t border-border flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Conta</span>
+                  <UserMenu />
                 </div>
               </div>
             </SheetContent>

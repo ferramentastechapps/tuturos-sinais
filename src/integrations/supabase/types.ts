@@ -14,7 +14,141 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      indicator_alert_config: {
+        Row: {
+          adx_strong_trend: number
+          atr_high_volatility: number
+          atr_low_volatility: number
+          browser_notifications: boolean
+          enable_adx_cross: boolean
+          enable_atr_alerts: boolean
+          enable_bollinger_touch: boolean
+          enable_ema_cross: boolean
+          enable_ichimoku_signals: boolean
+          enable_macd_cross: boolean
+          enabled: boolean
+          id: string
+          rsi_overbought: number
+          rsi_oversold: number
+          stoch_overbought: number
+          stoch_oversold: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          adx_strong_trend?: number
+          atr_high_volatility?: number
+          atr_low_volatility?: number
+          browser_notifications?: boolean
+          enable_adx_cross?: boolean
+          enable_atr_alerts?: boolean
+          enable_bollinger_touch?: boolean
+          enable_ema_cross?: boolean
+          enable_ichimoku_signals?: boolean
+          enable_macd_cross?: boolean
+          enabled?: boolean
+          id?: string
+          rsi_overbought?: number
+          rsi_oversold?: number
+          stoch_overbought?: number
+          stoch_oversold?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          adx_strong_trend?: number
+          atr_high_volatility?: number
+          atr_low_volatility?: number
+          browser_notifications?: boolean
+          enable_adx_cross?: boolean
+          enable_atr_alerts?: boolean
+          enable_bollinger_touch?: boolean
+          enable_ema_cross?: boolean
+          enable_ichimoku_signals?: boolean
+          enable_macd_cross?: boolean
+          enabled?: boolean
+          id?: string
+          rsi_overbought?: number
+          rsi_oversold?: number
+          stoch_overbought?: number
+          stoch_oversold?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      indicator_alerts: {
+        Row: {
+          created_at: string
+          direction: string
+          id: string
+          indicator_name: string
+          message: string
+          read: boolean
+          symbol: string
+          threshold: number | null
+          type: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          id?: string
+          indicator_name: string
+          message: string
+          read?: boolean
+          symbol: string
+          threshold?: number | null
+          type: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          id?: string
+          indicator_name?: string
+          message?: string
+          read?: boolean
+          symbol?: string
+          threshold?: number | null
+          type?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          notification_preferences: Json | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          notification_preferences?: Json | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          notification_preferences?: Json | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
