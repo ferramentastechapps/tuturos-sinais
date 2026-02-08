@@ -8,6 +8,8 @@ import { useTrades } from '@/hooks/useTrades';
 import { useWatchlist } from '@/hooks/useWatchlist';
 import { useTechnicalIndicators } from '@/hooks/useTechnicalIndicators';
 import { useIndicatorAlerts } from '@/hooks/useIndicatorAlerts';
+import { useIndicatorAlertsDB } from '@/hooks/useIndicatorAlertsDB';
+import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/trading/Header';
 import { MarketTicker } from '@/components/trading/MarketTicker';
 import { PriceCard } from '@/components/trading/PriceCard';
@@ -31,6 +33,7 @@ import { CryptoPair, TechnicalIndicator } from '@/types/trading';
 import { Loader2 } from 'lucide-react';
 
 const Index = () => {
+  const { isAuthenticated } = useAuth();
   const { data: cryptoPairs = [], isLoading } = useCryptoPrices();
   const [selectedPair, setSelectedPair] = useState<CryptoPair | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -48,7 +51,10 @@ const Index = () => {
     isInWatchlist,
   } = useWatchlist();
 
-  // Indicator alerts
+  // Indicator alerts - use DB hook when authenticated, otherwise local storage
+  const localIndicatorAlerts = useIndicatorAlerts();
+  const dbIndicatorAlerts = useIndicatorAlertsDB();
+  
   const {
     alerts: indicatorAlerts,
     unreadCount: indicatorUnreadCount,
@@ -61,7 +67,7 @@ const Index = () => {
     updateConfig: updateIndicatorAlertConfig,
     requestNotificationPermission,
     getNotificationStatus,
-  } = useIndicatorAlerts();
+  } = isAuthenticated ? dbIndicatorAlerts : localIndicatorAlerts;
 
   // Technical indicators for selected pair
   const { data: technicalIndicators } = useTechnicalIndicators(selectedPair?.symbol || '');
