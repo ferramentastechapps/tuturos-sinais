@@ -423,6 +423,31 @@ export const calculateADX = (prices: PricePoint[], period: number = 14): ADXResu
   return result;
 };
 
+// Williams %R
+export interface WilliamsRResult {
+  timestamp: number;
+  value: number; // Range: -100 to 0
+}
+
+export const calculateWilliamsR = (
+  prices: PricePoint[],
+  period: number = 14
+): WilliamsRResult[] => {
+  const result: WilliamsRResult[] = [];
+
+  for (let i = period - 1; i < prices.length; i++) {
+    const slice = prices.slice(i - period + 1, i + 1);
+    const highest = Math.max(...slice.map(p => p.price));
+    const lowest = Math.min(...slice.map(p => p.price));
+    const current = prices[i].price;
+
+    const wr = highest === lowest ? -50 : ((highest - current) / (highest - lowest)) * -100;
+    result.push({ timestamp: prices[i].timestamp, value: wr });
+  }
+
+  return result;
+};
+
 // Get signal interpretation
 export const getIndicatorSignal = (
   indicator: string,

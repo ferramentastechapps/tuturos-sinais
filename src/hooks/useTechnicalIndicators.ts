@@ -10,6 +10,7 @@ import {
   calculateIchimoku,
   calculateATR,
   calculateADX,
+  calculateWilliamsR,
   getIndicatorSignal 
 } from '@/utils/technicalIndicators';
 import { TechnicalIndicator } from '@/types/trading';
@@ -215,6 +216,22 @@ export const useTechnicalIndicators = (symbol: string) => {
           value: parseFloat(latestADX.plusDI.toFixed(2)),
           signal: latestADX.plusDI > latestADX.minusDI ? 'bullish' : 'bearish',
           description: `+DI: ${latestADX.plusDI.toFixed(1)} | -DI: ${latestADX.minusDI.toFixed(1)}`,
+        });
+      }
+
+      // Williams %R (14)
+      const williamsR = calculateWilliamsR(prices, 14);
+      const latestWR = williamsR[williamsR.length - 1];
+      if (latestWR) {
+        let wrSignal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+        if (latestWR.value > -20) wrSignal = 'bearish'; // Overbought
+        else if (latestWR.value < -80) wrSignal = 'bullish'; // Oversold
+
+        indicators.push({
+          name: 'Williams %R (14)',
+          value: parseFloat(latestWR.value.toFixed(2)),
+          signal: wrSignal,
+          description: latestWR.value > -20 ? 'Sobrecomprado' : latestWR.value < -80 ? 'Sobrevendido' : 'Zona Neutra',
         });
       }
 
