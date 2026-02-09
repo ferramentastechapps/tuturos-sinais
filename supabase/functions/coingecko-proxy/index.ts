@@ -9,7 +9,7 @@ const COINGECKO_API = 'https://api.coingecko.com/api/v3';
 
 // Simple in-memory cache
 const cache = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_TTL = 60 * 1000; // 1 minute cache
+const CACHE_TTL = 2 * 60 * 1000; // 2 minute cache
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -54,25 +54,38 @@ serve(async (req) => {
       );
     }
 
-    // Fetch from CoinGecko
+    // Fetch from CoinGecko with retry on 429
     const coinGeckoUrl = `${COINGECKO_API}${endpoint}${params.toString() ? '?' + params.toString() : ''}`;
     console.log(`Fetching from CoinGecko: ${coinGeckoUrl}`);
 
-    const response = await fetch(coinGeckoUrl, {
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+    let response: Response | null = null;
+    const maxRetries = 3;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`CoinGecko error: ${response.status} - ${errorText}`);
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      response = await fetch(coinGeckoUrl, {
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        const waitMs = retryAfter
+          ? parseInt(retryAfter) * 1000
+          : Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+        console.log(`Rate limited (429), waiting ${Math.round(waitMs)}ms before retry ${attempt + 1}`);
+        await response.text(); // consume body
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        continue;
+      }
+      break;
+    }
+
+    if (!response || !response.ok) {
+      const status = response?.status || 500;
+      const errorText = response ? await response.text() : 'No response';
+      console.error(`CoinGecko error: ${status} - ${errorText}`);
       return new Response(
-        JSON.stringify({ error: `CoinGecko API error: ${response.status}` }),
-        { 
-          status: response.status, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: `CoinGecko API error: ${status}` }),
+        { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
