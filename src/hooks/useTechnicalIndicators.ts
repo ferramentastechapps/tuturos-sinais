@@ -12,6 +12,7 @@ import {
   calculateADX,
   calculateWilliamsR,
   calculateOBV,
+  calculateCCI,
   getIndicatorSignal 
 } from '@/utils/technicalIndicators';
 import { TechnicalIndicator } from '@/types/trading';
@@ -250,6 +251,22 @@ export const useTechnicalIndicators = (symbol: string) => {
           value: parseFloat(latestOBV.toFixed(0)),
           signal: obvSignal,
           description: latestOBV > prevOBV ? 'Volume confirmando alta' : latestOBV < prevOBV ? 'Volume confirmando queda' : 'Volume neutro',
+        });
+      }
+
+      // CCI (20)
+      const cci = calculateCCI(prices, 20);
+      const latestCCI = cci[cci.length - 1];
+      if (latestCCI) {
+        let cciSignal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+        if (latestCCI.value > 100) cciSignal = 'bearish'; // Overbought
+        else if (latestCCI.value < -100) cciSignal = 'bullish'; // Oversold
+
+        indicators.push({
+          name: 'CCI (20)',
+          value: parseFloat(latestCCI.value.toFixed(2)),
+          signal: cciSignal,
+          description: latestCCI.value > 100 ? 'Sobrecomprado' : latestCCI.value < -100 ? 'Sobrevendido' : 'Zona Neutra',
         });
       }
 
