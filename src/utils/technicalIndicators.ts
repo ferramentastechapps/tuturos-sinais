@@ -477,6 +477,29 @@ export const calculateOBV = (prices: PricePoint[]): OBVResult[] => {
   return result;
 };
 
+// Commodity Channel Index (CCI)
+export interface CCIResult {
+  timestamp: number;
+  value: number;
+}
+
+export const calculateCCI = (prices: PricePoint[], period: number = 20): CCIResult[] => {
+  const result: CCIResult[] = [];
+
+  for (let i = period - 1; i < prices.length; i++) {
+    const slice = prices.slice(i - period + 1, i + 1);
+    // Typical price approximation using close price
+    const typicalPrices = slice.map(p => p.price);
+    const mean = typicalPrices.reduce((a, b) => a + b, 0) / period;
+    const meanDeviation = typicalPrices.reduce((sum, tp) => sum + Math.abs(tp - mean), 0) / period;
+
+    const cci = meanDeviation === 0 ? 0 : (prices[i].price - mean) / (0.015 * meanDeviation);
+    result.push({ timestamp: prices[i].timestamp, value: cci });
+  }
+
+  return result;
+};
+
 // Get signal interpretation
 export const getIndicatorSignal = (
   indicator: string,
