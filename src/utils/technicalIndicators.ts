@@ -448,6 +448,35 @@ export const calculateWilliamsR = (
   return result;
 };
 
+// On-Balance Volume (OBV)
+export interface OBVResult {
+  timestamp: number;
+  obv: number;
+}
+
+export const calculateOBV = (prices: PricePoint[]): OBVResult[] => {
+  const result: OBVResult[] = [];
+  let obv = 0;
+
+  for (let i = 0; i < prices.length; i++) {
+    if (i === 0) {
+      result.push({ timestamp: prices[i].timestamp, obv: 0 });
+      continue;
+    }
+    // Simulate volume based on price movement magnitude
+    const simulatedVolume = 1000 + Math.abs(prices[i].price - prices[i - 1].price) * 100;
+
+    if (prices[i].price > prices[i - 1].price) {
+      obv += simulatedVolume;
+    } else if (prices[i].price < prices[i - 1].price) {
+      obv -= simulatedVolume;
+    }
+    result.push({ timestamp: prices[i].timestamp, obv });
+  }
+
+  return result;
+};
+
 // Get signal interpretation
 export const getIndicatorSignal = (
   indicator: string,

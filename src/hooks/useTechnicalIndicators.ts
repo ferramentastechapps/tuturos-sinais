@@ -11,6 +11,7 @@ import {
   calculateATR,
   calculateADX,
   calculateWilliamsR,
+  calculateOBV,
   getIndicatorSignal 
 } from '@/utils/technicalIndicators';
 import { TechnicalIndicator } from '@/types/trading';
@@ -232,6 +233,23 @@ export const useTechnicalIndicators = (symbol: string) => {
           value: parseFloat(latestWR.value.toFixed(2)),
           signal: wrSignal,
           description: latestWR.value > -20 ? 'Sobrecomprado' : latestWR.value < -80 ? 'Sobrevendido' : 'Zona Neutra',
+        });
+      }
+
+      // OBV (On-Balance Volume)
+      const obv = calculateOBV(prices);
+      if (obv.length >= 10) {
+        const latestOBV = obv[obv.length - 1].obv;
+        const prevOBV = obv[obv.length - 10].obv;
+        let obvSignal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+        if (latestOBV > prevOBV) obvSignal = 'bullish';
+        else if (latestOBV < prevOBV) obvSignal = 'bearish';
+
+        indicators.push({
+          name: 'OBV',
+          value: parseFloat(latestOBV.toFixed(0)),
+          signal: obvSignal,
+          description: latestOBV > prevOBV ? 'Volume confirmando alta' : latestOBV < prevOBV ? 'Volume confirmando queda' : 'Volume neutro',
         });
       }
 
