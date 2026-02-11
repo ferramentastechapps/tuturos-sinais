@@ -11,6 +11,8 @@ import {
   calculateATR,
   calculateADX,
   calculateWilliamsR,
+  calculateOBV,
+  calculateCCI,
   getIndicatorSignal 
 } from '@/utils/technicalIndicators';
 import { TechnicalIndicator } from '@/types/trading';
@@ -232,6 +234,39 @@ export const useTechnicalIndicators = (symbol: string) => {
           value: parseFloat(latestWR.value.toFixed(2)),
           signal: wrSignal,
           description: latestWR.value > -20 ? 'Sobrecomprado' : latestWR.value < -80 ? 'Sobrevendido' : 'Zona Neutra',
+        });
+      }
+
+      // OBV (On-Balance Volume)
+      const obv = calculateOBV(prices);
+      if (obv.length >= 10) {
+        const latestOBV = obv[obv.length - 1].obv;
+        const prevOBV = obv[obv.length - 10].obv;
+        let obvSignal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+        if (latestOBV > prevOBV) obvSignal = 'bullish';
+        else if (latestOBV < prevOBV) obvSignal = 'bearish';
+
+        indicators.push({
+          name: 'OBV',
+          value: parseFloat(latestOBV.toFixed(0)),
+          signal: obvSignal,
+          description: latestOBV > prevOBV ? 'Volume confirmando alta' : latestOBV < prevOBV ? 'Volume confirmando queda' : 'Volume neutro',
+        });
+      }
+
+      // CCI (20)
+      const cci = calculateCCI(prices, 20);
+      const latestCCI = cci[cci.length - 1];
+      if (latestCCI) {
+        let cciSignal: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+        if (latestCCI.value > 100) cciSignal = 'bearish'; // Overbought
+        else if (latestCCI.value < -100) cciSignal = 'bullish'; // Oversold
+
+        indicators.push({
+          name: 'CCI (20)',
+          value: parseFloat(latestCCI.value.toFixed(2)),
+          signal: cciSignal,
+          description: latestCCI.value > 100 ? 'Sobrecomprado' : latestCCI.value < -100 ? 'Sobrevendido' : 'Zona Neutra',
         });
       }
 

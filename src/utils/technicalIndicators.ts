@@ -557,6 +557,7 @@ export const calculateWilliamsR = (
   return result;
 };
 
+<<<<<<< HEAD
 // Stochastic RSI — aplica Stochastic sobre o RSI para sinais mais rápidos
 export interface StochRSIResult {
   timestamp: number;
@@ -602,11 +603,38 @@ export const calculateStochasticRSI = (
         d,
       });
     }
+=======
+// On-Balance Volume (OBV)
+export interface OBVResult {
+  timestamp: number;
+  obv: number;
+}
+
+export const calculateOBV = (prices: PricePoint[]): OBVResult[] => {
+  const result: OBVResult[] = [];
+  let obv = 0;
+
+  for (let i = 0; i < prices.length; i++) {
+    if (i === 0) {
+      result.push({ timestamp: prices[i].timestamp, obv: 0 });
+      continue;
+    }
+    // Simulate volume based on price movement magnitude
+    const simulatedVolume = 1000 + Math.abs(prices[i].price - prices[i - 1].price) * 100;
+
+    if (prices[i].price > prices[i - 1].price) {
+      obv += simulatedVolume;
+    } else if (prices[i].price < prices[i - 1].price) {
+      obv -= simulatedVolume;
+    }
+    result.push({ timestamp: prices[i].timestamp, obv });
+>>>>>>> 6c662583cebf889e47843b1d017a067516fafa64
   }
 
   return result;
 };
 
+<<<<<<< HEAD
 // EMA Crossovers — Golden Cross, Death Cross, cruzamentos rápidos
 export interface EMACrossover {
   type: 'golden_cross' | 'death_cross' | 'fast_bullish' | 'fast_bearish';
@@ -677,6 +705,29 @@ export const detectEMACrossovers = (
   }
 
   return crossovers;
+=======
+// Commodity Channel Index (CCI)
+export interface CCIResult {
+  timestamp: number;
+  value: number;
+}
+
+export const calculateCCI = (prices: PricePoint[], period: number = 20): CCIResult[] => {
+  const result: CCIResult[] = [];
+
+  for (let i = period - 1; i < prices.length; i++) {
+    const slice = prices.slice(i - period + 1, i + 1);
+    // Typical price approximation using close price
+    const typicalPrices = slice.map(p => p.price);
+    const mean = typicalPrices.reduce((a, b) => a + b, 0) / period;
+    const meanDeviation = typicalPrices.reduce((sum, tp) => sum + Math.abs(tp - mean), 0) / period;
+
+    const cci = meanDeviation === 0 ? 0 : (prices[i].price - mean) / (0.015 * meanDeviation);
+    result.push({ timestamp: prices[i].timestamp, value: cci });
+  }
+
+  return result;
+>>>>>>> 6c662583cebf889e47843b1d017a067516fafa64
 };
 
 // Get signal interpretation
