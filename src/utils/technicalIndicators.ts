@@ -1,5 +1,7 @@
 // Technical Indicators Calculation Utilities
 
+import { OHLCPoint } from '@/services/coingeckoOHLC';
+
 export interface PricePoint {
   timestamp: number;
   price: number;
@@ -27,7 +29,7 @@ export interface MACDResult {
 // Simple Moving Average (SMA)
 export const calculateSMA = (prices: PricePoint[], period: number): IndicatorPoint[] => {
   const result: IndicatorPoint[] = [];
-  
+
   for (let i = period - 1; i < prices.length; i++) {
     const sum = prices.slice(i - period + 1, i + 1).reduce((acc, p) => acc + p.price, 0);
     result.push({
@@ -35,7 +37,7 @@ export const calculateSMA = (prices: PricePoint[], period: number): IndicatorPoi
       value: sum / period,
     });
   }
-  
+
   return result;
 };
 
@@ -43,10 +45,10 @@ export const calculateSMA = (prices: PricePoint[], period: number): IndicatorPoi
 export const calculateEMA = (prices: PricePoint[], period: number): IndicatorPoint[] => {
   const result: IndicatorPoint[] = [];
   const multiplier = 2 / (period + 1);
-  
+
   // Start with SMA for the first value
   let ema = prices.slice(0, period).reduce((acc, p) => acc + p.price, 0) / period;
-  
+
   for (let i = period - 1; i < prices.length; i++) {
     if (i === period - 1) {
       result.push({ timestamp: prices[i].timestamp, value: ema });
@@ -55,7 +57,7 @@ export const calculateEMA = (prices: PricePoint[], period: number): IndicatorPoi
       result.push({ timestamp: prices[i].timestamp, value: ema });
     }
   }
-  
+
   return result;
 };
 
@@ -64,33 +66,33 @@ export const calculateRSI = (prices: PricePoint[], period: number = 14): Indicat
   const result: IndicatorPoint[] = [];
   const gains: number[] = [];
   const losses: number[] = [];
-  
+
   // Calculate price changes
   for (let i = 1; i < prices.length; i++) {
     const change = prices[i].price - prices[i - 1].price;
     gains.push(change > 0 ? change : 0);
     losses.push(change < 0 ? Math.abs(change) : 0);
   }
-  
+
   // Calculate initial average gain and loss
   let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
   let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
-  
+
   for (let i = period; i < prices.length; i++) {
     if (i > period) {
       avgGain = (avgGain * (period - 1) + gains[i - 1]) / period;
       avgLoss = (avgLoss * (period - 1) + losses[i - 1]) / period;
     }
-    
+
     const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
     const rsi = 100 - (100 / (1 + rs));
-    
+
     result.push({
       timestamp: prices[i].timestamp,
       value: rsi,
     });
   }
-  
+
   return result;
 };
 
@@ -102,13 +104,13 @@ export const calculateMACD = (
   signalPeriod: number = 9
 ): MACDResult[] => {
   const result: MACDResult[] = [];
-  
+
   const fastEMA = calculateEMA(prices, fastPeriod);
   const slowEMA = calculateEMA(prices, slowPeriod);
-  
+
   // Align the EMAs by timestamp
   const macdLine: IndicatorPoint[] = [];
-  
+
   for (const slow of slowEMA) {
     const fast = fastEMA.find(f => f.timestamp === slow.timestamp);
     if (fast) {
@@ -118,17 +120,17 @@ export const calculateMACD = (
       });
     }
   }
-  
+
   // Calculate Signal Line (EMA of MACD line)
   if (macdLine.length >= signalPeriod) {
     const signalMultiplier = 2 / (signalPeriod + 1);
     let signalEMA = macdLine.slice(0, signalPeriod).reduce((acc, p) => acc + p.value, 0) / signalPeriod;
-    
+
     for (let i = signalPeriod - 1; i < macdLine.length; i++) {
       if (i > signalPeriod - 1) {
         signalEMA = (macdLine[i].value - signalEMA) * signalMultiplier + signalEMA;
       }
-      
+
       const macdValue = macdLine[i].value;
       result.push({
         timestamp: macdLine[i].timestamp,
@@ -138,7 +140,7 @@ export const calculateMACD = (
       });
     }
   }
-  
+
   return result;
 };
 
@@ -150,16 +152,16 @@ export const calculateBollingerBands = (
 ): BollingerBands[] => {
   const result: BollingerBands[] = [];
   const sma = calculateSMA(prices, period);
-  
+
   for (let i = period - 1; i < prices.length; i++) {
     const slice = prices.slice(i - period + 1, i + 1);
     const mean = slice.reduce((acc, p) => acc + p.price, 0) / period;
     const squaredDiffs = slice.map(p => Math.pow(p.price - mean, 2));
     const variance = squaredDiffs.reduce((acc, v) => acc + v, 0) / period;
     const standardDeviation = Math.sqrt(variance);
-    
+
     const middle = sma.find(s => s.timestamp === prices[i].timestamp)?.value || mean;
-    
+
     result.push({
       timestamp: prices[i].timestamp,
       upper: middle + standardDeviation * stdDev,
@@ -167,30 +169,86 @@ export const calculateBollingerBands = (
       lower: middle - standardDeviation * stdDev,
     });
   }
-  
+
   return result;
 };
 
-// VWAP (Volume Weighted Average Price) - Simplified version using price only
-export const calculateVWAP = (prices: PricePoint[]): IndicatorPoint[] => {
+// VWAP (Volume Weighted Average Price)
+export const calculateVWAP = (prices: PricePoint[], volumes?: PricePoint[]): IndicatorPoint[] => {
   const result: IndicatorPoint[] = [];
   let cumulativeTPV = 0;
   let cumulativeVolume = 0;
-  
+
   for (let i = 0; i < prices.length; i++) {
-    // Simulate volume based on price movement
-    const priceChange = i > 0 ? Math.abs(prices[i].price - prices[i - 1].price) : 0;
-    const simulatedVolume = 1000 + priceChange * 100;
-    
-    cumulativeTPV += prices[i].price * simulatedVolume;
-    cumulativeVolume += simulatedVolume;
-    
+    const price = prices[i].price;
+    // Use real volume if available and aligned, otherwise simulate
+    let volume = 0;
+
+    if (volumes && volumes[i] && volumes[i].timestamp === prices[i].timestamp) {
+      volume = volumes[i].price; // PricePoint.price holds volume here
+    } else {
+      // Fallback simulation
+      const priceChange = i > 0 ? Math.abs(prices[i].price - prices[i - 1].price) : 0;
+      volume = 1000 + priceChange * 100;
+    }
+
+    cumulativeTPV += price * volume;
+    cumulativeVolume += volume;
+
     result.push({
       timestamp: prices[i].timestamp,
-      value: cumulativeTPV / cumulativeVolume,
+      value: cumulativeVolume > 0 ? cumulativeTPV / cumulativeVolume : price,
     });
   }
-  
+
+  return result;
+};
+
+// VWAP from OHLC data — usa volume REAL e preço típico (H+L+C)/3
+export interface VWAPWithBands {
+  timestamp: number;
+  vwap: number;
+  upperBand1: number; // +1σ
+  lowerBand1: number; // -1σ
+  upperBand2: number; // +2σ
+  lowerBand2: number; // -2σ
+  upperBand3: number; // +3σ
+  lowerBand3: number; // -3σ
+}
+
+export const calculateVWAPFromOHLC = (data: OHLCPoint[]): VWAPWithBands[] => {
+  const result: VWAPWithBands[] = [];
+  let cumulativeTPV = 0;
+  let cumulativeVolume = 0;
+  let cumulativeTPV2 = 0; // Para cálculo de desvio padrão
+
+  for (let i = 0; i < data.length; i++) {
+    const candle = data[i];
+    const typicalPrice = (candle.high + candle.low + candle.close) / 3;
+    const volume = candle.volume && candle.volume > 0 ? candle.volume : (candle.high - candle.low) * 1000;
+
+    cumulativeTPV += typicalPrice * volume;
+    cumulativeVolume += volume;
+    cumulativeTPV2 += typicalPrice * typicalPrice * volume;
+
+    const vwap = cumulativeTPV / cumulativeVolume;
+
+    // Desvio padrão ponderado pelo volume
+    const variance = (cumulativeTPV2 / cumulativeVolume) - (vwap * vwap);
+    const stdDev = Math.sqrt(Math.max(0, variance));
+
+    result.push({
+      timestamp: candle.timestamp,
+      vwap,
+      upperBand1: vwap + stdDev,
+      lowerBand1: vwap - stdDev,
+      upperBand2: vwap + stdDev * 2,
+      lowerBand2: vwap - stdDev * 2,
+      upperBand3: vwap + stdDev * 3,
+      lowerBand3: vwap - stdDev * 3,
+    });
+  }
+
   return result;
 };
 
@@ -208,16 +266,16 @@ export const calculateStochastic = (
 ): StochasticResult[] => {
   const result: StochasticResult[] = [];
   const kValues: number[] = [];
-  
+
   for (let i = kPeriod - 1; i < prices.length; i++) {
     const slice = prices.slice(i - kPeriod + 1, i + 1);
     const highest = Math.max(...slice.map(p => p.price));
     const lowest = Math.min(...slice.map(p => p.price));
     const current = prices[i].price;
-    
+
     const k = highest === lowest ? 50 : ((current - lowest) / (highest - lowest)) * 100;
     kValues.push(k);
-    
+
     if (kValues.length >= dPeriod) {
       const d = kValues.slice(-dPeriod).reduce((a, b) => a + b, 0) / dPeriod;
       result.push({
@@ -227,7 +285,7 @@ export const calculateStochastic = (
       });
     }
   }
-  
+
   return result;
 };
 
@@ -255,17 +313,17 @@ export const calculateIchimoku = (
   senkouBPeriod: number = 52
 ): IchimokuResult[] => {
   const result: IchimokuResult[] = [];
-  
+
   for (let i = senkouBPeriod - 1; i < prices.length; i++) {
     const tenkan = getHighLow(prices, i, tenkanPeriod);
     const kijun = getHighLow(prices, i, kijunPeriod);
     const senkouB = getHighLow(prices, i, senkouBPeriod);
-    
+
     const tenkanSen = (tenkan.high + tenkan.low) / 2;
     const kijunSen = (kijun.high + kijun.low) / 2;
     const senkouSpanA = (tenkanSen + kijunSen) / 2;
     const senkouSpanB = (senkouB.high + senkouB.low) / 2;
-    
+
     result.push({
       timestamp: prices[i].timestamp,
       tenkanSen,
@@ -275,7 +333,7 @@ export const calculateIchimoku = (
       chikouSpan: prices[i].price,
     });
   }
-  
+
   return result;
 };
 
@@ -289,43 +347,62 @@ export interface ATRResult {
 export const calculateATR = (prices: PricePoint[], period: number = 14): ATRResult[] => {
   const result: ATRResult[] = [];
   const trueRanges: number[] = [];
-  
+
   for (let i = 1; i < prices.length; i++) {
-    const high = prices[i].price * 1.005; // Simulate high as 0.5% above close
-    const low = prices[i].price * 0.995;  // Simulate low as 0.5% below close
+    const high = prices[i].price * 1.005;
+    const low = prices[i].price * 0.995;
     const prevClose = prices[i - 1].price;
-    
-    // True Range = max(high - low, |high - prevClose|, |low - prevClose|)
+
     const tr = Math.max(
       high - low,
       Math.abs(high - prevClose),
       Math.abs(low - prevClose)
     );
     trueRanges.push(tr);
-    
+
     if (trueRanges.length >= period) {
-      // Use Wilder's smoothing method for ATR
       if (result.length === 0) {
-        // First ATR is simple average
         const atr = trueRanges.slice(-period).reduce((a, b) => a + b, 0) / period;
-        result.push({
-          timestamp: prices[i].timestamp,
-          atr,
-          trueRange: tr,
-        });
+        result.push({ timestamp: prices[i].timestamp, atr, trueRange: tr });
       } else {
-        // Subsequent ATRs use smoothing: ATR = ((prevATR * (period - 1)) + TR) / period
         const prevATR = result[result.length - 1].atr;
         const atr = ((prevATR * (period - 1)) + tr) / period;
-        result.push({
-          timestamp: prices[i].timestamp,
-          atr,
-          trueRange: tr,
-        });
+        result.push({ timestamp: prices[i].timestamp, atr, trueRange: tr });
       }
     }
   }
-  
+
+  return result;
+};
+
+// ATR from OHLC — usa high/low REAIS em vez de simulados
+export const calculateATRFromOHLC = (data: OHLCPoint[], period: number = 14): ATRResult[] => {
+  const result: ATRResult[] = [];
+  const trueRanges: number[] = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const { high, low } = data[i];
+    const prevClose = data[i - 1].close;
+
+    const tr = Math.max(
+      high - low,
+      Math.abs(high - prevClose),
+      Math.abs(low - prevClose)
+    );
+    trueRanges.push(tr);
+
+    if (trueRanges.length >= period) {
+      if (result.length === 0) {
+        const atr = trueRanges.slice(-period).reduce((a, b) => a + b, 0) / period;
+        result.push({ timestamp: data[i].timestamp, atr, trueRange: tr });
+      } else {
+        const prevATR = result[result.length - 1].atr;
+        const atr = ((prevATR * (period - 1)) + tr) / period;
+        result.push({ timestamp: data[i].timestamp, atr, trueRange: tr });
+      }
+    }
+  }
+
   return result;
 };
 
@@ -342,84 +419,116 @@ export const calculateADX = (prices: PricePoint[], period: number = 14): ADXResu
   const plusDMs: number[] = [];
   const minusDMs: number[] = [];
   const trueRanges: number[] = [];
-  
+
   for (let i = 1; i < prices.length; i++) {
     const high = prices[i].price * 1.005;
     const low = prices[i].price * 0.995;
     const prevHigh = prices[i - 1].price * 1.005;
     const prevLow = prices[i - 1].price * 0.995;
     const prevClose = prices[i - 1].price;
-    
-    // Calculate directional movement
+
     const upMove = high - prevHigh;
     const downMove = prevLow - low;
-    
+
     let plusDM = 0;
     let minusDM = 0;
-    
-    if (upMove > downMove && upMove > 0) {
-      plusDM = upMove;
-    }
-    if (downMove > upMove && downMove > 0) {
-      minusDM = downMove;
-    }
-    
+    if (upMove > downMove && upMove > 0) plusDM = upMove;
+    if (downMove > upMove && downMove > 0) minusDM = downMove;
+
     plusDMs.push(plusDM);
     minusDMs.push(minusDM);
-    
-    // True Range
-    const tr = Math.max(
-      high - low,
-      Math.abs(high - prevClose),
-      Math.abs(low - prevClose)
-    );
+
+    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
     trueRanges.push(tr);
-    
+
     if (trueRanges.length >= period) {
-      // Smooth the values using Wilder's method
       const smoothedPlusDM = plusDMs.slice(-period).reduce((a, b) => a + b, 0);
       const smoothedMinusDM = minusDMs.slice(-period).reduce((a, b) => a + b, 0);
       const smoothedTR = trueRanges.slice(-period).reduce((a, b) => a + b, 0);
-      
-      // Calculate +DI and -DI
+
       const plusDI = smoothedTR > 0 ? (smoothedPlusDM / smoothedTR) * 100 : 0;
       const minusDI = smoothedTR > 0 ? (smoothedMinusDM / smoothedTR) * 100 : 0;
-      
-      // Calculate DX
+
       const diSum = plusDI + minusDI;
       const dx = diSum > 0 ? (Math.abs(plusDI - minusDI) / diSum) * 100 : 0;
-      
-      // Calculate ADX (smoothed DX)
+
       if (result.length === 0) {
-        result.push({
-          timestamp: prices[i].timestamp,
-          adx: dx,
-          plusDI,
-          minusDI,
-        });
+        result.push({ timestamp: prices[i].timestamp, adx: dx, plusDI, minusDI });
       } else if (result.length < period) {
-        // Accumulate DX values for initial ADX
         const avgDX = (result.reduce((sum, r) => sum + r.adx, 0) + dx) / (result.length + 1);
-        result.push({
-          timestamp: prices[i].timestamp,
-          adx: avgDX,
-          plusDI,
-          minusDI,
-        });
+        result.push({ timestamp: prices[i].timestamp, adx: avgDX, plusDI, minusDI });
       } else {
-        // Smooth ADX
         const prevADX = result[result.length - 1].adx;
         const adx = ((prevADX * (period - 1)) + dx) / period;
-        result.push({
-          timestamp: prices[i].timestamp,
-          adx,
-          plusDI,
-          minusDI,
-        });
+        result.push({ timestamp: prices[i].timestamp, adx, plusDI, minusDI });
       }
     }
   }
-  
+
+  return result;
+};
+
+// ADX from OHLC — usa high/low REAIS
+export const calculateADXFromOHLC = (data: OHLCPoint[], period: number = 14): ADXResult[] => {
+  const result: ADXResult[] = [];
+  let smoothedPlusDM = 0;
+  let smoothedMinusDM = 0;
+  let smoothedTR = 0;
+  const dxValues: number[] = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const { high, low } = data[i];
+    const prevHigh = data[i - 1].high;
+    const prevLow = data[i - 1].low;
+    const prevClose = data[i - 1].close;
+
+    const upMove = high - prevHigh;
+    const downMove = prevLow - low;
+
+    let plusDM = 0;
+    let minusDM = 0;
+    if (upMove > downMove && upMove > 0) plusDM = upMove;
+    if (downMove > upMove && downMove > 0) minusDM = downMove;
+
+    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+
+    if (i <= period) {
+      // Período de acumulação
+      smoothedPlusDM += plusDM;
+      smoothedMinusDM += minusDM;
+      smoothedTR += tr;
+
+      if (i === period) {
+        const plusDI = smoothedTR > 0 ? (smoothedPlusDM / smoothedTR) * 100 : 0;
+        const minusDI = smoothedTR > 0 ? (smoothedMinusDM / smoothedTR) * 100 : 0;
+        const diSum = plusDI + minusDI;
+        const dx = diSum > 0 ? (Math.abs(plusDI - minusDI) / diSum) * 100 : 0;
+        dxValues.push(dx);
+        result.push({ timestamp: data[i].timestamp, adx: dx, plusDI, minusDI });
+      }
+    } else {
+      // Suavização de Wilder correta
+      smoothedPlusDM = smoothedPlusDM - (smoothedPlusDM / period) + plusDM;
+      smoothedMinusDM = smoothedMinusDM - (smoothedMinusDM / period) + minusDM;
+      smoothedTR = smoothedTR - (smoothedTR / period) + tr;
+
+      const plusDI = smoothedTR > 0 ? (smoothedPlusDM / smoothedTR) * 100 : 0;
+      const minusDI = smoothedTR > 0 ? (smoothedMinusDM / smoothedTR) * 100 : 0;
+      const diSum = plusDI + minusDI;
+      const dx = diSum > 0 ? (Math.abs(plusDI - minusDI) / diSum) * 100 : 0;
+      dxValues.push(dx);
+
+      if (dxValues.length <= period) {
+        const avgDX = dxValues.reduce((s, v) => s + v, 0) / dxValues.length;
+        result.push({ timestamp: data[i].timestamp, adx: avgDX, plusDI, minusDI });
+      } else {
+        const prevADX = result[result.length - 1].adx;
+        const adx = ((prevADX * (period - 1)) + dx) / period;
+        result.push({ timestamp: data[i].timestamp, adx, plusDI, minusDI });
+      }
+    }
+  }
+
   return result;
 };
 
@@ -446,6 +555,128 @@ export const calculateWilliamsR = (
   }
 
   return result;
+};
+
+// Stochastic RSI — aplica Stochastic sobre o RSI para sinais mais rápidos
+export interface StochRSIResult {
+  timestamp: number;
+  k: number;  // %K do Stochastic RSI (0-100)
+  d: number;  // %D (SMA do %K)
+}
+
+export const calculateStochasticRSI = (
+  rsiValues: IndicatorPoint[],
+  period: number = 14,
+  kSmoothing: number = 3,
+  dSmoothing: number = 3
+): StochRSIResult[] => {
+  const result: StochRSIResult[] = [];
+  const rawK: number[] = [];
+
+  for (let i = period - 1; i < rsiValues.length; i++) {
+    const slice = rsiValues.slice(i - period + 1, i + 1);
+    const values = slice.map(r => r.value);
+    const highest = Math.max(...values);
+    const lowest = Math.min(...values);
+
+    const stochRSI = highest === lowest ? 50 : ((rsiValues[i].value - lowest) / (highest - lowest)) * 100;
+    rawK.push(stochRSI);
+  }
+
+  // Suaviza %K
+  const smoothedK: number[] = [];
+  for (let i = kSmoothing - 1; i < rawK.length; i++) {
+    const avg = rawK.slice(i - kSmoothing + 1, i + 1).reduce((a, b) => a + b, 0) / kSmoothing;
+    smoothedK.push(avg);
+  }
+
+  // Calcula %D (SMA do %K suavizado)
+  for (let i = dSmoothing - 1; i < smoothedK.length; i++) {
+    const d = smoothedK.slice(i - dSmoothing + 1, i + 1).reduce((a, b) => a + b, 0) / dSmoothing;
+    const sourceIndex = (period - 1) + (kSmoothing - 1) + i;
+
+    if (sourceIndex < rsiValues.length) {
+      result.push({
+        timestamp: rsiValues[sourceIndex].timestamp,
+        k: smoothedK[i],
+        d,
+      });
+    }
+  }
+
+  return result;
+};
+
+// EMA Crossovers — Golden Cross, Death Cross, cruzamentos rápidos
+export interface EMACrossover {
+  type: 'golden_cross' | 'death_cross' | 'fast_bullish' | 'fast_bearish';
+  timestamp: number;
+  index: number;
+  fastValue: number;
+  slowValue: number;
+  description: string;
+}
+
+export const detectEMACrossovers = (
+  ema9: IndicatorPoint[],
+  ema21: IndicatorPoint[],
+  ema50: IndicatorPoint[],
+  ema200: IndicatorPoint[]
+): EMACrossover[] => {
+  const crossovers: EMACrossover[] = [];
+
+  // Helper para detectar cruzamento entre dois arrays
+  const findCrossovers = (
+    fast: IndicatorPoint[],
+    slow: IndicatorPoint[],
+    bullishType: EMACrossover['type'],
+    bearishType: EMACrossover['type'],
+    label: string
+  ) => {
+    const minLen = Math.min(fast.length, slow.length);
+    for (let i = 1; i < minLen; i++) {
+      const prevFast = fast[i - 1].value;
+      const prevSlow = slow[i - 1].value;
+      const currFast = fast[i].value;
+      const currSlow = slow[i].value;
+
+      // Bullish crossover (fast cruza acima de slow)
+      if (prevFast <= prevSlow && currFast > currSlow) {
+        crossovers.push({
+          type: bullishType,
+          timestamp: fast[i].timestamp,
+          index: i,
+          fastValue: currFast,
+          slowValue: currSlow,
+          description: `${label} Bullish: EMA rápida cruzou acima da lenta`,
+        });
+      }
+
+      // Bearish crossover (fast cruza abaixo de slow)
+      if (prevFast >= prevSlow && currFast < currSlow) {
+        crossovers.push({
+          type: bearishType,
+          timestamp: fast[i].timestamp,
+          index: i,
+          fastValue: currFast,
+          slowValue: currSlow,
+          description: `${label} Bearish: EMA rápida cruzou abaixo da lenta`,
+        });
+      }
+    }
+  };
+
+  // Golden Cross / Death Cross (EMA 50 vs EMA 200)
+  if (ema50.length > 1 && ema200.length > 1) {
+    findCrossovers(ema50, ema200, 'golden_cross', 'death_cross', 'Golden/Death Cross');
+  }
+
+  // Fast Cross (EMA 9 vs EMA 21)
+  if (ema9.length > 1 && ema21.length > 1) {
+    findCrossovers(ema9, ema21, 'fast_bullish', 'fast_bearish', 'EMA 9/21');
+  }
+
+  return crossovers;
 };
 
 // Get signal interpretation
@@ -477,5 +708,46 @@ export const getIndicatorSignal = (
       return 'neutral';
     default:
       return 'neutral';
+  }
+};
+
+// Fibonacci Levels
+export interface FibonacciLevels {
+  level0: number;      // 0% (Low for Uptrend, High for Downtrend)
+  level1: number;      // 100% (High for Uptrend, Low for Downtrend)
+  retracement382: number;
+  retracement500: number;
+  retracement618: number;
+  extension1618: number;
+  extension2618: number;
+}
+
+export const calculateFibonacciLevels = (
+  high: number,
+  low: number,
+  trend: 'bullish' | 'bearish'
+): FibonacciLevels => {
+  const diff = high - low;
+
+  if (trend === 'bullish') {
+    return {
+      level0: low,
+      level1: high,
+      retracement382: high - (diff * 0.382),
+      retracement500: high - (diff * 0.5),
+      retracement618: high - (diff * 0.618),
+      extension1618: high + (diff * 0.618), // Target 1
+      extension2618: high + (diff * 1.618), // Target 2
+    };
+  } else {
+    return {
+      level0: high,
+      level1: low,
+      retracement382: low + (diff * 0.382),
+      retracement500: low + (diff * 0.5),
+      retracement618: low + (diff * 0.618),
+      extension1618: low - (diff * 0.618), // Target 1
+      extension2618: low - (diff * 1.618), // Target 2
+    };
   }
 };

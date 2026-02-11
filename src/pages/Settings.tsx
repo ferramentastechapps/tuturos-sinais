@@ -8,6 +8,7 @@ import { Download, Upload, Trash2, Database, Shield, Bell } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useRef } from 'react';
 import { Switch } from '@/components/ui/switch';
+import { TelegramSettings } from '@/components/dashboard/TelegramSettings';
 
 const Settings = () => {
   const { exportBackup, importBackup, clearAllData } = useDataBackup();
@@ -27,7 +28,7 @@ const Settings = () => {
   return (
     <div className="min-h-screen bg-background">
       <SimpleHeader />
-      
+
       <main className="container mx-auto px-4 py-6 space-y-6 max-w-4xl">
         <div>
           <h1 className="text-2xl font-bold">Configurações</h1>
@@ -65,7 +66,7 @@ const Settings = () => {
             </div>
             <Alert>
               <AlertDescription className="text-sm">
-                O backup inclui: portfolio, trades, transações e configurações. 
+                O backup inclui: portfolio, trades, transações e configurações.
                 Seus dados são salvos apenas localmente no navegador.
               </AlertDescription>
             </Alert>
@@ -113,6 +114,9 @@ const Settings = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Telegram Bot Settings */}
+        <TelegramSettings />
 
         {/* Trading Preferences */}
         <Card>
@@ -182,13 +186,13 @@ const Settings = () => {
           <CardContent className="space-y-4">
             <Alert variant="destructive">
               <AlertDescription>
-                <strong>Atenção:</strong> Apagar todos os dados é uma ação permanente e não pode ser desfeita. 
+                <strong>Atenção:</strong> Apagar todos os dados é uma ação permanente e não pode ser desfeita.
                 Faça um backup antes de prosseguir.
               </AlertDescription>
             </Alert>
-            <Button 
-              onClick={clearAllData} 
-              variant="destructive" 
+            <Button
+              onClick={clearAllData}
+              variant="destructive"
               className="w-full sm:w-auto"
             >
               <Trash2 className="h-4 w-4 mr-2" />
@@ -206,7 +210,7 @@ const Settings = () => {
             <p><strong>Versão:</strong> 1.0.0</p>
             <p><strong>Última Atualização:</strong> Janeiro 2026</p>
             <p>
-              CryptoFutures é uma ferramenta de gestão de trading de criptomoedas. 
+              CryptoFutures é uma ferramenta de gestão de trading de criptomoedas.
               Todos os dados são armazenados localmente no seu navegador.
             </p>
           </CardContent>

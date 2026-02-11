@@ -70,6 +70,10 @@ export default {
         bullish: "hsl(var(--bullish))",
         bearish: "hsl(var(--bearish))",
         neutral: "hsl(var(--neutral))",
+        "signal-buy": "hsl(var(--signal-buy))",
+        "signal-sell": "hsl(var(--signal-sell))",
+        "signal-alert": "hsl(var(--signal-alert))",
+        "signal-info": "hsl(var(--signal-info))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

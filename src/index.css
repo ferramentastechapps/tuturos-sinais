@@ -46,21 +46,33 @@
     --bullish: 142 72% 35%;
     --bearish: 0 72% 50%;
     --neutral: 220 15% 50%;
-    
+
+    /* Signal colors — dashboard accent palette */
+    --signal-buy: 160 100% 39%;
+    /* #00C896 */
+    --signal-sell: 352 100% 63%;
+    /* #FF4466 */
+    --signal-alert: 43 100% 50%;
+    /* #FFB800 */
+    --signal-info: 214 100% 65%;
+    /* #4C9EFF */
+
     /* Chart colors */
     --chart-line: 174 72% 40%;
     --chart-area: 174 72% 40%;
     --chart-grid: 220 15% 90%;
-    
+    --chart-candle-up: 160 100% 39%;
+    --chart-candle-down: 352 100% 63%;
+
     /* Gradient tokens */
-    --gradient-bullish: linear-gradient(135deg, hsl(142 72% 35%), hsl(142 72% 25%));
-    --gradient-bearish: linear-gradient(135deg, hsl(0 72% 50%), hsl(0 72% 40%));
+    --gradient-bullish: linear-gradient(135deg, hsl(160 100% 39%), hsl(160 100% 29%));
+    --gradient-bearish: linear-gradient(135deg, hsl(352 100% 63%), hsl(352 100% 53%));
     --gradient-primary: linear-gradient(135deg, hsl(174 72% 40%), hsl(174 72% 30%));
     --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 15% 98%));
-    
+
     /* Glow effects */
-    --glow-bullish: 0 0 20px hsl(142 72% 35% / 0.2);
-    --glow-bearish: 0 0 20px hsl(0 72% 50% / 0.2);
+    --glow-bullish: 0 0 20px hsl(160 100% 39% / 0.2);
+    --glow-bearish: 0 0 20px hsl(352 100% 63% / 0.2);
     --glow-primary: 0 0 20px hsl(174 72% 40% / 0.2);
 
     --sidebar-background: 0 0% 100%;
@@ -112,21 +124,29 @@
     --bullish: 142 72% 45%;
     --bearish: 0 72% 55%;
     --neutral: 220 15% 50%;
-    
+
+    /* Signal colors — dashboard accent palette */
+    --signal-buy: 160 100% 39%;
+    --signal-sell: 352 100% 63%;
+    --signal-alert: 43 100% 50%;
+    --signal-info: 214 100% 65%;
+
     /* Chart colors */
     --chart-line: 174 72% 50%;
     --chart-area: 174 72% 50%;
     --chart-grid: 220 15% 15%;
-    
+    --chart-candle-up: 160 100% 39%;
+    --chart-candle-down: 352 100% 63%;
+
     /* Gradient tokens */
-    --gradient-bullish: linear-gradient(135deg, hsl(142 72% 45%), hsl(142 72% 35%));
-    --gradient-bearish: linear-gradient(135deg, hsl(0 72% 55%), hsl(0 72% 45%));
+    --gradient-bullish: linear-gradient(135deg, hsl(160 100% 39%), hsl(160 100% 29%));
+    --gradient-bearish: linear-gradient(135deg, hsl(352 100% 63%), hsl(352 100% 53%));
     --gradient-primary: linear-gradient(135deg, hsl(174 72% 50%), hsl(174 72% 40%));
     --gradient-card: linear-gradient(180deg, hsl(220 18% 12%), hsl(220 18% 8%));
-    
+
     /* Glow effects */
-    --glow-bullish: 0 0 20px hsl(142 72% 45% / 0.3);
-    --glow-bearish: 0 0 20px hsl(0 72% 55% / 0.3);
+    --glow-bullish: 0 0 20px hsl(160 100% 39% / 0.3);
+    --glow-bearish: 0 0 20px hsl(352 100% 63% / 0.3);
     --glow-primary: 0 0 20px hsl(174 72% 50% / 0.3);
 
     --sidebar-background: 220 18% 8%;
@@ -194,6 +214,38 @@
     background-clip: text;
   }
 
+  .text-signal-buy {
+    color: hsl(var(--signal-buy));
+  }
+
+  .text-signal-sell {
+    color: hsl(var(--signal-sell));
+  }
+
+  .text-signal-alert {
+    color: hsl(var(--signal-alert));
+  }
+
+  .text-signal-info {
+    color: hsl(var(--signal-info));
+  }
+
+  .bg-signal-buy {
+    background-color: hsl(var(--signal-buy));
+  }
+
+  .bg-signal-sell {
+    background-color: hsl(var(--signal-sell));
+  }
+
+  .bg-signal-alert {
+    background-color: hsl(var(--signal-alert));
+  }
+
+  .bg-signal-info {
+    background-color: hsl(var(--signal-info));
+  }
+
   .animate-pulse-slow {
     animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
@@ -202,21 +254,106 @@
     animation: glow 2s ease-in-out infinite alternate;
   }
 
+  .animate-blink {
+    animation: blink 1.4s ease-in-out infinite;
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.3s ease-out;
+  }
+
+  .animate-slide-right {
+    animation: slide-right 0.25s ease-out;
+  }
+
   @keyframes glow {
     from {
       box-shadow: 0 0 5px hsl(174 72% 50% / 0.2);
     }
+
     to {
       box-shadow: 0 0 20px hsl(174 72% 50% / 0.4);
     }
   }
 
+  @keyframes blink {
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.2;
+    }
+  }
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-right {
+    from {
+      opacity: 0;
+      transform: translateX(-12px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
   @keyframes ticker {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
+    0% {
+      transform: translateX(0);
+    }
+
+    100% {
+      transform: translateX(-50%);
+    }
   }
 
   .animate-ticker {
     animation: ticker 30s linear infinite;
+  }
+
+  /* Dashboard layout utilities */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    grid-template-rows: 1fr;
+    gap: 0;
+    height: calc(100vh - 3.5rem);
+    /* below header */
+    overflow: hidden;
+  }
+
+  @media (max-width: 1279px) {
+    .dashboard-grid {
+      grid-template-columns: 260px 1fr;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Score bar gradient */
+  .score-bar-gradient {
+    background: linear-gradient(90deg,
+        hsl(var(--signal-sell)) 0%,
+        hsl(var(--signal-alert)) 50%,
+        hsl(var(--signal-buy)) 100%);
   }
 }

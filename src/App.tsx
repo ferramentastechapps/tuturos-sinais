@@ -13,6 +13,10 @@ import TaxReport from "./pages/TaxReport";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import RiskManagement from "./pages/RiskManagement";
+import Backtesting from "./pages/Backtesting";
+import MLAnalytics from "./pages/MLAnalytics";
+import PaperTrading from "./pages/PaperTrading";
 
 const queryClient = new QueryClient();
 
@@ -31,7 +35,11 @@ const App = () => (
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/tax-report" element={<TaxReport />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/risk-management" element={<RiskManagement />} />
+            <Route path="/backtesting" element={<Backtesting />} />
+            <Route path="/ml-analytics" element={<MLAnalytics />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/paper-trading" element={<PaperTrading />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

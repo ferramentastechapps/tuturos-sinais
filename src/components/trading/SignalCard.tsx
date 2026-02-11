@@ -1,13 +1,16 @@
 import { TradeSignal } from '@/types/trading';
-import { ArrowUpRight, ArrowDownRight, Target, ShieldX, Clock, Sparkles } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Target, ShieldX, Clock, Sparkles, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 interface SignalCardProps {
   signal: TradeSignal;
 }
 
 export const SignalCard = ({ signal }: SignalCardProps) => {
+  const navigate = useNavigate();
   const isLong = signal.type === 'long';
   const isActive = signal.status === 'active';
 
@@ -67,71 +70,159 @@ export const SignalCard = ({ signal }: SignalCardProps) => {
         {getStatusBadge()}
       </div>
 
-      {/* Price Levels */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        <div className="p-2 rounded-lg bg-secondary/50">
-          <p className="text-xs text-muted-foreground mb-1">Entrada</p>
-          <p className="text-sm font-mono font-semibold text-foreground">
+      {/* Price Levels — Vertical rows to fit narrow panel */}
+      <div className="space-y-1.5 mb-3 p-2.5 rounded-lg bg-secondary/30">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Entrada</span>
+          <span className="text-sm font-mono font-semibold text-foreground">
             ${signal.entry.toLocaleString()}
-          </p>
+          </span>
         </div>
-        <div className="p-2 rounded-lg bg-success/10">
-          <div className="flex items-center gap-1 mb-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
             <Target className="w-3 h-3 text-success" />
-            <p className="text-xs text-success">Take Profit</p>
+            <span className="text-xs text-success">TP (Principal)</span>
           </div>
-          <p className="text-sm font-mono font-semibold text-success">
+          <span className="text-sm font-mono font-semibold text-success">
             ${signal.takeProfit.toLocaleString()}
-          </p>
+          </span>
         </div>
-        <div className="p-2 rounded-lg bg-destructive/10">
-          <div className="flex items-center gap-1 mb-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
             <ShieldX className="w-3 h-3 text-destructive" />
-            <p className="text-xs text-destructive">Stop Loss</p>
+            <span className="text-xs text-destructive">Stop Loss</span>
           </div>
-          <p className="text-sm font-mono font-semibold text-destructive">
+          <span className="text-sm font-mono font-semibold text-destructive">
             ${signal.stopLoss.toLocaleString()}
-          </p>
+          </span>
         </div>
       </div>
+
+      {/* Multi-TP Levels — Vertical rows */}
+      {signal.takeProfit1 && signal.takeProfit2 && signal.takeProfit3 && (
+        <div className="space-y-1 mb-3 p-2 rounded-lg bg-success/5 border border-success/15">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-success/70 font-medium">TP1 (1.5R)</span>
+            <span className="text-xs font-mono font-semibold text-success">${signal.takeProfit1.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-success font-medium">TP2 (2.5R)</span>
+            <span className="text-xs font-mono font-bold text-success">${signal.takeProfit2.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-success/70 font-medium">TP3 (4R)</span>
+            <span className="text-xs font-mono font-semibold text-success">${signal.takeProfit3.toLocaleString()}</span>
+          </div>
+        </div>
+      )}
 
       {/* Risk Reward */}
       <div className="flex items-center justify-between p-2 rounded-lg bg-primary/10 mb-3">
         <span className="text-sm text-muted-foreground">Risco/Retorno</span>
-        <span className="text-sm font-bold text-primary">1:{signal.riskReward.toFixed(2)}</span>
+        <span className={cn(
+          "text-sm font-bold",
+          signal.riskReward >= 2.5 ? "text-success" : signal.riskReward >= 1.5 ? "text-primary" : "text-warning"
+        )}>1:{signal.riskReward.toFixed(2)}</span>
       </div>
 
-      {/* Confidence Score */}
-      <div className="mb-3">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-1">
-            <Sparkles className="w-4 h-4 text-warning" />
-            <span className="text-xs text-muted-foreground">Confiança IA</span>
+      {/* Quality Score & Confidence */}
+      <div className="mb-3 space-y-2">
+        {/* Quality Score */}
+        {signal.quality && (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted-foreground">Qualidade do Sinal</span>
+              <span className={cn("text-xs font-bold",
+                signal.quality.score >= 80 ? "text-success" :
+                  signal.quality.score >= 60 ? "text-warning" : "text-muted-foreground"
+              )}>{signal.quality.score}/100</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all',
+                  signal.quality.score >= 80 ? 'bg-success' : signal.quality.score >= 60 ? 'bg-warning' : 'bg-muted-foreground'
+                )}
+                style={{ width: `${signal.quality.score}%` }}
+              />
+            </div>
           </div>
-          <span className="text-sm font-bold text-foreground">{signal.confidence}%</span>
-        </div>
-        <div className="h-2 rounded-full bg-secondary overflow-hidden">
-          <div
-            className={cn(
-              'h-full rounded-full transition-all',
-              signal.confidence >= 70 ? 'bg-success' : signal.confidence >= 50 ? 'bg-warning' : 'bg-destructive'
-            )}
-            style={{ width: `${signal.confidence}%` }}
-          />
+        )}
+
+        {/* Confidence (Existing) */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-primary" />
+              <span className="text-xs text-muted-foreground">Confiança IA</span>
+            </div>
+            <span className="text-xs font-bold text-foreground">{signal.confidence}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all',
+                signal.confidence >= 70 ? 'bg-blue-500' : 'bg-blue-300'
+              )}
+              style={{ width: `${signal.confidence}%` }}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Indicators */}
-      <div className="flex flex-wrap gap-1">
-        {signal.indicators.map((indicator, index) => (
-          <span
-            key={index}
-            className="px-2 py-0.5 rounded text-xs bg-secondary text-secondary-foreground"
-          >
-            {indicator}
-          </span>
-        ))}
+      {/* Smart Money Badges */}
+      {signal.smartMoney && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {signal.smartMoney.orderBlocks.length > 0 && (
+            <Badge variant="outline" className="text-[10px] border-primary/40 text-primary bg-primary/5">
+              OB
+            </Badge>
+          )}
+          {signal.smartMoney.fvgs.length > 0 && (
+            <Badge variant="outline" className="text-[10px] border-warning/40 text-warning bg-warning/5">
+              FVG
+            </Badge>
+          )}
+          {signal.smartMoney.liquidity.length > 0 && (
+            <Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-500 bg-purple-500/5">
+              LIQ
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* Indicators/Factors Accordion */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground">Fatores de Confluência:</p>
+        <div className="flex flex-wrap gap-1.5">
+          {signal.quality?.factors.slice(0, 3).map((factor, index) => (
+            <span
+              key={index}
+              className="px-2 py-0.5 rounded text-[10px] bg-secondary text-secondary-foreground border border-border/50"
+            >
+              {factor}
+            </span>
+          ))}
+          {(signal.quality?.factors.length || 0) > 3 && (
+            <span className="px-2 py-0.5 rounded text-[10px] bg-secondary text-muted-foreground">
+              +{signal.quality!.factors.length - 3}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Paper Trading CTA */}
+      {isActive && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full mt-3 h-7 text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+          onClick={() => navigate('/paper-trading', { state: { signal } })}
+        >
+          <FileText className="h-3 w-3" />
+          Simular Operação
+        </Button>
+      )}
     </div>
   );
 };

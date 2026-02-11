@@ -1,73 +1,91 @@
-# Welcome to your Lovable project
+# Tuturos Sinais 🚀
 
-## Project info
+Sistema avançado de sinais de trading para criptomoedas com integração de Machine Learning, Gestão de Risco Dinâmica e Notificações via Telegram.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## 📋 Visão Geral
 
-## How can I edit this code?
+O **Tuturos Sinais** é uma plataforma completa que monitora o mercado de criptomoedas em tempo real, identifica oportunidades de trading com base em múltiplos indicadores técnicos (RSI, MACD, EMAs, Smart Money Concepts) e utiliza um modelo de Machine Learning (XGBoost/ONNX) para filtrar e validar os sinais.
 
-There are several ways of editing your application.
+### Funcionalidades Principais
 
-**Use Lovable**
+- **Sinais em Tempo Real**: Monitoramento de múltiplos pares USDT perpétuos.
+- **Machine Learning**: Modelo preditivo que atribui probabilidade de sucesso a cada sinal.
+- **Gestão de Risco Dinâmica**: Ajuste automático de Stop Loss e Alavancagem baseado na volatilidade (ATR), Funding Rate e Sentimento do Mercado.
+- **Dashboard Interativo**: Gráficos avançados, painel de sinais e métricas de portfólio.
+- **Notificações Telegram**: Alertas instantâneos para novos sinais, Take Profits e Stop Losses (via Edge Function segura).
+- **Integração Binance Futures**: Dados de preço, funding rate e open interest em tempo real.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## 🔄 Fluxo do Sistema
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```ascii
+[Binance API] ──> [Exchange Service] ──> [Adv. Signal Generator]
+                                                │
+                                                ▼
+                                       [Dynamic Risk Adjuster]
+                                                │
+                                                ▼
+[TensorFlow/ONNX] ──> [ML Prediction] ──> [Signal Filter]
+                                                │
+                                       ┌────────┴────────┐
+                                       ▼                 ▼
+                              [Dashboard UI]      [Telegram Bot]
 ```
 
-**Edit a file directly in GitHub**
+## 🚀 Instalação e Configuração
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Pré-requisitos
+- Node.js 18+
+- Conta na Supabase (para Backend/Edge Functions)
+- Bot no Telegram (para notificações)
 
-**Use GitHub Codespaces**
+### Passos
+1. Clone o repositório:
+   ```bash
+   git clone https://github.com/seu-usuario/tuturos-sinais.git
+   cd tuturos-sinais
+   ```
+2. Instale as dependências:
+   ```bash
+   npm install
+   ```
+3. Configure as variáveis de ambiente:
+   Crie um arquivo `.env` na raiz com base no exemplo abaixo.
+4. Inicie o servidor de desenvolvimento:
+   ```bash
+   npm run dev
+   ```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## ⚙️ Variáveis de Ambiente
 
-## What technologies are used for this project?
+Crie um arquivo `.env` na raiz do projeto:
 
-This project is built with:
+```env
+# Supabase
+VITE_SUPABASE_URL="https://seu-projeto.supabase.co"
+VITE_SUPABASE_ANON_KEY="sua-chave-anonima"
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Telegram (Configuração via UI ou Edge Function recomendada)
+# VITE_TELEGRAM_BOT_TOKEN removemos do frontend por segurança!
+# Configure o token nos segredos da Edge Function no Supabase.
+```
 
-## How can I deploy this project?
+## 🤖 Configuração do Bot Telegram
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+1. Crie um bot com o [@BotFather](https://t.me/BotFather) e obtenha o Token.
+2. No Dashboard do Supabase, vá em **Edge Functions** > **Secrets**.
+3. Adicione o segredo `TELEGRAM_BOT_TOKEN` com o valor do seu token.
+4. A Edge Function `telegram-proxy` já está configurada para usar esse segredo.
 
-## Can I connect a custom domain to my Lovable project?
+## 🧠 Machine Learning
 
-Yes, you can!
+O sistema utiliza um modelo **XGBoost** treinado com dados históricos e exportado para **ONNX**.
+- **Retreinamento**: O script Python em `ml_engine/train_model.py` pode ser executado periodicamente para atualizar o modelo com novos dados.
+- **Inferência**: Feita no navegador via `onnxruntime-web` para baixa latência.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## ⚠️ Aviso de Risco
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+**Este software é apenas para fins educacionais e informativos.** O trading de criptomoedas, especialmente futuros, envolve alto risco financeiro. O uso deste software não garante lucros. Opere com responsabilidade.
+
+## 📝 Licença
+
+MIT

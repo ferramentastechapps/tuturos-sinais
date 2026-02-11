@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { Settings, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun, BarChart3, Receipt, FileText } from 'lucide-react';
+import { Settings, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun, BarChart3, Receipt, FileText, BrainCircuit } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +28,8 @@ interface HeaderProps {
   onClearAlerts: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
+  totalCapital?: number;
+  dailyPnL?: number;
 }
 
 export const Header = ({
@@ -38,6 +40,8 @@ export const Header = ({
   onClearAlerts,
   soundEnabled,
   onToggleSound,
+  totalCapital,
+  dailyPnL,
 }: HeaderProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -55,6 +59,25 @@ export const Header = ({
               <p className="text-[10px] sm:text-xs text-muted-foreground">Bybit Trading</p>
             </div>
           </div>
+
+          {/* Financial Summary */}
+          {(totalCapital !== undefined || dailyPnL !== undefined) && (
+            <div className="hidden md:flex items-center gap-4 ml-6 px-4 py-1.5 bg-muted/30 rounded-lg border border-border/50">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Patrimônio Total</span>
+                <span className="text-sm font-mono font-bold text-foreground">
+                  {totalCapital ? `$${totalCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '---'}
+                </span>
+              </div>
+              <div className="h-6 w-px bg-border/50" />
+              <div className="flex flex-col">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">PnL Diário</span>
+                <span className={`text-sm font-mono font-bold ${dailyPnL && dailyPnL >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {dailyPnL ? `${dailyPnL >= 0 ? '+' : ''}$${dailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '---'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Desktop Navigation */}
@@ -89,6 +112,12 @@ export const Header = ({
           <Link to="/analytics">
             <Button variant="ghost" size="icon" title="Análise">
               <BarChart3 className="w-5 h-5" />
+            </Button>
+          </Link>
+
+          <Link to="/ml-analytics">
+            <Button variant="ghost" size="icon" title="ML Analytics">
+              <BrainCircuit className="w-5 h-5" />
             </Button>
           </Link>
 
@@ -151,9 +180,9 @@ export const Header = ({
           />
 
           {/* Mobile Theme Toggle */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-9 w-9"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           >
@@ -201,6 +230,13 @@ export const Header = ({
                   </Button>
                 </Link>
 
+                <Link to="/ml-analytics" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-3">
+                    <BrainCircuit className="w-5 h-5" />
+                    ML Analytics
+                  </Button>
+                </Link>
+
                 <Link to="/transactions" onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="ghost" className="w-full justify-start gap-3">
                     <Receipt className="w-5 h-5" />
@@ -223,8 +259,8 @@ export const Header = ({
                 </Link>
 
                 <div className="pt-4 border-t border-border">
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className="w-full justify-start gap-3"
                     onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                   >

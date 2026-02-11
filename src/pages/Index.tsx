@@ -1,36 +1,40 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAlerts } from '@/hooks/useAlerts';
-import { useMarketMonitor } from '@/hooks/useMarketMonitor';
 import { useCryptoPrices } from '@/hooks/useCryptoPrices';
 import { usePriceAlerts } from '@/hooks/usePriceAlerts';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { useTrades } from '@/hooks/useTrades';
-import { useWatchlist } from '@/hooks/useWatchlist';
 import { useTechnicalIndicators } from '@/hooks/useTechnicalIndicators';
+import { useMarketMonitor } from '@/hooks/useMarketMonitor';
 import { useIndicatorAlerts } from '@/hooks/useIndicatorAlerts';
 import { useIndicatorAlertsDB } from '@/hooks/useIndicatorAlertsDB';
+import { useRealTimeSignals } from '@/hooks/useRealTimeSignals';
 import { useAuth } from '@/hooks/useAuth';
+import { startTelegramMonitor, stopTelegramMonitor, updatePortfolioCapital } from '@/services/telegramNotificationMonitor';
+
+// Components
 import { Header } from '@/components/trading/Header';
 import { MarketTicker } from '@/components/trading/MarketTicker';
-import { PriceCard } from '@/components/trading/PriceCard';
+import { ActiveSignals } from '@/components/dashboard/ActiveSignals';
+import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
+import { CoinSidebar } from '@/components/dashboard/CoinSidebar';
+import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
+import { CandlestickChart } from '@/components/trading/CandlestickChart';
+import { AdvancedChart } from '@/components/trading/AdvancedChart';
 import { TechnicalPanel } from '@/components/trading/TechnicalPanel';
 import { SignalsPanel } from '@/components/trading/SignalsPanel';
 import { RiskCalculator } from '@/components/trading/RiskCalculator';
-import { SentimentGauge } from '@/components/trading/SentimentGauge';
-import { RiskDisclaimer } from '@/components/trading/RiskDisclaimer';
-import { MiniChart } from '@/components/trading/MiniChart';
-import { AlertDemoPanel } from '@/components/trading/AlertDemoPanel';
-import { HistoricalChart } from '@/components/trading/HistoricalChart';
-import { AdvancedChart } from '@/components/trading/AdvancedChart';
-import { CandlestickChart } from '@/components/trading/CandlestickChart';
-import { PriceAlertsPanel } from '@/components/trading/PriceAlertsPanel';
-import { WatchlistPanel } from '@/components/trading/WatchlistPanel';
-import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
-import { CoinSelector } from '@/components/trading/CoinSelector';
 import { IndicatorAlertsPanel } from '@/components/trading/IndicatorAlertsPanel';
+import { PriceAlertsPanel } from '@/components/trading/PriceAlertsPanel';
+import { AlertDemoPanel } from '@/components/trading/AlertDemoPanel';
+import { Loader2 } from 'lucide-react';
+import { RiskDisclaimer } from '@/components/trading/RiskDisclaimer';
+import BacktestWidget from '@/components/dashboard/BacktestWidget';
+
+// Data & Types
 import { tradeSignals } from '@/data/mockData';
 import { CryptoPair, TechnicalIndicator } from '@/types/trading';
-import { Loader2 } from 'lucide-react';
+import { getCoinSignalScores } from '@/services/dashboardDataService';
 
 const Index = () => {
   const { isAuthenticated } = useAuth();
@@ -38,23 +42,32 @@ const Index = () => {
   const [selectedPair, setSelectedPair] = useState<CryptoPair | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Portfolio and trades for dashboard
+  // Portfolio and layout data
   const { summary: portfolioSummary } = usePortfolio();
+  const totalValue = portfolioSummary?.totalValue || 0;
+  const totalPnL = portfolioSummary?.totalPnL || 0;
+
   const { trades: recentTrades } = useTrades();
 
-  // Watchlist
-  const {
-    items: watchlistItems,
-    addToWatchlist,
-    removeFromWatchlist,
-    toggleAlert,
-    isInWatchlist,
-  } = useWatchlist();
+  // Signals for all coins (limit 50 for sidebar scores)
+  const { data: allSignals = [] } = useRealTimeSignals({ limit: 50 });
 
-  // Indicator alerts - use DB hook when authenticated, otherwise local storage
+  // Compute scores for sidebar
+  const coinScores = useMemo(() =>
+    getCoinSignalScores(cryptoPairs, allSignals),
+    [cryptoPairs, allSignals]
+  );
+
+  // Filter signals for selected pair
+  const selectedPairSignal = useMemo(() =>
+    allSignals.find(s => s.pair === selectedPair?.symbol && s.status === 'active'),
+    [allSignals, selectedPair]
+  );
+
+  // Indicator alerts
   const localIndicatorAlerts = useIndicatorAlerts();
   const dbIndicatorAlerts = useIndicatorAlertsDB();
-  
+
   const {
     alerts: indicatorAlerts,
     unreadCount: indicatorUnreadCount,
@@ -73,18 +86,27 @@ const Index = () => {
   const { data: technicalIndicators } = useTechnicalIndicators(selectedPair?.symbol || '');
   const prevIndicatorsRef = useRef<TechnicalIndicator[]>([]);
 
-  // Update selectedPair when prices load or change
+  // Initialize selected pair
   useEffect(() => {
-    if (cryptoPairs.length > 0) {
-      setSelectedPair(prev => {
-        if (!prev) return cryptoPairs[0];
-        const updated = cryptoPairs.find(p => p.symbol === prev.symbol);
-        return updated || cryptoPairs[0];
-      });
+    if (cryptoPairs.length > 0 && !selectedPair) {
+      setSelectedPair(cryptoPairs[0]);
     }
-  }, [cryptoPairs]);
+  }, [cryptoPairs, selectedPair]);
 
-  // Check indicators for alerts when they update
+  // Start Telegram notification monitor
+  useEffect(() => {
+    startTelegramMonitor(totalValue || 10000);
+    return () => stopTelegramMonitor();
+  }, []);
+
+  // Update portfolio capital for risk calculations
+  useEffect(() => {
+    if (totalValue > 0) {
+      updatePortfolioCapital(totalValue);
+    }
+  }, [totalValue]);
+
+  // Check indicators for alerts
   useEffect(() => {
     if (selectedPair && technicalIndicators && technicalIndicators.length > 0) {
       checkIndicators(
@@ -97,6 +119,7 @@ const Index = () => {
     }
   }, [selectedPair, technicalIndicators, checkIndicators]);
 
+  // General System Alerts
   const {
     alerts,
     unreadCount,
@@ -110,7 +133,7 @@ const Index = () => {
     clearAlerts,
   } = useAlerts({ enableSound: soundEnabled });
 
-  // Monitor market for alerts
+  // Market Monitor
   useMarketMonitor({
     pairs: cryptoPairs,
     signals: tradeSignals,
@@ -122,7 +145,7 @@ const Index = () => {
     enabled: cryptoPairs.length > 0,
   });
 
-  // Price alerts monitoring
+  // Price Alerts
   const {
     activeAlerts,
     triggeredAlerts,
@@ -143,15 +166,15 @@ const Index = () => {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Carregando preços ao vivo...</p>
+          <p className="text-muted-foreground animate-pulse">Carregando sistema...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header 
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header
         alerts={alerts}
         unreadCount={unreadCount}
         onMarkAsRead={markAsRead}
@@ -159,63 +182,116 @@ const Index = () => {
         onClearAlerts={clearAlerts}
         soundEnabled={soundEnabled}
         onToggleSound={handleToggleSound}
+        totalCapital={totalValue}
+        dailyPnL={totalPnL}
       />
-      <MarketTicker />
-      
-      <main className="container px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-        {/* Dashboard Overview */}
-        <div className="mb-4 sm:mb-6">
-          <h2 className="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">Visão Geral</h2>
-          <DashboardOverview
-            portfolioSummary={portfolioSummary}
-            recentTrades={recentTrades}
-            activeAlerts={activeAlerts}
+
+      <DashboardLayout
+        // ── Sidebar: Coin List ──
+        sidebar={
+          <CoinSidebar
+            pairs={cryptoPairs}
+            scores={coinScores}
+            selectedSymbol={selectedPair.symbol}
+            onSelectPair={setSelectedPair}
           />
-        </div>
+        }
 
-        {/* Risk Disclaimer */}
-        <div className="mb-4 sm:mb-6">
-          <RiskDisclaimer />
-        </div>
+        // ── Center: Chart & Analysis ──
+        center={
+          <div className="space-y-4 pb-20 lg:pb-0">
+            {/* Top Stats Overview */}
+            <DashboardOverview
+              portfolioSummary={portfolioSummary}
+              recentTrades={recentTrades}
+              activeAlerts={activeAlerts}
+            />
 
-        {/* Demo Alert Panel */}
-        <div className="mb-4 sm:mb-6">
-          <AlertDemoPanel
-            onTriggerTP={() => triggerTPAlert('BTCUSDT', 69500, 3.42)}
-            onTriggerSL={() => triggerSLAlert('ETHUSDT', 3200, -4.2)}
-            onTriggerVolatility={() => triggerVolatilityAlert('SOLUSDT', 5.8)}
-            onTriggerTrend={() => triggerTrendChangeAlert('BTCUSDT', 'bullish', '4H')}
-            onTriggerEntry={() => triggerEntrySignal('BTCUSDT', 'LONG', 67500, 82)}
-          />
-        </div>
+            {/* Selected Pair Info & Chart */}
+            <div className="trading-card animate-fade-up">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-bold text-foreground">{selectedPair.symbol}</h2>
+                    {selectedPairSignal && (
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${selectedPairSignal.type === 'long'
+                        ? 'bg-signal-buy text-white'
+                        : 'bg-signal-sell text-white'
+                        }`}>
+                        {selectedPairSignal.type.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">{selectedPair.name} Perpetual</p>
+                </div>
+                <div className="sm:text-right">
+                  <p className="text-3xl font-bold font-mono text-foreground tracking-tight">
+                    ${selectedPair.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className={`text-lg font-mono ${selectedPair.change24h >= 0 ? 'text-signal-buy' : 'text-signal-sell'}`}>
+                    {selectedPair.change24h >= 0 ? '+' : ''}{selectedPair.change24h.toFixed(2)}%
+                  </p>
+                </div>
+              </div>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-          {/* Left Column - Market Overview */}
-          <div className="lg:col-span-3 space-y-4 order-2 lg:order-1">
-            <div className="trading-card">
-              <h2 className="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">Favoritos</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-1 gap-3">
-                {cryptoPairs.filter(p => p.isFavorite).map(pair => (
-                  <PriceCard
-                    key={pair.symbol}
-                    pair={pair}
-                    isSelected={selectedPair?.symbol === pair.symbol}
-                    onClick={() => setSelectedPair(pair)}
-                  />
-                ))}
+              {/* Main Charts */}
+              <div className="space-y-6">
+                <CandlestickChart symbol={selectedPair.symbol} name={selectedPair.name} />
+                <AdvancedChart
+                  symbol={selectedPair.symbol}
+                  name={selectedPair.name}
+                  activeSignal={selectedPairSignal}
+                />
+
+                <ActiveSignals
+                  signals={allSignals}
+                  onSelectSignal={(signal) => {
+                    const pair = cryptoPairs.find(p => p.symbol === signal.pair);
+                    if (pair) setSelectedPair(pair);
+                  }}
+                />
               </div>
             </div>
-            
-            <SentimentGauge />
 
-            <WatchlistPanel
-              items={watchlistItems}
-              livePrices={cryptoPairs}
-              onRemove={removeFromWatchlist}
-              onToggleAlert={toggleAlert}
-              onAdd={addToWatchlist}
-              isInWatchlist={isInWatchlist}
+            {/* Technical Analysis */}
+            <TechnicalPanel symbol={selectedPair.symbol} />
+
+            {/* Dev Tools */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <AlertDemoPanel
+                onTriggerTP={() => triggerTPAlert('BTCUSDT', 69500, 3.42)}
+                onTriggerSL={() => triggerSLAlert('ETHUSDT', 3200, -4.2)}
+                onTriggerVolatility={() => triggerVolatilityAlert('SOLUSDT', 5.8)}
+                onTriggerTrend={() => triggerTrendChangeAlert('BTCUSDT', 'bullish', '4H')}
+                onTriggerEntry={() => triggerEntrySignal('BTCUSDT', 'LONG', 67500, 82)}
+              />
+            </div>
+          </div>
+        }
+
+        // ── Right: Tools & Alerts ──
+        rightPanel={
+          <div className="p-3 space-y-4">
+            <BacktestWidget />
+
+            <SignalsPanel symbol={selectedPair.symbol} />
+
+            <RiskCalculator
+              currentPrice={selectedPair.price}
+              balance={totalValue}
+            />
+
+            <IndicatorAlertsPanel
+              alerts={indicatorAlerts}
+              unreadCount={indicatorUnreadCount}
+              config={indicatorAlertConfig}
+              onMarkAsRead={markIndicatorAsRead}
+              onMarkAllAsRead={markAllIndicatorAsRead}
+              onClearAlerts={clearIndicatorAlerts}
+              onDeleteAlert={deleteIndicatorAlert}
+              onUpdateConfig={updateIndicatorAlertConfig}
+              onRequestNotificationPermission={requestNotificationPermission}
+              notificationStatus={getNotificationStatus()}
             />
 
             <PriceAlertsPanel
@@ -227,86 +303,13 @@ const Index = () => {
               onClearTriggered={clearTriggeredAlerts}
             />
           </div>
+        }
 
-          {/* Center Column - Chart & Technical */}
-          <div className="lg:col-span-5 space-y-4 order-1 lg:order-2">
-            {/* Coin Selector with Indicator Alerts */}
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <CoinSelector
-                  pairs={cryptoPairs}
-                  selectedPair={selectedPair}
-                  onSelect={setSelectedPair}
-                />
-              </div>
-              <IndicatorAlertsPanel
-                alerts={indicatorAlerts}
-                unreadCount={indicatorUnreadCount}
-                config={indicatorAlertConfig}
-                onMarkAsRead={markIndicatorAsRead}
-                onMarkAllAsRead={markAllIndicatorAsRead}
-                onClearAlerts={clearIndicatorAlerts}
-                onDeleteAlert={deleteIndicatorAlert}
-                onUpdateConfig={updateIndicatorAlertConfig}
-                onRequestNotificationPermission={requestNotificationPermission}
-                notificationStatus={getNotificationStatus()}
-              />
-            </div>
-
-            {/* Selected Pair Header */}
-            <div className="trading-card">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-4">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-foreground">{selectedPair.symbol}</h2>
-                  <p className="text-sm text-muted-foreground">{selectedPair.name} Perpetual</p>
-                </div>
-                <div className="sm:text-right">
-                  <p className="text-2xl sm:text-3xl font-bold font-mono text-foreground">
-                    ${selectedPair.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </p>
-                  <p className={`text-base sm:text-lg font-mono ${selectedPair.change24h >= 0 ? 'text-success' : 'text-destructive'}`}>
-                    {selectedPair.change24h >= 0 ? '+' : ''}{selectedPair.change24h.toFixed(2)}%
-                  </p>
-                </div>
-              </div>
-              <MiniChart isPositive={selectedPair.change24h >= 0} />
-            </div>
-
-            <CandlestickChart symbol={selectedPair.symbol} name={selectedPair.name} />
-
-            <AdvancedChart symbol={selectedPair.symbol} name={selectedPair.name} />
-
-            <TechnicalPanel symbol={selectedPair.symbol} />
-          </div>
-
-          {/* Right Column - Signals & Calculator */}
-          <div className="lg:col-span-4 space-y-4 order-3">
-            <SignalsPanel symbol={selectedPair.symbol} />
-            <RiskCalculator />
-          </div>
-        </div>
-
-        {/* All Pairs Section */}
-        <div className="mt-6 sm:mt-8">
-          <h2 className="text-lg sm:text-xl font-semibold text-foreground mb-3 sm:mb-4">Todos os Pares</h2>
-          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-            {cryptoPairs.map(pair => (
-              <PriceCard
-                key={pair.symbol}
-                pair={pair}
-                isSelected={selectedPair?.symbol === pair.symbol}
-                onClick={() => setSelectedPair(pair)}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <footer className="mt-8 sm:mt-12 pt-4 sm:pt-6 border-t border-border text-center text-xs sm:text-sm text-muted-foreground">
-          <p>CryptoFutures © 2024 - Ferramenta de apoio ao trading</p>
-          <p className="mt-1">Não constitui aconselhamento financeiro. Use por sua conta e risco.</p>
-        </footer>
-      </main>
+        // ── Bottom: Ticker ──
+        bottomBar={<MarketTicker onSelectPair={(symbol) => {
+          const pair = cryptoPairs.find(p => p.symbol === symbol);
+        }} />}
+      />
     </div>
   );
 };

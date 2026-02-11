@@ -1,0 +1,41 @@
+{
+    "name": "signal-engine",
+    "version": "1.0.0",
+    "description": "Signal Engine Backend — 24/7 autonomous trading signal system",
+    "type": "module",
+    "main": "dist/index.js",
+    "scripts": {
+        "dev": "tsx watch src/index.ts",
+        "dev:bot": "tsx watch src/bot.ts",
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "start:bot": "node dist/bot.js",
+        "test": "vitest run",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.90.1",
+        "bybit-api": "^3.10.8",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.7",
+        "express": "^4.21.2",
+        "express-rate-limit": "^7.5.0",
+        "helmet": "^8.0.0",
+        "node-telegram-bot-api": "^0.66.0",
+        "onnxruntime-node": "^1.20.1",
+        "winston": "^3.17.0",
+        "winston-daily-rotate-file": "^5.0.0",
+        "ws": "^8.18.0",
+        "zod": "^3.25.76"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.17",
+        "@types/express": "^5.0.0",
+        "@types/node": "^22.16.5",
+        "@types/node-telegram-bot-api": "^0.64.7",
+        "@types/ws": "^8.5.14",
+        "tsx": "^4.19.2",
+        "typescript": "^5.8.3",
+        "vitest": "^3.2.4"
+    }
+}
