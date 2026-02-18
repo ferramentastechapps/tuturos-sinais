@@ -2,22 +2,37 @@
 
 import axios from 'axios';
 
-// Default to localhost:3001 if env var is not set (legacy mode or local dev)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Only connect to backend when VITE_API_URL is explicitly configured
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+// Flag to check if backend is available
+export const isBackendAvailable = !!API_URL;
 
 export const apiClient = axios.create({
-    baseURL: API_URL,
+    baseURL: API_URL || 'http://localhost:3001/api',
     headers: {
         'Content-Type': 'application/json',
     },
     timeout: 10000,
 });
 
+// Request interceptor — block requests when no backend is configured
+apiClient.interceptors.request.use(
+    (config) => {
+        if (!isBackendAvailable) {
+            return Promise.reject(new axios.Cancel('No backend configured'));
+        }
+        return config;
+    }
+);
+
 // Response interceptor for global error handling
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        console.error('API Error:', error.response?.data || error.message);
+        if (!axios.isCancel(error)) {
+            console.error('API Error:', error.response?.data || error.message);
+        }
         return Promise.reject(error);
     }
 );

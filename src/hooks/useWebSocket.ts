@@ -3,7 +3,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001/ws';
+const WS_URL = import.meta.env.VITE_WS_URL || '';
+const isWsAvailable = !!WS_URL;
 
 export type WsChannel = 'signals' | 'positions' | 'prices' | 'alerts' | 'portfolio';
 
@@ -47,6 +48,7 @@ export const useWebSocket = (channels: WsChannel[] = []) => {
     }, []);
 
     const connect = useCallback(() => {
+        if (!isWsAvailable) return;
         if (ws.current?.readyState === WebSocket.OPEN || ws.current?.readyState === WebSocket.CONNECTING) return;
 
         // console.log('Connecting to WebSocket...', WS_URL);
