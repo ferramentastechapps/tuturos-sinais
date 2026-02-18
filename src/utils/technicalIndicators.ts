@@ -557,7 +557,6 @@ export const calculateWilliamsR = (
   return result;
 };
 
-<<<<<<< HEAD
 // Stochastic RSI — aplica Stochastic sobre o RSI para sinais mais rápidos
 export interface StochRSIResult {
   timestamp: number;
@@ -603,7 +602,11 @@ export const calculateStochasticRSI = (
         d,
       });
     }
-=======
+  }
+
+  return result;
+};
+
 // On-Balance Volume (OBV)
 export interface OBVResult {
   timestamp: number;
@@ -628,13 +631,11 @@ export const calculateOBV = (prices: PricePoint[]): OBVResult[] => {
       obv -= simulatedVolume;
     }
     result.push({ timestamp: prices[i].timestamp, obv });
->>>>>>> 6c662583cebf889e47843b1d017a067516fafa64
   }
 
   return result;
 };
 
-<<<<<<< HEAD
 // EMA Crossovers — Golden Cross, Death Cross, cruzamentos rápidos
 export interface EMACrossover {
   type: 'golden_cross' | 'death_cross' | 'fast_bullish' | 'fast_bearish';
@@ -705,7 +706,8 @@ export const detectEMACrossovers = (
   }
 
   return crossovers;
-=======
+};
+
 // Commodity Channel Index (CCI)
 export interface CCIResult {
   timestamp: number;
@@ -727,7 +729,6 @@ export const calculateCCI = (prices: PricePoint[], period: number = 20): CCIResu
   }
 
   return result;
->>>>>>> 6c662583cebf889e47843b1d017a067516fafa64
 };
 
 // Get signal interpretation
