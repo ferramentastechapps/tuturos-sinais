@@ -4,15 +4,16 @@ import { MLModelArtifact, MLTrainingSample } from '@/types/mlTypes';
 // ---- Models ----
 
 export const saveModel = async (model: MLModelArtifact): Promise<{ error: any }> => {
-    const { error } = await supabase
+    const { error } = await (supabase as any)
         .from('ml_models')
         .insert({
             id: model.id,
             version: model.version,
             type: model.type,
             data: model.data,
-            metrics: model.metrics as any, // Cast to JSON
+            metrics: model.metrics as any,
             is_active: model.isActive,
+            user_id: (await supabase.auth.getUser()).data.user?.id,
         });
 
     return { error };
