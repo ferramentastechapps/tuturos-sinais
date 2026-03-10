@@ -119,6 +119,78 @@ export type Database = {
         }
         Relationships: []
       }
+      ml_models: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          is_active: boolean
+          metrics: Json
+          type: string
+          updated_at: string
+          user_id: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          id?: string
+          is_active?: boolean
+          metrics: Json
+          type: string
+          updated_at?: string
+          user_id: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          is_active?: boolean
+          metrics?: Json
+          type?: string
+          updated_at?: string
+          user_id?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      ml_training_data: {
+        Row: {
+          created_at: string
+          entry_time: string
+          features: Json
+          id: string
+          outcome_label: number
+          outcome_pnl: number
+          signal_id: string
+          symbol: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entry_time: string
+          features: Json
+          id?: string
+          outcome_label: number
+          outcome_pnl: number
+          signal_id: string
+          symbol: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entry_time?: string
+          features?: Json
+          id?: string
+          outcome_label?: number
+          outcome_pnl?: number
+          signal_id?: string
+          symbol?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
