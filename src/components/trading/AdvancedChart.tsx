@@ -83,7 +83,7 @@ export const AdvancedChart = ({ symbol, name, activeSignal }: AdvancedChartProps
     if (!data?.prices || data.prices.length < 52) return [];
 
     const prices = data.prices;
-    const volumes = data.totalVolumes;
+    const volumes = (data as any).totalVolumes || [];
 
     const sma20 = calculateSMA(prices, 20);
     const sma50 = calculateSMA(prices, 50);

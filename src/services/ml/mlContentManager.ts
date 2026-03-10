@@ -72,7 +72,7 @@ export const saveTrainingData = async (samples: MLTrainingSample[]): Promise<{ c
 };
 
 export const fetchTrainingData = async (limit = 1000): Promise<{ samples: MLTrainingSample[], error: any }> => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
         .from('ml_training_data')
         .select('*')
         .order('entry_time', { ascending: false })

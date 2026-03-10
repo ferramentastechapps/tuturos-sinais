@@ -1,4 +1,7 @@
-import { RiskProfileType, RiskProfile, RiskProfiles } from '@/types/riskProfiles';
+import { RiskProfileType, RiskProfileBase } from '@/types/riskProfiles';
+
+type RiskProfile = RiskProfileBase & { id: string; name: string; };
+type RiskProfiles = Record<RiskProfileType, RiskProfile>;
 
 export const RISK_PROFILES: RiskProfiles = {
     conservative: {

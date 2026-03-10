@@ -57,9 +57,9 @@ export const extractFeatures = (
     }
 
     // 3. Futures Data (if available)
-    const fundingRate = futuresData?.fundingRate?.rate || 0;
-    const openInterestVar = futuresData?.openInterest?.value || 0; // Using value as proxy for change if not explicit
-    const longShortRatio = futuresData?.longShortRatio?.value || 1;
+    const fundingRate = futuresData?.fundingRate?.fundingRate || 0;
+    const openInterestVar = futuresData?.openInterest?.openInterest || 0;
+    const longShortRatio = (futuresData as any)?.longShortRatio?.value || 1;
 
     // 4. Time Context
     const now = new Date(); // In backtest this should be passed from signal timestamp, but input doesn't have it explicitly yet. 

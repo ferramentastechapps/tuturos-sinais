@@ -40,6 +40,6 @@ export const collectFromBacktest = async (result: BacktestResult): Promise<numbe
 
     // Upload in batches
     console.log(`[ML Collector] Uploading ${samples.length} samples to Supabase...`);
-    const successCount = await saveTrainingData(samples);
-    return successCount;
+    const result = await saveTrainingData(samples);
+    return result.count;
 };

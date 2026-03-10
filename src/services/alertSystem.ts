@@ -107,7 +107,7 @@ class AlertSystem {
 
             const indicators: TechnicalIndicator[] = [
                 { name: 'RSI', value: lastRSI, signal: 'neutral' },
-                { name: 'MACD', value: lastMACD?.value || 0, signal: lastMACD?.histogram > 0 ? 'bullish' : 'bearish' },
+                { name: 'MACD', value: lastMACD?.macd || 0, signal: lastMACD?.histogram > 0 ? 'bullish' : 'bearish' },
                 { name: 'EMA 20', value: lastEMA20, signal: 'neutral' },
                 { name: 'EMA 50', value: lastEMA50, signal: 'neutral' },
                 { name: 'EMA 200', value: lastEMA200, signal: 'neutral' },
