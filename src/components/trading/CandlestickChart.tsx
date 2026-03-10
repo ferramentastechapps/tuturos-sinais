@@ -295,12 +295,9 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                   />
                 ))}
                 
-                {/* Candlesticks using Bar with custom shape */}
-                <Bar
-                  dataKey="range"
-                  shape={<CandlestickShape />}
-                  isAnimationActive={false}
-                />
+                {/* Hidden bar to feed data, candles drawn by Customized */}
+                <Bar dataKey="range" fill="transparent" isAnimationActive={false} />
+                <Customized component={CandlesticksLayer} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
