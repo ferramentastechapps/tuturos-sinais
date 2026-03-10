@@ -8,8 +8,8 @@ import {
     calculateMACD,
     calculateEMA,
     calculateVWAPFromOHLC,
-    TechnicalIndicator
 } from '@/utils/technicalIndicators';
+import { TechnicalIndicator } from '@/types/trading';
 import { OHLCPoint } from '@/services/coingeckoOHLC';
 import { telegramService } from '@/services/telegramService';
 import { telegramConfigManager } from '@/services/telegramConfigManager';
