@@ -1,6 +1,6 @@
 import { RiskProfileType, RiskProfileBase } from '@/types/riskProfiles';
 
-type RiskProfile = RiskProfileBase & { id: string; name: string; };
+type RiskProfile = RiskProfileBase & { id: string; name: string; allowedCategories?: string[] };
 type RiskProfiles = Record<RiskProfileType, RiskProfile>;
 
 export const RISK_PROFILES: RiskProfiles = {
