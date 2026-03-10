@@ -9,9 +9,8 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Cell,
+  Customized,
   ReferenceLine,
-  ReferenceArea,
 } from 'recharts';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
