@@ -60,10 +60,13 @@ export const saveTrainingData = async (samples: MLTrainingSample[]): Promise<{ c
         // Supabase client handles auth context automatically.
     }));
 
-    const { error, count } = await supabase
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const rowsWithUser = rows.map(r => ({ ...r, user_id: userId }));
+
+    const { error, count } = await (supabase as any)
         .from('ml_training_data')
-        .insert(rows)
-        .select('id', { count: 'exact' });
+        .insert(rowsWithUser)
+        .select();
 
     return { count: count || 0, error };
 };
