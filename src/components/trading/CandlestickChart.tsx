@@ -47,68 +47,62 @@ const formatPrice = (price: number) => {
   return `$${price.toFixed(4)}`;
 };
 
-// Custom candlestick shape
-const CandlestickShape = (props: any) => {
-  const { x, y, width, height, payload } = props;
-  
-  if (!payload) return null;
-  
-  const { open, close, high, low } = payload;
-  const isBullish = close >= open;
-  const color = isBullish ? 'hsl(var(--success))' : 'hsl(var(--destructive))';
-  
-  const candleWidth = Math.max(width * 0.6, 2);
-  const wickWidth = 1;
-  
-  // Calculate positions
-  const bodyTop = Math.min(open, close);
-  const bodyBottom = Math.max(open, close);
-  const bodyHeight = Math.abs(close - open);
-  
-  // Y scale factor (height represents the range)
-  const range = high - low;
-  const yScale = range > 0 ? Math.abs(height) / range : 0;
-  
-  // Center x position
-  const centerX = x + width / 2;
-  
-  // Calculate Y positions (inverted because SVG y increases downward)
-  const highY = y;
-  const lowY = y + Math.abs(height);
-  const bodyTopY = y + (high - bodyBottom) * yScale;
-  const bodyBottomY = y + (high - bodyTop) * yScale;
-  const bodyHeightPx = Math.max(bodyBottomY - bodyTopY, 1);
-  
+// Render all candlesticks via Customized for proper Y-axis mapping
+const CandlesticksLayer = (props: any) => {
+  const { xAxisMap, yAxisMap, formattedGraphicalItems } = props;
+  if (!xAxisMap || !yAxisMap) return null;
+
+  const xAxis = Object.values(xAxisMap)[0] as any;
+  const yAxis = Object.values(yAxisMap)[0] as any;
+  if (!xAxis?.scale || !yAxis?.scale) return null;
+
+  // Get data from the first graphical item (hidden Bar)
+  const items = formattedGraphicalItems?.[0]?.props?.data || [];
+  const bandWidth = xAxis.bandSize || (xAxis.width / Math.max(items.length, 1));
+  const candleWidth = Math.max(bandWidth * 0.65, 3);
+
   return (
     <g>
-      {/* Upper wick */}
-      <line
-        x1={centerX}
-        y1={highY}
-        x2={centerX}
-        y2={bodyTopY}
-        stroke={color}
-        strokeWidth={wickWidth}
-      />
-      {/* Body */}
-      <rect
-        x={centerX - candleWidth / 2}
-        y={bodyTopY}
-        width={candleWidth}
-        height={bodyHeightPx}
-        fill={isBullish ? color : color}
-        stroke={color}
-        strokeWidth={1}
-      />
-      {/* Lower wick */}
-      <line
-        x1={centerX}
-        y1={bodyBottomY}
-        x2={centerX}
-        y2={lowY}
-        stroke={color}
-        strokeWidth={wickWidth}
-      />
+      {items.map((entry: any, index: number) => {
+        const d = entry?.payload;
+        if (!d || d.open == null) return null;
+
+        const { open, close, high, low } = d;
+        const isBullish = close >= open;
+        const bullColor = '#22c55e';
+        const bearColor = '#ef4444';
+        const color = isBullish ? bullColor : bearColor;
+
+        const cx = xAxis.scale(d.timestamp) + bandWidth / 2;
+        const yHigh = yAxis.scale(high);
+        const yLow = yAxis.scale(low);
+        const yOpen = yAxis.scale(open);
+        const yClose = yAxis.scale(close);
+
+        const bodyTop = Math.min(yOpen, yClose);
+        const bodyHeight = Math.max(Math.abs(yOpen - yClose), 1.5);
+
+        return (
+          <g key={index}>
+            {/* Wick (shadow) */}
+            <line
+              x1={cx} y1={yHigh} x2={cx} y2={yLow}
+              stroke={color} strokeWidth={1.2}
+            />
+            {/* Body */}
+            <rect
+              x={cx - candleWidth / 2}
+              y={bodyTop}
+              width={candleWidth}
+              height={bodyHeight}
+              fill={isBullish ? bullColor : bearColor}
+              stroke={color}
+              strokeWidth={0.5}
+              rx={0.5}
+            />
+          </g>
+        );
+      })}
     </g>
   );
 };
