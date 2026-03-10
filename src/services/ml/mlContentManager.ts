@@ -20,7 +20,7 @@ export const saveModel = async (model: MLModelArtifact): Promise<{ error: any }>
 };
 
 export const getActiveModel = async (): Promise<{ model: MLModelArtifact | null, error: any }> => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
         .from('ml_models')
         .select('*')
         .eq('is_active', true)
