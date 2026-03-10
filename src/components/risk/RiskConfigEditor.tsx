@@ -93,7 +93,7 @@ export const RiskConfigEditor = ({ config, open, onClose, onSave, onReset }: Ris
                         {config.symbol} — {config.name}
                     </DialogTitle>
                     <DialogDescription className="flex items-center gap-2">
-                        Perfil: <Badge variant="outline">{profile.label}</Badge>
+                        Perfil: <Badge variant="outline">{(profile as any).label || profile.name}</Badge>
                         <span className="text-muted-foreground">|</span>
                         Categoria: <Badge variant="secondary">{config.category}</Badge>
                     </DialogDescription>
