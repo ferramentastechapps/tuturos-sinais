@@ -4,22 +4,23 @@ import { MLModelArtifact, MLTrainingSample } from '@/types/mlTypes';
 // ---- Models ----
 
 export const saveModel = async (model: MLModelArtifact): Promise<{ error: any }> => {
-    const { error } = await supabase
+    const { error } = await (supabase as any)
         .from('ml_models')
         .insert({
             id: model.id,
             version: model.version,
             type: model.type,
             data: model.data,
-            metrics: model.metrics as any, // Cast to JSON
+            metrics: model.metrics as any,
             is_active: model.isActive,
+            user_id: (await supabase.auth.getUser()).data.user?.id,
         });
 
     return { error };
 };
 
 export const getActiveModel = async (): Promise<{ model: MLModelArtifact | null, error: any }> => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
         .from('ml_models')
         .select('*')
         .eq('is_active', true)
@@ -59,16 +60,19 @@ export const saveTrainingData = async (samples: MLTrainingSample[]): Promise<{ c
         // Supabase client handles auth context automatically.
     }));
 
-    const { error, count } = await supabase
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const rowsWithUser = rows.map(r => ({ ...r, user_id: userId }));
+
+    const { error, count } = await (supabase as any)
         .from('ml_training_data')
-        .insert(rows)
-        .select('id', { count: 'exact' });
+        .insert(rowsWithUser)
+        .select();
 
     return { count: count || 0, error };
 };
 
 export const fetchTrainingData = async (limit = 1000): Promise<{ samples: MLTrainingSample[], error: any }> => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
         .from('ml_training_data')
         .select('*')
         .order('entry_time', { ascending: false })

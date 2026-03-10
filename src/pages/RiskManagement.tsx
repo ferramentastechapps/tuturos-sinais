@@ -179,7 +179,7 @@ const RiskManagement = () => {
                             className="text-xs cursor-pointer hover:bg-muted/50 transition-colors"
                             onClick={() => setProfileFilter(profileFilter === key ? 'all' : key)}
                         >
-                            {profile.label}: {profileStats[key] || 0} moedas
+                            {(profile as any).label}: {profileStats[key] || 0} moedas
                         </Badge>
                     ))}
                 </div>

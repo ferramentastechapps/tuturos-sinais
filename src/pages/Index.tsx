@@ -276,10 +276,7 @@ const Index = () => {
 
             <SignalsPanel symbol={selectedPair.symbol} />
 
-            <RiskCalculator
-              currentPrice={selectedPair.price}
-              balance={totalValue}
-            />
+            <RiskCalculator />
 
             <IndicatorAlertsPanel
               alerts={indicatorAlerts}

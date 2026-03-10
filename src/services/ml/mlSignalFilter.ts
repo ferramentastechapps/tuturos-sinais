@@ -1,6 +1,6 @@
 import { AdvancedSignal, AdvancedSignalInput } from '@/services/advancedSignalGenerator';
 import { extractFeatures } from './featureExtractor';
-import { getMLPrediction } from './mlPredictionService';
+import { predictSignal as getMLPrediction } from './mlPredictionService';
 
 // Configuration for ML filtering
 const ML_CONFIG = {

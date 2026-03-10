@@ -64,7 +64,7 @@ export const RiskProfileCard = ({ config, onEdit, onToggle }: RiskProfileCardPro
                                 variant="outline"
                                 className={cn('text-[10px] px-1.5 py-0', profileBadgeColors[config.riskProfile])}
                             >
-                                {profile.label}
+                                {(profile as any).label || profile.name}
                             </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">{config.name}</p>

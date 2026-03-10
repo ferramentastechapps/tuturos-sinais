@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/services/apiClient';
+import { apiClient, isBackendAvailable } from '@/services/apiClient';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useEffect } from 'react';
 import { TradeSignal } from '@/types/trading';
@@ -14,20 +14,20 @@ export const useRealTimeSignals = (options: UseRealTimeSignalsOptions = {}) => {
   const queryClient = useQueryClient();
   const { on, off, isConnected, subscribe } = useWebSocket();
 
-  // 1. Initial fetch via REST
   const { data: signals = [], isLoading, error } = useQuery<TradeSignal[]>({
     queryKey: ['real-time-signals'],
     queryFn: async () => {
+      if (!isBackendAvailable) return [];
       const { data } = await apiClient.get<TradeSignal[]>('/signals', {
         params: { limit },
       });
       return data;
     },
-    staleTime: Infinity, // Managed by WS
+    staleTime: Infinity,
   });
 
-  // 2. Real-time updates via WebSocket
   useEffect(() => {
+    if (!isBackendAvailable) return;
     if (isConnected) {
       subscribe('signals');
     }
@@ -35,9 +35,7 @@ export const useRealTimeSignals = (options: UseRealTimeSignalsOptions = {}) => {
     const handleNewSignal = (newSignal: TradeSignal) => {
       queryClient.setQueryData<TradeSignal[]>(['real-time-signals'], (oldSignals) => {
         const current = oldSignals || [];
-        // Prevent duplicates
         if (current.some(s => s.id === newSignal.id)) return current;
-        // Add new signal to top
         return [newSignal, ...current].slice(0, 50);
       });
     };
@@ -51,7 +49,6 @@ export const useRealTimeSignals = (options: UseRealTimeSignalsOptions = {}) => {
     };
   }, [isConnected, on, off, queryClient, subscribe]);
 
-  // Filter signals if options provided (client-side filtering for simplicity, though API supports some)
   const filteredSignals = signals.filter(s => {
     if (symbol && s.pair !== symbol) return false;
     return true;
