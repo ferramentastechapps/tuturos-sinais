@@ -1,26 +1,34 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/services/apiClient';
+import { apiClient, isBackendAvailable } from '@/services/apiClient';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useEffect } from 'react';
 import { CryptoPair } from '@/types/trading';
+import { fetchCryptoPrices } from '@/services/coingecko';
 
 export const useCryptoPrices = () => {
   const queryClient = useQueryClient();
-  const { on, off, isConnected, subscribe } = useWebSocket(); // subscribe is returned by useWebSocket, need to ensure I use it if not auto-subscribed
+  const { on, off, isConnected, subscribe } = useWebSocket();
 
-  // 1. Initial fetch via REST
+  // 1. Initial fetch — backend if available, otherwise CoinGecko
   const { data: prices = [], isLoading, error } = useQuery<CryptoPair[]>({
     queryKey: ['crypto-prices'],
     queryFn: async () => {
-      const { data } = await apiClient.get<CryptoPair[]>('/market');
-      return data;
+      if (isBackendAvailable) {
+        const { data } = await apiClient.get<CryptoPair[]>('/market');
+        return data;
+      }
+      // Fallback to CoinGecko
+      return fetchCryptoPrices();
     },
-    staleTime: Infinity, // Data is updated via WS
+    staleTime: isBackendAvailable ? Infinity : 60_000, // Refresh every 60s when using CoinGecko
+    refetchInterval: isBackendAvailable ? false : 60_000,
+    retry: 2,
   });
 
-  // 2. Real-time updates via WebSocket
+  // 2. Real-time updates via WebSocket (only when backend is available)
   useEffect(() => {
-    // Subscribe to prices channel
+    if (!isBackendAvailable) return;
+
     if (isConnected) {
       subscribe('prices');
     }
@@ -31,14 +39,7 @@ export const useCryptoPrices = () => {
         return oldPrices.map(p => {
           const newPrice = newPrices[p.symbol];
           if (!newPrice) return p;
-
-          // Calculate new 24h change if possible, or just update price
-          // For now, simple price update. Backend sends full market data on REST.
-          // WS only sends { symbol: price }
-          return {
-            ...p,
-            price: newPrice,
-          };
+          return { ...p, price: newPrice };
         });
       });
     };
