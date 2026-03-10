@@ -1,6 +1,16 @@
-import { RiskProfileType, RiskProfileBase } from '@/types/riskProfiles';
+import { RiskProfileType } from '@/types/riskProfiles';
 
-type RiskProfile = RiskProfileBase & { id: string; name: string; allowedCategories?: string[] };
+type RiskProfile = {
+    id: string;
+    name: string;
+    description: string;
+    maxLeverage: number;
+    stopLoss: { min: number; max: number };
+    takeProfit: { tp1: number; tp2: number; tp3: number };
+    maxRiskPerTrade: number;
+    maxPositionSize: number;
+    allowedCategories?: string[];
+};
 type RiskProfiles = Record<RiskProfileType, RiskProfile>;
 
 export const RISK_PROFILES: RiskProfiles = {
