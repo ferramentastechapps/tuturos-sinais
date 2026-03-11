@@ -87,7 +87,7 @@ const CandlesticksLayer = (props: any) => {
             {/* Wick (shadow) */}
             <line
               x1={cx} y1={yHigh} x2={cx} y2={yLow}
-              stroke={color} strokeWidth={1.2}
+              stroke={color} strokeWidth={1.5}
             />
             {/* Body */}
             <rect
