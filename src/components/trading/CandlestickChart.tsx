@@ -155,6 +155,19 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
   const [range, setRange] = useState<OHLCTimeRange>('7d');
   const { data: ohlcData, isLoading, error } = useOHLCData(symbol, range);
   const [selectedPattern, setSelectedPattern] = useState<CandlestickPattern | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1); // 1 = show all data
+
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + 0.5, 5));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - 0.5, 1));
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setZoomLevel(1);
+  }, []);
 
   // Detect patterns
   const patterns = useMemo(() => {
