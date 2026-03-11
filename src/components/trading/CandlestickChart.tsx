@@ -274,6 +274,40 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             </div>
           </div>
 
+          {/* Zoom Controls */}
+          <div className="flex items-center justify-end gap-1 mb-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleZoomIn}
+              disabled={zoomLevel >= 5}
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleZoomOut}
+              disabled={zoomLevel <= 1}
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleResetZoom}
+              disabled={zoomLevel === 1}
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+            {zoomLevel > 1 && (
+              <span className="text-xs text-muted-foreground ml-1">{zoomLevel.toFixed(1)}x</span>
+            )}
+          </div>
+
           {/* Candlestick Chart */}
           <div className="h-[400px] mb-4">
             <ResponsiveContainer width="100%" height="100%">
