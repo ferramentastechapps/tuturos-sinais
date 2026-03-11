@@ -226,15 +226,13 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             <p className="text-sm text-muted-foreground">{name}</p>
           </div>
         </div>
-        <Tabs value={range} onValueChange={(v) => { setRange(v as OHLCTimeRange); setZoomLevel(1); }}>
+        <Tabs value={interval} onValueChange={(v) => { setInterval(v as BybitInterval); setZoomLevel(1); }}>
           <TabsList className="bg-muted/50 flex-wrap h-auto gap-0.5 p-1">
-            <TabsTrigger value="1d" className="text-xs px-2 py-1">1D</TabsTrigger>
-            <TabsTrigger value="7d" className="text-xs px-2 py-1">7D</TabsTrigger>
-            <TabsTrigger value="14d" className="text-xs px-2 py-1">14D</TabsTrigger>
-            <TabsTrigger value="30d" className="text-xs px-2 py-1">1M</TabsTrigger>
-            <TabsTrigger value="90d" className="text-xs px-2 py-1">3M</TabsTrigger>
-            <TabsTrigger value="180d" className="text-xs px-2 py-1">6M</TabsTrigger>
-            <TabsTrigger value="365d" className="text-xs px-2 py-1">1A</TabsTrigger>
+            {BYBIT_TIMEFRAMES.map((tf) => (
+              <TabsTrigger key={tf.interval} value={tf.interval} className="text-xs px-2 py-1">
+                {tf.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
       </div>
