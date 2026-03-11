@@ -195,16 +195,16 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
     return allData.slice(-visibleCount);
   }, [ohlcData, patterns, zoomLevel]);
 
-  // Calculate price domain
+  // Calculate price domain from visible data
   const priceDomain = useMemo(() => {
-    if (!ohlcData || ohlcData.length === 0) return [0, 100];
-    const highs = ohlcData.map(d => d.high);
-    const lows = ohlcData.map(d => d.low);
+    if (!chartData || chartData.length === 0) return [0, 100];
+    const highs = chartData.map(d => d.high);
+    const lows = chartData.map(d => d.low);
     const min = Math.min(...lows);
     const max = Math.max(...highs);
     const padding = (max - min) * 0.05;
     return [min - padding, max + padding];
-  }, [ohlcData]);
+  }, [chartData]);
 
   // Pattern summary
   const patternSummary = useMemo(() => {
