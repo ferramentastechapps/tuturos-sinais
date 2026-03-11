@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useOHLCData } from '@/hooks/useOHLCData';
-import { OHLCTimeRange } from '@/services/coingeckoOHLC';
+import { BybitInterval, BYBIT_TIMEFRAMES } from '@/services/bybitOHLC';
 import { detectPatterns, CandlestickPattern, getPatternEmoji } from '@/utils/candlestickPatterns';
 import {
   ComposedChart,
@@ -30,9 +30,10 @@ interface CandlestickChartProps {
   name: string;
 }
 
-const formatDate = (timestamp: number, range: OHLCTimeRange) => {
+const formatDate = (timestamp: number, interval: BybitInterval) => {
   const date = new Date(timestamp);
-  if (range === '1d') {
+  // Intraday intervals show time
+  if (['1', '3', '5', '15', '30', '60', '120', '240', '360', '720'].includes(interval)) {
     return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
@@ -152,8 +153,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
-  const [range, setRange] = useState<OHLCTimeRange>('7d');
-  const { data: ohlcData, isLoading, error } = useOHLCData(symbol, range);
+  const [interval, setInterval] = useState<BybitInterval>('60');
+  const { data: ohlcData, isLoading, error } = useOHLCData(symbol, interval);
   const [selectedPattern, setSelectedPattern] = useState<CandlestickPattern | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1); // 1 = show all data
 
@@ -225,15 +226,13 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             <p className="text-sm text-muted-foreground">{name}</p>
           </div>
         </div>
-        <Tabs value={range} onValueChange={(v) => { setRange(v as OHLCTimeRange); setZoomLevel(1); }}>
+        <Tabs value={interval} onValueChange={(v) => { setInterval(v as BybitInterval); setZoomLevel(1); }}>
           <TabsList className="bg-muted/50 flex-wrap h-auto gap-0.5 p-1">
-            <TabsTrigger value="1d" className="text-xs px-2 py-1">1D</TabsTrigger>
-            <TabsTrigger value="7d" className="text-xs px-2 py-1">7D</TabsTrigger>
-            <TabsTrigger value="14d" className="text-xs px-2 py-1">14D</TabsTrigger>
-            <TabsTrigger value="30d" className="text-xs px-2 py-1">1M</TabsTrigger>
-            <TabsTrigger value="90d" className="text-xs px-2 py-1">3M</TabsTrigger>
-            <TabsTrigger value="180d" className="text-xs px-2 py-1">6M</TabsTrigger>
-            <TabsTrigger value="365d" className="text-xs px-2 py-1">1A</TabsTrigger>
+            {BYBIT_TIMEFRAMES.map((tf) => (
+              <TabsTrigger key={tf.interval} value={tf.interval} className="text-xs px-2 py-1">
+                {tf.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
       </div>
@@ -317,7 +316,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <XAxis
                   dataKey="timestamp"
-                  tickFormatter={(val) => formatDate(val, range)}
+                  tickFormatter={(val) => formatDate(val, interval)}
                   stroke="hsl(var(--muted-foreground))"
                   fontSize={10}
                   tickLine={false}
