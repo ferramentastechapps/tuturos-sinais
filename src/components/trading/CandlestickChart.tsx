@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useOHLCData } from '@/hooks/useOHLCData';
 import { OHLCTimeRange } from '@/services/coingeckoOHLC';
 import { detectPatterns, CandlestickPattern, getPatternEmoji } from '@/utils/candlestickPatterns';
