@@ -175,11 +175,11 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
     return detectPatterns(ohlcData);
   }, [ohlcData]);
 
-  // Prepare chart data with patterns
+  // Prepare chart data with patterns, apply zoom (show last N candles)
   const chartData = useMemo(() => {
     if (!ohlcData) return [];
     
-    return ohlcData.map((candle, index) => {
+    const allData = ohlcData.map((candle, index) => {
       const pattern = patterns.find(p => p.index === index);
       return {
         ...candle,
@@ -187,7 +187,13 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
         pattern,
       };
     });
-  }, [ohlcData, patterns]);
+
+    if (zoomLevel <= 1) return allData;
+
+    // Zoom = show fewer candles (last portion)
+    const visibleCount = Math.max(Math.floor(allData.length / zoomLevel), 10);
+    return allData.slice(-visibleCount);
+  }, [ohlcData, patterns, zoomLevel]);
 
   // Calculate price domain
   const priceDomain = useMemo(() => {
