@@ -80,7 +80,7 @@ const CandlesticksLayer = (props: any) => {
         const yClose = yAxis.scale(close);
 
         const bodyTop = Math.min(yOpen, yClose);
-        const bodyHeight = Math.max(Math.abs(yOpen - yClose), 1.5);
+        const bodyHeight = Math.max(Math.abs(yOpen - yClose), 2.5);
 
         return (
           <g key={index}>
