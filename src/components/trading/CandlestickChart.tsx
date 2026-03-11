@@ -15,7 +15,8 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, CandlestickChart as CandlestickIcon, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
+import { Loader2, CandlestickChart as CandlestickIcon, TrendingUp, TrendingDown, Minus, Info, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   Tooltip as UITooltip,
