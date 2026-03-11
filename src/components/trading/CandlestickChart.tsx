@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useOHLCData } from '@/hooks/useOHLCData';
 import { OHLCTimeRange } from '@/services/coingeckoOHLC';
 import { detectPatterns, CandlestickPattern, getPatternEmoji } from '@/utils/candlestickPatterns';
@@ -15,7 +15,8 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, CandlestickChart as CandlestickIcon, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
+import { Loader2, CandlestickChart as CandlestickIcon, TrendingUp, TrendingDown, Minus, Info, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   Tooltip as UITooltip,
@@ -154,6 +155,19 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
   const [range, setRange] = useState<OHLCTimeRange>('7d');
   const { data: ohlcData, isLoading, error } = useOHLCData(symbol, range);
   const [selectedPattern, setSelectedPattern] = useState<CandlestickPattern | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1); // 1 = show all data
+
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + 0.5, 5));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - 0.5, 1));
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setZoomLevel(1);
+  }, []);
 
   // Detect patterns
   const patterns = useMemo(() => {
@@ -161,11 +175,11 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
     return detectPatterns(ohlcData);
   }, [ohlcData]);
 
-  // Prepare chart data with patterns
+  // Prepare chart data with patterns, apply zoom (show last N candles)
   const chartData = useMemo(() => {
     if (!ohlcData) return [];
     
-    return ohlcData.map((candle, index) => {
+    const allData = ohlcData.map((candle, index) => {
       const pattern = patterns.find(p => p.index === index);
       return {
         ...candle,
@@ -173,18 +187,24 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
         pattern,
       };
     });
-  }, [ohlcData, patterns]);
 
-  // Calculate price domain
+    if (zoomLevel <= 1) return allData;
+
+    // Zoom = show fewer candles (last portion)
+    const visibleCount = Math.max(Math.floor(allData.length / zoomLevel), 10);
+    return allData.slice(-visibleCount);
+  }, [ohlcData, patterns, zoomLevel]);
+
+  // Calculate price domain from visible data
   const priceDomain = useMemo(() => {
-    if (!ohlcData || ohlcData.length === 0) return [0, 100];
-    const highs = ohlcData.map(d => d.high);
-    const lows = ohlcData.map(d => d.low);
+    if (!chartData || chartData.length === 0) return [0, 100];
+    const highs = chartData.map(d => d.high);
+    const lows = chartData.map(d => d.low);
     const min = Math.min(...lows);
     const max = Math.max(...highs);
     const padding = (max - min) * 0.05;
     return [min - padding, max + padding];
-  }, [ohlcData]);
+  }, [chartData]);
 
   // Pattern summary
   const patternSummary = useMemo(() => {
@@ -252,6 +272,40 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                 <p className="text-xs text-destructive/80">Padrões Baixistas</p>
               </div>
             </div>
+          </div>
+
+          {/* Zoom Controls */}
+          <div className="flex items-center justify-end gap-1 mb-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleZoomIn}
+              disabled={zoomLevel >= 5}
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleZoomOut}
+              disabled={zoomLevel <= 1}
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleResetZoom}
+              disabled={zoomLevel === 1}
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+            {zoomLevel > 1 && (
+              <span className="text-xs text-muted-foreground ml-1">{zoomLevel.toFixed(1)}x</span>
+            )}
           </div>
 
           {/* Candlestick Chart */}
