@@ -59,7 +59,7 @@ const CandlesticksLayer = (props: any) => {
   // Get data from the first graphical item (hidden Bar)
   const items = formattedGraphicalItems?.[0]?.props?.data || [];
   const bandWidth = xAxis.bandSize || (xAxis.width / Math.max(items.length, 1));
-  const candleWidth = Math.max(bandWidth * 0.65, 3);
+  const candleWidth = Math.max(bandWidth * 0.8, 6);
 
   return (
     <g>
@@ -80,14 +80,14 @@ const CandlesticksLayer = (props: any) => {
         const yClose = yAxis.scale(close);
 
         const bodyTop = Math.min(yOpen, yClose);
-        const bodyHeight = Math.max(Math.abs(yOpen - yClose), 1.5);
+        const bodyHeight = Math.max(Math.abs(yOpen - yClose), 2.5);
 
         return (
           <g key={index}>
             {/* Wick (shadow) */}
             <line
               x1={cx} y1={yHigh} x2={cx} y2={yLow}
-              stroke={color} strokeWidth={1.2}
+              stroke={color} strokeWidth={1.5}
             />
             {/* Body */}
             <rect
@@ -255,7 +255,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
           </div>
 
           {/* Candlestick Chart */}
-          <div className="h-[250px] mb-4">
+          <div className="h-[400px] mb-4">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <XAxis
