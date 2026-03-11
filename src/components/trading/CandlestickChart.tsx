@@ -153,8 +153,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
-  const [range, setRange] = useState<OHLCTimeRange>('7d');
-  const { data: ohlcData, isLoading, error } = useOHLCData(symbol, range);
+  const [interval, setInterval] = useState<BybitInterval>('60');
+  const { data: ohlcData, isLoading, error } = useOHLCData(symbol, interval);
   const [selectedPattern, setSelectedPattern] = useState<CandlestickPattern | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1); // 1 = show all data
 
