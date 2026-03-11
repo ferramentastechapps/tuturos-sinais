@@ -59,7 +59,7 @@ const CandlesticksLayer = (props: any) => {
   // Get data from the first graphical item (hidden Bar)
   const items = formattedGraphicalItems?.[0]?.props?.data || [];
   const bandWidth = xAxis.bandSize || (xAxis.width / Math.max(items.length, 1));
-  const candleWidth = Math.max(bandWidth * 0.65, 3);
+  const candleWidth = Math.max(bandWidth * 0.8, 6);
 
   return (
     <g>
