@@ -32,9 +32,7 @@ export const BYBIT_TIMEFRAMES: BybitTimeframe[] = [
 
 // Map coingecko-style symbols to Bybit symbols
 const toBybitSymbol = (symbol: string): string => {
-  // If already in BTCUSDT format, use as is
   if (symbol.endsWith('USDT')) return symbol;
-  // Convert from coingecko id format
   const map: Record<string, string> = {
     bitcoin: 'BTCUSDT',
     ethereum: 'ETHUSDT',
@@ -66,18 +64,11 @@ export const fetchBybitOHLC = async (
   limit: number = 200
 ): Promise<OHLCPoint[]> => {
   const bybitSymbol = toBybitSymbol(symbol);
-
-  const { data, error } = await supabase.functions.invoke('bybit-proxy', {
-    body: undefined,
-    headers: { 'Content-Type': 'application/json' },
-  });
-
-  // Use direct fetch with query params since invoke doesn't support query params well
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'owchjtzucnhsvlkwdapn';
   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  
+
   const url = `https://${projectId}.supabase.co/functions/v1/bybit-proxy?symbol=${bybitSymbol}&interval=${interval}&limit=${limit}`;
-  
+
   const response = await fetch(url, {
     headers: {
       'apikey': anonKey,
@@ -96,9 +87,8 @@ export const fetchBybitOHLC = async (
   }
 
   // Bybit returns: [startTime, openPrice, highPrice, lowPrice, closePrice, volume, turnover]
-  // Data comes in reverse chronological order
   const klines = result.result?.list || [];
-  
+
   return klines
     .map((item: string[]) => ({
       timestamp: parseInt(item[0]),
