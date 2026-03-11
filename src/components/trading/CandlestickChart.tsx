@@ -316,7 +316,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <XAxis
                   dataKey="timestamp"
-                  tickFormatter={(val) => formatDate(val, range)}
+                  tickFormatter={(val) => formatDate(val, interval)}
                   stroke="hsl(var(--muted-foreground))"
                   fontSize={10}
                   tickLine={false}
