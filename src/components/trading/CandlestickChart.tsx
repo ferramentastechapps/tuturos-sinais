@@ -255,7 +255,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
           </div>
 
           {/* Candlestick Chart */}
-          <div className="h-[250px] mb-4">
+          <div className="h-[400px] mb-4">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <XAxis
