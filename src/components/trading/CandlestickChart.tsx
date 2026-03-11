@@ -30,9 +30,10 @@ interface CandlestickChartProps {
   name: string;
 }
 
-const formatDate = (timestamp: number, range: OHLCTimeRange) => {
+const formatDate = (timestamp: number, interval: BybitInterval) => {
   const date = new Date(timestamp);
-  if (range === '1d') {
+  // Intraday intervals show time
+  if (['1', '3', '5', '15', '30', '60', '120', '240', '360', '720'].includes(interval)) {
     return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
