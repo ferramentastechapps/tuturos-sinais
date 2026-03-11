@@ -10,13 +10,16 @@ export interface OHLCPoint {
   volume?: number;
 }
 
-export type OHLCTimeRange = '1d' | '7d' | '14d' | '30d';
+export type OHLCTimeRange = '1d' | '7d' | '14d' | '30d' | '90d' | '180d' | '365d';
 
 const DAYS_MAP: Record<OHLCTimeRange, number> = {
   '1d': 1,
   '7d': 7,
   '14d': 14,
   '30d': 30,
+  '90d': 90,
+  '180d': 180,
+  '365d': 365,
 };
 
 export const fetchOHLCData = async (
