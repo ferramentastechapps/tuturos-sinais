@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useOHLCData } from '@/hooks/useOHLCData';
-import { OHLCTimeRange } from '@/services/coingeckoOHLC';
+import { BybitInterval, BYBIT_TIMEFRAMES } from '@/services/bybitOHLC';
 import { detectPatterns, CandlestickPattern, getPatternEmoji } from '@/utils/candlestickPatterns';
 import {
   ComposedChart,
