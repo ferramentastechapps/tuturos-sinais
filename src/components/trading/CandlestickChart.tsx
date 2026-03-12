@@ -7,6 +7,7 @@ import {
   Bar,
   Cell,
   Line,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -201,8 +202,29 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
     const ema9 = calcEMA(closes, 9);
     const ema21 = calcEMA(closes, 21);
 
+    // Bollinger Bands (20-period SMA, 2 std devs)
+    const bbPeriod = 20;
+    const bbStdDev = 2;
+
     const allData = ohlcData.map((candle, index) => {
       const pattern = patterns.find(p => p.index === index);
+
+      let bbUpper: number | undefined;
+      let bbMiddle: number | undefined;
+      let bbLower: number | undefined;
+
+      if (index >= bbPeriod - 1) {
+        let sum = 0;
+        for (let i = index - bbPeriod + 1; i <= index; i++) sum += closes[i];
+        const mean = sum / bbPeriod;
+        let sqSum = 0;
+        for (let i = index - bbPeriod + 1; i <= index; i++) sqSum += (closes[i] - mean) ** 2;
+        const std = Math.sqrt(sqSum / bbPeriod);
+        bbMiddle = mean;
+        bbUpper = mean + bbStdDev * std;
+        bbLower = mean - bbStdDev * std;
+      }
+
       return {
         ...candle,
         range: candle.high - candle.low,
@@ -211,6 +233,9 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
         ema9: ema9[index],
         ema21: ema21[index],
         sma50: calcSMA(closes, 50, index),
+        bbUpper,
+        bbMiddle,
+        bbLower,
       };
     });
 
@@ -392,6 +417,13 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                   />
                 ))}
 
+                {/* Bollinger Bands - shaded area */}
+                <Area yAxisId="price" type="monotone" dataKey="bbUpper" stroke="none" fill="hsl(var(--primary))" fillOpacity={0.06} connectNulls isAnimationActive={false} />
+                <Area yAxisId="price" type="monotone" dataKey="bbLower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} connectNulls isAnimationActive={false} />
+                <Line yAxisId="price" type="monotone" dataKey="bbUpper" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="4 2" dot={false} connectNulls isAnimationActive={false} name="BB Upper" />
+                <Line yAxisId="price" type="monotone" dataKey="bbMiddle" stroke="hsl(var(--primary))" strokeWidth={1} strokeOpacity={0.5} dot={false} connectNulls isAnimationActive={false} name="BB Middle" />
+                <Line yAxisId="price" type="monotone" dataKey="bbLower" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="4 2" dot={false} connectNulls isAnimationActive={false} name="BB Lower" />
+
                 {/* Volume bars */}
                 <Bar
                   yAxisId="volume"
@@ -430,6 +462,10 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             <div className="flex items-center gap-1.5">
               <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#a855f7' }} />
               <span>SMA 50</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full inline-block border-t border-dashed border-primary opacity-70" />
+              <span>Bollinger Bands</span>
             </div>
           </div>
 
