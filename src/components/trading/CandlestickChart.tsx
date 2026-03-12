@@ -417,6 +417,13 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                   />
                 ))}
 
+                {/* Bollinger Bands - shaded area */}
+                <Area yAxisId="price" type="monotone" dataKey="bbUpper" stroke="none" fill="hsl(var(--primary))" fillOpacity={0.06} connectNulls isAnimationActive={false} />
+                <Area yAxisId="price" type="monotone" dataKey="bbLower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} connectNulls isAnimationActive={false} />
+                <Line yAxisId="price" type="monotone" dataKey="bbUpper" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="4 2" dot={false} connectNulls isAnimationActive={false} name="BB Upper" />
+                <Line yAxisId="price" type="monotone" dataKey="bbMiddle" stroke="hsl(var(--primary))" strokeWidth={1} strokeOpacity={0.5} dot={false} connectNulls isAnimationActive={false} name="BB Middle" />
+                <Line yAxisId="price" type="monotone" dataKey="bbLower" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="4 2" dot={false} connectNulls isAnimationActive={false} name="BB Lower" />
+
                 {/* Volume bars */}
                 <Bar
                   yAxisId="volume"
