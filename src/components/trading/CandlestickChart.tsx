@@ -304,7 +304,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             )}
           </div>
 
-          {/* Candlestick Chart */}
+          {/* Candlestick + Volume Chart */}
           <div className="h-[400px] mb-4">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -317,7 +317,9 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                   axisLine={false}
                   minTickGap={30}
                 />
+                {/* Price axis */}
                 <YAxis
+                  yAxisId="price"
                   domain={priceDomain}
                   tickFormatter={formatPrice}
                   stroke="hsl(var(--muted-foreground))"
@@ -326,12 +328,20 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                   axisLine={false}
                   width={65}
                 />
+                {/* Volume axis (hidden, occupies bottom 20%) */}
+                <YAxis
+                  yAxisId="volume"
+                  orientation="right"
+                  domain={[0, (dataMax: number) => dataMax * 5]}
+                  hide
+                />
                 <Tooltip content={<CustomTooltip />} />
                 
                 {/* Pattern markers */}
                 {patterns.map((pattern, idx) => (
                   <ReferenceLine
                     key={`pattern-${idx}`}
+                    yAxisId="price"
                     x={pattern.timestamp}
                     stroke={
                       pattern.signal === 'bullish'
@@ -344,9 +354,22 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                     strokeOpacity={0.5}
                   />
                 ))}
+
+                {/* Volume bars */}
+                <Bar
+                  yAxisId="volume"
+                  dataKey="volume"
+                  isAnimationActive={false}
+                  radius={[1, 1, 0, 0]}
+                  opacity={0.35}
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`vol-${index}`} fill={entry.volColor} />
+                  ))}
+                </Bar>
                 
-                {/* Hidden bar to feed data, candles drawn by Customized */}
-                <Bar dataKey="range" fill="transparent" isAnimationActive={false} />
+                {/* Hidden bar to feed data for candles */}
+                <Bar yAxisId="price" dataKey="range" fill="transparent" isAnimationActive={false} />
                 <Customized component={CandlesticksLayer} />
               </ComposedChart>
             </ResponsiveContainer>
