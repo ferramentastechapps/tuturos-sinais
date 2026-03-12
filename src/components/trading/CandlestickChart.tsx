@@ -176,7 +176,31 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
   // Prepare chart data with patterns, apply zoom (show last N candles)
   const chartData = useMemo(() => {
     if (!ohlcData) return [];
-    
+
+    // Calculate MAs on full dataset before slicing
+    const closes = ohlcData.map(c => c.close);
+    const calcSMA = (data: number[], period: number, idx: number) => {
+      if (idx < period - 1) return undefined;
+      let sum = 0;
+      for (let i = idx - period + 1; i <= idx; i++) sum += data[i];
+      return sum / period;
+    };
+    const calcEMA = (data: number[], period: number): (number | undefined)[] => {
+      const result: (number | undefined)[] = new Array(data.length).fill(undefined);
+      if (data.length < period) return result;
+      let sum = 0;
+      for (let i = 0; i < period; i++) sum += data[i];
+      result[period - 1] = sum / period;
+      const k = 2 / (period + 1);
+      for (let i = period; i < data.length; i++) {
+        result[i] = data[i] * k + (result[i - 1] as number) * (1 - k);
+      }
+      return result;
+    };
+
+    const ema9 = calcEMA(closes, 9);
+    const ema21 = calcEMA(closes, 21);
+
     const allData = ohlcData.map((candle, index) => {
       const pattern = patterns.find(p => p.index === index);
       return {
@@ -184,6 +208,9 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
         range: candle.high - candle.low,
         pattern,
         volColor: candle.close >= candle.open ? '#22c55e' : '#ef4444',
+        ema9: ema9[index],
+        ema21: ema21[index],
+        sma50: calcSMA(closes, 50, index),
       };
     });
 
