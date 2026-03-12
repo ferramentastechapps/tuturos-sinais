@@ -7,6 +7,7 @@ import {
   Bar,
   Cell,
   Line,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
