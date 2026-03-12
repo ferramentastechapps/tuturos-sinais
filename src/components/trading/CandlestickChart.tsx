@@ -6,6 +6,7 @@ import {
   ComposedChart,
   Bar,
   Cell,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -175,7 +176,31 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
   // Prepare chart data with patterns, apply zoom (show last N candles)
   const chartData = useMemo(() => {
     if (!ohlcData) return [];
-    
+
+    // Calculate MAs on full dataset before slicing
+    const closes = ohlcData.map(c => c.close);
+    const calcSMA = (data: number[], period: number, idx: number) => {
+      if (idx < period - 1) return undefined;
+      let sum = 0;
+      for (let i = idx - period + 1; i <= idx; i++) sum += data[i];
+      return sum / period;
+    };
+    const calcEMA = (data: number[], period: number): (number | undefined)[] => {
+      const result: (number | undefined)[] = new Array(data.length).fill(undefined);
+      if (data.length < period) return result;
+      let sum = 0;
+      for (let i = 0; i < period; i++) sum += data[i];
+      result[period - 1] = sum / period;
+      const k = 2 / (period + 1);
+      for (let i = period; i < data.length; i++) {
+        result[i] = data[i] * k + (result[i - 1] as number) * (1 - k);
+      }
+      return result;
+    };
+
+    const ema9 = calcEMA(closes, 9);
+    const ema21 = calcEMA(closes, 21);
+
     const allData = ohlcData.map((candle, index) => {
       const pattern = patterns.find(p => p.index === index);
       return {
@@ -183,6 +208,9 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
         range: candle.high - candle.low,
         pattern,
         volColor: candle.close >= candle.open ? '#22c55e' : '#ef4444',
+        ema9: ema9[index],
+        ema21: ema21[index],
+        sma50: calcSMA(closes, 50, index),
       };
     });
 
@@ -377,6 +405,11 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                   ))}
                 </Bar>
                 
+                {/* Moving Averages */}
+                <Line yAxisId="price" type="monotone" dataKey="ema9" stroke="#f59e0b" strokeWidth={1.2} dot={false} name="EMA 9" connectNulls />
+                <Line yAxisId="price" type="monotone" dataKey="ema21" stroke="#3b82f6" strokeWidth={1.2} dot={false} name="EMA 21" connectNulls />
+                <Line yAxisId="price" type="monotone" dataKey="sma50" stroke="#a855f7" strokeWidth={1.2} dot={false} name="SMA 50" connectNulls />
+
                 {/* Hidden bar to feed data for candles */}
                 <Bar yAxisId="price" dataKey="range" fill="transparent" isAnimationActive={false} />
                 <Customized component={CandlesticksLayer} />
@@ -384,7 +417,22 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             </ResponsiveContainer>
           </div>
 
-          {/* Detected Patterns List */}
+          {/* MA Legend */}
+          <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#f59e0b' }} />
+              <span>EMA 9</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#3b82f6' }} />
+              <span>EMA 21</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#a855f7' }} />
+              <span>SMA 50</span>
+            </div>
+          </div>
+
           {patterns.length > 0 && (
             <div className="border-t border-border pt-4">
               <div className="flex items-center gap-2 mb-3">
