@@ -417,7 +417,22 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             </ResponsiveContainer>
           </div>
 
-          {/* Detected Patterns List */}
+          {/* MA Legend */}
+          <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#f59e0b' }} />
+              <span>EMA 9</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#3b82f6' }} />
+              <span>EMA 21</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#a855f7' }} />
+              <span>SMA 50</span>
+            </div>
+          </div>
+
           {patterns.length > 0 && (
             <div className="border-t border-border pt-4">
               <div className="flex items-center gap-2 mb-3">
