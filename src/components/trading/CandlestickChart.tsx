@@ -55,10 +55,9 @@ const CandlesticksLayer = (props: any) => {
   if (!xAxisMap || !yAxisMap) return null;
 
   const xAxis = Object.values(xAxisMap)[0] as any;
-  const yAxis = Object.values(yAxisMap)[0] as any;
+  const yAxis = (yAxisMap as any)['price'];
   if (!xAxis?.scale || !yAxis?.scale) return null;
 
-  // Get data from the first graphical item (hidden Bar)
   const items = formattedGraphicalItems?.[0]?.props?.data || [];
   const bandWidth = xAxis.bandSize || (xAxis.width / Math.max(items.length, 1));
   const candleWidth = Math.max(bandWidth * 0.8, 6);
@@ -86,12 +85,7 @@ const CandlesticksLayer = (props: any) => {
 
         return (
           <g key={index}>
-            {/* Wick (shadow) */}
-            <line
-              x1={cx} y1={yHigh} x2={cx} y2={yLow}
-              stroke={color} strokeWidth={1.5}
-            />
-            {/* Body */}
+            <line x1={cx} y1={yHigh} x2={cx} y2={yLow} stroke={color} strokeWidth={1.5} />
             <rect
               x={cx - candleWidth / 2}
               y={bodyTop}
