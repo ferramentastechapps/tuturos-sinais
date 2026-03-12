@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  CartesianGrid,
   ResponsiveContainer,
   Customized,
   ReferenceLine,
@@ -309,6 +310,13 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
           <div className="h-[400px] mb-4">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeOpacity={0.12}
+                  horizontal={true}
+                  vertical={true}
+                />
                 <XAxis
                   dataKey="timestamp"
                   tickFormatter={(val) => formatDate(val, interval)}
@@ -336,7 +344,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                   domain={[0, (dataMax: number) => dataMax * 5]}
                   hide
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }} />
                 
                 {/* Pattern markers */}
                 {patterns.map((pattern, idx) => (
