@@ -180,12 +180,12 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
         ...candle,
         range: candle.high - candle.low,
         pattern,
+        volColor: candle.close >= candle.open ? '#22c55e' : '#ef4444',
       };
     });
 
     if (zoomLevel <= 1) return allData;
 
-    // Zoom = show fewer candles (last portion)
     const visibleCount = Math.max(Math.floor(allData.length / zoomLevel), 10);
     return allData.slice(-visibleCount);
   }, [ohlcData, patterns, zoomLevel]);
