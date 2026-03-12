@@ -463,6 +463,10 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
               <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#a855f7' }} />
               <span>SMA 50</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 rounded-full inline-block border-t border-dashed border-primary opacity-70" />
+              <span>Bollinger Bands</span>
+            </div>
           </div>
 
           {patterns.length > 0 && (
