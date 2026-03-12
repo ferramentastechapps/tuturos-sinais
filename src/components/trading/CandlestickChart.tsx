@@ -6,6 +6,7 @@ import {
   ComposedChart,
   Bar,
   Cell,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
