@@ -5,6 +5,7 @@ import { detectPatterns, CandlestickPattern, getPatternEmoji } from '@/utils/can
 import {
   ComposedChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   Tooltip,
