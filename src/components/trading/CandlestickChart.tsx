@@ -405,6 +405,11 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                   ))}
                 </Bar>
                 
+                {/* Moving Averages */}
+                <Line yAxisId="price" type="monotone" dataKey="ema9" stroke="#f59e0b" strokeWidth={1.2} dot={false} name="EMA 9" connectNulls />
+                <Line yAxisId="price" type="monotone" dataKey="ema21" stroke="#3b82f6" strokeWidth={1.2} dot={false} name="EMA 21" connectNulls />
+                <Line yAxisId="price" type="monotone" dataKey="sma50" stroke="#a855f7" strokeWidth={1.2} dot={false} name="SMA 50" connectNulls />
+
                 {/* Hidden bar to feed data for candles */}
                 <Bar yAxisId="price" dataKey="range" fill="transparent" isAnimationActive={false} />
                 <Customized component={CandlesticksLayer} />
