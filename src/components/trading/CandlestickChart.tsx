@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  CartesianGrid,
   ResponsiveContainer,
   Customized,
   ReferenceLine,
