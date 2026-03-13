@@ -11,12 +11,13 @@ import { paperTradingEngine } from './trading/paperTradingEngine.js';
 import { isModelLoaded } from './ml/mlPredictionService.js';
 import { getUptime } from './notifications/systemAlerts.js';
 
-if (!config.telegram.botToken) {
-    logger.error('TELEGRAM_BOT_TOKEN not configured. Bot cannot start.');
-    process.exit(1);
-}
+export function initBot() {
+    if (!config.telegram.botToken) {
+        logger.error('TELEGRAM_BOT_TOKEN not configured. Bot commands cannot start.');
+        return;
+    }
 
-const bot = new TelegramBot(config.telegram.botToken, { polling: true });
+    const bot = new TelegramBot(config.telegram.botToken, { polling: true });
 
 logger.info('Telegram bot starting with polling...');
 
@@ -180,8 +181,9 @@ bot.on('polling_error', (error) => {
     logger.error('Telegram polling error', { error: error.message });
 });
 
-bot.on('error', (error) => {
-    logger.error('Telegram bot error', { error: error.message });
-});
+    bot.on('error', (error) => {
+        logger.error('Telegram bot error', { error: error.message });
+    });
 
-logger.info('Telegram bot started');
+    logger.info('Telegram bot listener started');
+}

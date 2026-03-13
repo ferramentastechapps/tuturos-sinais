@@ -21,6 +21,7 @@ import {
     sendWebSocketReconnectAlert,
     startSystemMonitor,
 } from './notifications/systemAlerts.js';
+import { initBot } from './bot.js';
 
 const app = express();
 const server = createServer(app);
@@ -138,6 +139,9 @@ async function bootstrap(): Promise<void> {
     if (telegramService.isEnabled) {
         await sendSystemStartAlert();
     }
+
+    // 7. Initialize Telegram Bot commands and listeners
+    initBot();
 }
 
 // ──── Graceful Shutdown ────
