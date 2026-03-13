@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TradeSignal } from '@/types/trading';
-import { ArrowUpRight, ArrowDownRight, Target, Clock, Activity, Shield, TrendingUp, Crosshair } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Target, Clock, Activity, Shield, TrendingUp, Crosshair, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency, formatPercentage } from '@/utils/formatters';
 
@@ -84,6 +84,18 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                         <Clock className="w-3 h-3" /> {signal.timeframe || '4H'}
                     </span>
                     <span>{getRelativeTime(new Date(signal.createdAt).getTime())}</span>
+                    {(signal as TradeSignal & { profileInfo?: { profileName: string, activeIndicators: number, totalIndicators: number } }).profileInfo && (
+                        <Badge
+                            variant="outline"
+                            className="ml-auto bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] px-1.5 py-0 flex items-center gap-1"
+                        >
+                            <Settings2 className="w-2.5 h-2.5" />
+                            {(signal as TradeSignal & { profileInfo?: { profileName: string, activeIndicators: number, totalIndicators: number } }).profileInfo?.profileName}
+                            <span className="text-[9px] opacity-70">
+                                {(signal as TradeSignal & { profileInfo?: { profileName: string, activeIndicators: number, totalIndicators: number } }).profileInfo?.activeIndicators}/{(signal as TradeSignal & { profileInfo?: { profileName: string, activeIndicators: number, totalIndicators: number } }).profileInfo?.totalIndicators}
+                            </span>
+                        </Badge>
+                    )}
                 </div>
 
                 {/* Row 3: Entry / TP / SL — VERTICAL rows, label left value right */}
@@ -228,6 +240,63 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                             </p>
                         )}
                     </div>
+                )}
+
+                {/* Performance Context (Histórico) */}
+                {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext && (
+                    <details className="mt-3 text-xs border border-border/50 rounded-lg overflow-hidden group">
+                        <summary className="p-2.5 bg-muted/20 cursor-pointer flex justify-between items-center outline-none hover:bg-muted/40 transition-colors">
+                            <span className="font-semibold flex items-center gap-1.5 text-muted-foreground group-open:text-primary transition-colors">
+                                📊 Histórico deste par
+                            </span>
+                        </summary>
+                        <div className="p-2.5 pt-1 space-y-2 bg-muted/10 border-t border-border/30">
+                            {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.insufficientData ? (
+                                <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20">
+                                    ⏳ Dados insuficientes (&lt;10 trades)
+                                </Badge>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between items-center text-[10px] sm:text-xs">
+                                        <span className="text-muted-foreground">Win Rate Geral ({signal.pair}):</span>
+                                        <span className="font-bold">{(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.globalWinRate}%</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[10px] sm:text-xs">
+                                        <span className="text-muted-foreground">Profit Factor:</span>
+                                        <span className="font-bold">{(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.globalProfitFactor}x</span>
+                                    </div>
+                                    
+                                    {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.confirmedTopExcerpts.length ? (
+                                        <div className="pt-1 mt-1 border-t border-border/30">
+                                            <span className="text-[10px] text-muted-foreground block mb-1">Top Indicadores Confirmados:</span>
+                                            <div className="space-y-1">
+                                                {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.confirmedTopExcerpts.map((ind: { name: string, stars: string, winRate: number }, i: number) => (
+                                                    <div key={i} className="flex justify-between items-center text-[10px] bg-background/50 p-1 px-1.5 rounded">
+                                                        <span className="truncate max-w-[120px]">{ind.name} {ind.stars}</span>
+                                                        <span className="text-signal-buy font-medium">{ind.winRate}% WR</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                    
+                                    {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.weakExcerpts.length ? (
+                                        <div className="pt-1 mt-1 border-t border-border/30">
+                                            <span className="text-[10px] text-muted-foreground block mb-1">Atenção (Fraquezas no par):</span>
+                                            <div className="space-y-1">
+                                                {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.weakExcerpts.map((ind: { name: string, winRate: number }, i: number) => (
+                                                    <div key={i} className="flex justify-between items-center text-[10px] bg-red-500/5 p-1 px-1.5 rounded border border-red-500/10">
+                                                        <span className="truncate max-w-[120px] opacity-80">{ind.name}</span>
+                                                        <span className="text-red-400 font-medium">{ind.winRate}% WR</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                </>
+                            )}
+                        </div>
+                    </details>
                 )}
             </div>
         );

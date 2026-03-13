@@ -16,6 +16,8 @@ export interface Trade {
   exitFee?: number;
   notes?: string;
   exchange?: string;
+  signalIndicators?: string[]; // Para rastrear eficácia dos indicadores
+  profileUsed?: string;        // Perfil de estratégia utilizado
 }
 
 export interface TradeWithMetrics extends Trade {

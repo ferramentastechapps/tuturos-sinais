@@ -14,6 +14,9 @@ import { OHLCPoint } from '@/services/coingeckoOHLC';
 import { telegramService } from '@/services/telegramService';
 import { telegramConfigManager } from '@/services/telegramConfigManager';
 import { SignalNotificationData } from '@/types/telegram';
+import { indicatorPerformanceService } from '@/services/indicatorPerformanceService';
+import { computeSymbolSummary } from '@/utils/indicatorEfficacy';
+import { formatPerformanceForTelegram, enrichSignalWithPerformance } from '@/utils/performanceEnricher';
 
 export interface AlertConfig {
     symbol: string;
@@ -185,6 +188,16 @@ class AlertSystem {
             : 0;
         const entrySpread = signal.entry * 0.005;
 
+        // Fetch historical performance data directly using the service
+        const records = await indicatorPerformanceService.loadPerformanceForSymbol(config.symbol);
+        const summary = computeSymbolSummary(config.symbol, records);
+        
+        // Need to enrich to get the context formatting
+        const enriched = enrichSignalWithPerformance(signal as unknown as TradeSignal, summary) as unknown as TradeSignal & { performanceContext: SignalPerformanceContext };
+        const performanceSummary = enriched.performanceContext 
+            ? formatPerformanceForTelegram(enriched.performanceContext) 
+            : undefined;
+
         const signalData: SignalNotificationData = {
             type: signal.type,
             symbol: config.symbol,
@@ -223,6 +236,7 @@ class AlertSystem {
             positionSizePercent: signal.riskData?.positionSizePercent ?? 10,
             riskPercent: signal.riskData?.riskPerTradePercent ?? 1,
             timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC',
+            performanceSummary: performanceSummary || undefined,
         };
 
         await telegramService.sendNewSignal(signalData);

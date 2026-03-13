@@ -10,6 +10,8 @@ import { useIndicatorAlerts } from '@/hooks/useIndicatorAlerts';
 import { useIndicatorAlertsDB } from '@/hooks/useIndicatorAlertsDB';
 import { useRealTimeSignals } from '@/hooks/useRealTimeSignals';
 import { useAuth } from '@/hooks/useAuth';
+import { useIndicatorPerformance } from '@/hooks/useIndicatorPerformance';
+import { enrichSignalWithPerformance } from '@/utils/performanceEnricher';
 import { startTelegramMonitor, stopTelegramMonitor, updatePortfolioCapital } from '@/services/telegramNotificationMonitor';
 
 // Components
@@ -52,16 +54,27 @@ const Index = () => {
   // Signals for all coins (limit 50 for sidebar scores)
   const { data: allSignals = [] } = useRealTimeSignals({ limit: 50 });
 
+  // Load indicator performance for all symbols
+  const { getSymbolAnalysis } = useIndicatorPerformance();
+  
+  // Enrich signals with performance context
+  const enrichedSignals = useMemo(() => {
+    return allSignals.map(signal => {
+      const summary = getSymbolAnalysis(signal.pair);
+      return enrichSignalWithPerformance(signal, summary);
+    });
+  }, [allSignals, getSymbolAnalysis]);
+
   // Compute scores for sidebar
   const coinScores = useMemo(() =>
-    getCoinSignalScores(cryptoPairs, allSignals),
-    [cryptoPairs, allSignals]
+    getCoinSignalScores(cryptoPairs, enrichedSignals),
+    [cryptoPairs, enrichedSignals]
   );
 
   // Filter signals for selected pair
   const selectedPairSignal = useMemo(() =>
-    allSignals.find(s => s.pair === selectedPair?.symbol && s.status === 'active'),
-    [allSignals, selectedPair]
+    enrichedSignals.find(s => s.pair === selectedPair?.symbol && s.status === 'active'),
+    [enrichedSignals, selectedPair]
   );
 
   // Indicator alerts
@@ -244,7 +257,7 @@ const Index = () => {
                 />
 
                 <ActiveSignals
-                  signals={allSignals}
+                  signals={enrichedSignals}
                   onSelectSignal={(signal) => {
                     const pair = cryptoPairs.find(p => p.symbol === signal.pair);
                     if (pair) setSelectedPair(pair);

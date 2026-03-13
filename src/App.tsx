@@ -17,6 +17,8 @@ import RiskManagement from "./pages/RiskManagement";
 import Backtesting from "./pages/Backtesting";
 import MLAnalytics from "./pages/MLAnalytics";
 import PaperTrading from "./pages/PaperTrading";
+import StrategyConfig from "./pages/StrategyConfig";
+import SymbolAnalysis from "./pages/SymbolAnalysis";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +42,8 @@ const App = () => (
             <Route path="/ml-analytics" element={<MLAnalytics />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/paper-trading" element={<PaperTrading />} />
+            <Route path="/strategy-config" element={<StrategyConfig />} />
+            <Route path="/symbol-analysis" element={<SymbolAnalysis />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

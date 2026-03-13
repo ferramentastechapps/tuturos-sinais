@@ -12,6 +12,7 @@ import { type FuturesOverview } from '@/services/binanceFutures';
 import { detectAllDivergences, type Divergence } from '@/utils/divergenceDetector';
 import { analyzeBollingerBands, type BollingerAnalysisResult } from '@/utils/bollingerAnalysis';
 import { calculateRSI, calculateMACD, calculateEMA, calculateStochasticRSI, detectEMACrossovers, type IndicatorPoint, type PricePoint, calculateATRFromOHLC, calculateADXFromOHLC } from '@/utils/technicalIndicators';
+import { StrategyProfile, IndicatorKey, SignalProfileInfo } from '@/types/strategyTypes';
 
 // Risk Integration
 import { riskConfigManager } from '@/services/riskConfigManager';
@@ -28,6 +29,7 @@ export interface AdvancedSignalInput {
   volume24h?: number;
   futuresData?: FuturesOverview; // Dados de futuros (Binance)
   change24h?: number; // Needed for risk calculation
+  strategyProfile?: StrategyProfile; // Optional: profile-aware signal scoring
 }
 
 export interface SmartMoneyContext {
@@ -77,6 +79,7 @@ export interface AdvancedSignal {
   patterns?: string[];
   smartMoney?: SmartMoneyContext;
   riskData?: SignalRiskData; // Dados detalhados de risco
+  profileInfo?: SignalProfileInfo; // Profile-aware scoring info
   mlData?: {
     probability: number;
     predictedClass: 0 | 1;
@@ -84,6 +87,49 @@ export interface AdvancedSignal {
     isFiltered: boolean;
   };
 }
+
+// ──────────── Profile-Aware Scoring Helper ────────────
+
+interface WeightedCheck {
+  key: IndicatorKey;
+  label: string;
+  confirmed: boolean;
+}
+
+const computeProfileScore = (
+  checks: WeightedCheck[],
+  profile: StrategyProfile
+): { normalizedScore: number; confirmedIndicators: string[]; disabledIndicators: string[]; activeCount: number; totalCount: number } => {
+  const totalIndicators = checks.length;
+  let totalActiveWeight = 0;
+  let confirmedWeight = 0;
+  const confirmedIndicators: string[] = [];
+  const disabledIndicators: string[] = [];
+
+  for (const check of checks) {
+    const config = profile.indicators[check.key];
+    if (!config || !config.active) {
+      disabledIndicators.push(check.label);
+      continue;
+    }
+    totalActiveWeight += config.weight;
+    if (check.confirmed) {
+      confirmedWeight += config.weight;
+      confirmedIndicators.push(`${check.label} (+${config.weight})`);
+    }
+  }
+
+  const normalizedScore = totalActiveWeight > 0
+    ? Math.round((confirmedWeight / totalActiveWeight) * 100)
+    : 0;
+
+  const activeCount = checks.filter(c => {
+    const cfg = profile.indicators[c.key];
+    return cfg?.active;
+  }).length;
+
+  return { normalizedScore, confirmedIndicators, disabledIndicators, activeCount, totalCount: totalIndicators };
+};
 
 // Calculate support and resistance levels
 const calculateSupportResistance = (ohlcData: OHLCPoint[]) => {
@@ -281,7 +327,7 @@ const extractMarketConditions = (input: AdvancedSignalInput): MarketConditions =
 export const generateAdvancedSignal = (
   input: AdvancedSignalInput
 ): AdvancedSignal | null => {
-  const { currentPrice, indicators, high24h, low24h, ohlcData, volume24h, futuresData } = input;
+  const { currentPrice, indicators, high24h, low24h, ohlcData, volume24h, futuresData, strategyProfile } = input;
 
   // 1. Get Base Risk Config & Market Conditions & Adjusted Risk
   const baseConfig = riskConfigManager.getConfig(input.symbol);
@@ -684,6 +730,48 @@ export const generateAdvancedSignal = (
       confidence = 0;
     }
 
+    // Profile-aware scoring (injected only when a profile is active)
+    let profileInfo: SignalProfileInfo | undefined;
+    if (strategyProfile) {
+      const checks = [
+        { key: 'rsi' as const, label: 'RSI', confirmed: !!(rsi && rsi.value < 40) },
+        { key: 'rsiDivergence' as const, label: 'RSI Divergência', confirmed: !!(smartMoneyCtx.divergences?.some(d => d.type === 'bullish')) },
+        { key: 'macd' as const, label: 'MACD', confirmed: !!(macd && macd.signal === 'bullish') },
+        { key: 'macdCross' as const, label: 'MACD Cruzamento', confirmed: !!(macd && macd.signal === 'bullish') },
+        { key: 'bollingerBands' as const, label: 'Bollinger Bands', confirmed: !!(smartMoneyCtx.bollingerAnalysis?.currentState?.expansion && smartMoneyCtx.bollingerAnalysis.currentState.percentB > 0.8) },
+        { key: 'bollingerSqueeze' as const, label: 'Bollinger Squeeze', confirmed: !!(smartMoneyCtx.bollingerAnalysis?.currentState?.squeeze) },
+        { key: 'marketStructure' as const, label: 'Market Structure', confirmed: smartMoneyCtx.marketStructure?.currentTrend === 'bullish' },
+        { key: 'breakOfStructure' as const, label: 'Break of Structure', confirmed: !!(smartMoneyCtx.marketStructure?.structureBreaks.slice(-3).some(b => b.type === 'BOS' && b.direction === 'bullish')) },
+        { key: 'changeOfCharacter' as const, label: 'CHOCH', confirmed: !!(smartMoneyCtx.marketStructure?.structureBreaks.slice(-3).some(b => b.type === 'CHOCH' && b.direction === 'bullish')) },
+        { key: 'orderBlocks' as const, label: 'Order Blocks', confirmed: !!(smartMoneyCtx.smartMoney?.orderBlocks.some(ob => ob.type === 'bullish' && !ob.mitigated && currentPrice >= ob.bottom * 0.98 && currentPrice <= ob.top * 1.02)) },
+        { key: 'fairValueGaps' as const, label: 'FVG Bullish', confirmed: !!(smartMoneyCtx.smartMoney?.fairValueGaps.some(fvg => fvg.type === 'bullish' && !fvg.filled && currentPrice > fvg.top)) },
+        { key: 'liquidityZones' as const, label: 'Stop Hunt', confirmed: !!(smartMoneyCtx.smartMoney?.liquidityZones.some(lz => lz.type === 'stop_hunt_low' && lz.swept)) },
+        { key: 'cvd' as const, label: 'CVD', confirmed: smartMoneyCtx.cvd?.currentTrend === 'accumulation' },
+        { key: 'cvdDivergence' as const, label: 'CVD Divergência', confirmed: !!(smartMoneyCtx.cvd?.divergences.some(d => d.type === 'bullish')) },
+        { key: 'vwap' as const, label: 'VWAP', confirmed: !!(vwap && currentPrice > vwap.value) },
+        { key: 'volumeAboveAvg' as const, label: 'Volume', confirmed: volumeAnalysis === 'high' },
+        { key: 'volumeProfilePoc' as const, label: 'Volume Profile', confirmed: !!(smartMoneyCtx.volumeProfile && getPricePositionInProfile(currentPrice, smartMoneyCtx.volumeProfile).signal === 'bullish') },
+        { key: 'fundingRateExtreme' as const, label: 'Funding Rate', confirmed: futuresData?.fundingRate.direction === 'bullish' },
+        { key: 'oiDivergence' as const, label: 'OI Divergência', confirmed: futuresData?.oiDivergence?.type === 'bullish' },
+        { key: 'openInterestGrowing' as const, label: 'OI Crescendo', confirmed: !!(futuresData && !futuresData.oiDivergence) },
+        { key: 'ema200' as const, label: 'EMA 200', confirmed: !!(ema200 && currentPrice > ema200.value) },
+        { key: 'ema50' as const, label: 'EMA 50', confirmed: !!(ema50 && currentPrice > ema50.value) },
+        { key: 'goldenDeathCross' as const, label: 'Golden Cross', confirmed: !!(ema50 && ema200 && ema50.value > ema200.value) },
+        { key: 'supportZone' as const, label: 'Suporte', confirmed: nearSupport.near },
+        { key: 'engulfing' as const, label: 'Engolfo', confirmed: patternAnalysis.patterns.some(p => p.type.includes('engulf')) },
+      ];
+      const profileScore = computeProfileScore(checks, strategyProfile);
+      profileInfo = {
+        profileId: strategyProfile.id,
+        profileName: strategyProfile.name,
+        activeIndicators: profileScore.activeCount,
+        totalIndicators: profileScore.totalCount,
+        confirmedIndicators: profileScore.confirmedIndicators,
+        disabledIndicators: profileScore.disabledIndicators,
+        normalizedScore: profileScore.normalizedScore,
+      };
+    }
+
     return {
       type: 'long',
       entry: parseFloat(entry.toFixed(2)),
@@ -694,13 +782,14 @@ export const generateAdvancedSignal = (
       indicators: reasons,
       timeframe: '4H',
       quality: {
-        score: Math.max(Math.min(Math.round(qualityScore), 100), 0),
+        score: profileInfo ? profileInfo.normalizedScore : Math.max(Math.min(Math.round(qualityScore), 100), 0),
         factors: qualityFactors,
         warnings,
       },
       patterns: patternAnalysis.patterns.map(p => p.name),
       smartMoney: smartMoneyCtx,
       riskData,
+      profileInfo,
       takeProfit1: parseFloat(tp1.toFixed(2)),
       takeProfit2: parseFloat(tp2.toFixed(2)),
       takeProfit3: parseFloat(tp3.toFixed(2)),
@@ -1038,6 +1127,44 @@ export const generateAdvancedSignal = (
       confidence = 0;
     }
 
+    // Profile-aware scoring (SHORT)
+    let profileInfoShort: SignalProfileInfo | undefined;
+    if (strategyProfile) {
+      const checksShort = [
+        { key: 'rsi' as const, label: 'RSI', confirmed: !!(rsi && rsi.value > 60) },
+        { key: 'rsiDivergence' as const, label: 'RSI Divergência', confirmed: !!(smartMoneyCtx.divergences?.some(d => d.type === 'bearish')) },
+        { key: 'macd' as const, label: 'MACD', confirmed: !!(macd && macd.signal === 'bearish') },
+        { key: 'macdCross' as const, label: 'MACD Cruzamento', confirmed: !!(macd && macd.signal === 'bearish') },
+        { key: 'bollingerBands' as const, label: 'Bollinger Bands', confirmed: !!(smartMoneyCtx.bollingerAnalysis?.currentState?.expansion && smartMoneyCtx.bollingerAnalysis.currentState.percentB < 0.2) },
+        { key: 'bollingerSqueeze' as const, label: 'Bollinger Squeeze', confirmed: !!(smartMoneyCtx.bollingerAnalysis?.currentState?.squeeze) },
+        { key: 'marketStructure' as const, label: 'Market Structure', confirmed: smartMoneyCtx.marketStructure?.currentTrend === 'bearish' },
+        { key: 'breakOfStructure' as const, label: 'Break of Structure', confirmed: !!(smartMoneyCtx.marketStructure?.structureBreaks.slice(-3).some(b => b.type === 'BOS' && b.direction === 'bearish')) },
+        { key: 'changeOfCharacter' as const, label: 'CHOCH', confirmed: !!(smartMoneyCtx.marketStructure?.structureBreaks.slice(-3).some(b => b.type === 'CHOCH' && b.direction === 'bearish')) },
+        { key: 'orderBlocks' as const, label: 'Order Blocks', confirmed: !!(smartMoneyCtx.smartMoney?.orderBlocks.some(ob => ob.type === 'bearish' && !ob.mitigated && currentPrice >= ob.bottom * 0.98 && currentPrice <= ob.top * 1.02)) },
+        { key: 'fairValueGaps' as const, label: 'FVG Bearish', confirmed: !!(smartMoneyCtx.smartMoney?.fairValueGaps.some(fvg => fvg.type === 'bearish' && !fvg.filled && currentPrice < fvg.bottom)) },
+        { key: 'cvd' as const, label: 'CVD', confirmed: smartMoneyCtx.cvd?.currentTrend === 'distribution' },
+        { key: 'cvdDivergence' as const, label: 'CVD Divergência', confirmed: !!(smartMoneyCtx.cvd?.divergences.some(d => d.type === 'bearish')) },
+        { key: 'vwap' as const, label: 'VWAP', confirmed: !!(vwap && currentPrice < vwap.value) },
+        { key: 'volumeAboveAvg' as const, label: 'Volume', confirmed: volumeAnalysis === 'high' },
+        { key: 'fundingRateExtreme' as const, label: 'Funding Rate', confirmed: futuresData?.fundingRate.direction === 'bearish' },
+        { key: 'oiDivergence' as const, label: 'OI Divergência', confirmed: futuresData?.oiDivergence?.type === 'bearish' },
+        { key: 'ema200' as const, label: 'EMA 200', confirmed: !!(ema200 && currentPrice < ema200.value) },
+        { key: 'ema50' as const, label: 'EMA 50', confirmed: !!(ema50 && currentPrice < ema50.value) },
+        { key: 'goldenDeathCross' as const, label: 'Death Cross', confirmed: !!(ema50 && ema200 && ema50.value < ema200.value) },
+        { key: 'resistanceZone' as const, label: 'Resistência', confirmed: nearResistance.near },
+      ];
+      const profileScoreShort = computeProfileScore(checksShort, strategyProfile);
+      profileInfoShort = {
+        profileId: strategyProfile.id,
+        profileName: strategyProfile.name,
+        activeIndicators: profileScoreShort.activeCount,
+        totalIndicators: profileScoreShort.totalCount,
+        confirmedIndicators: profileScoreShort.confirmedIndicators,
+        disabledIndicators: profileScoreShort.disabledIndicators,
+        normalizedScore: profileScoreShort.normalizedScore,
+      };
+    }
+
     return {
       type: 'short',
       entry: parseFloat(entry.toFixed(2)),
@@ -1048,13 +1175,14 @@ export const generateAdvancedSignal = (
       indicators: reasons,
       timeframe: '4H',
       quality: {
-        score: Math.max(Math.min(Math.round(qualityScore), 100), 0),
+        score: profileInfoShort ? profileInfoShort.normalizedScore : Math.max(Math.min(Math.round(qualityScore), 100), 0),
         factors: qualityFactors,
         warnings,
       },
       patterns: patternAnalysis.patterns.map(p => p.name),
       smartMoney: smartMoneyCtx,
       riskData,
+      profileInfo: profileInfoShort,
       takeProfit1: parseFloat(tp1.toFixed(2)),
       takeProfit2: parseFloat(tp2.toFixed(2)),
       takeProfit3: parseFloat(tp3.toFixed(2)),

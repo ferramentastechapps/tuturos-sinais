@@ -119,6 +119,7 @@ export interface SignalNotificationData {
     positionSizePercent: number;
     riskPercent: number;
     timestamp: string;
+    performanceSummary?: string;
 }
 
 export interface TakeProfitNotificationData {

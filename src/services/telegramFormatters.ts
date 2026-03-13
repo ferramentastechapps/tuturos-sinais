@@ -73,6 +73,10 @@ export const formatNewSignal = (data: SignalNotificationData): string => {
     msg += `Tamanho sugerido: ${data.positionSizePercent}% do capital\n`;
     msg += `Risco: ${data.riskPercent}% do capital\n\n`;
 
+    if (data.performanceSummary) {
+        msg += data.performanceSummary;
+    }
+
     msg += `🕐 ${data.timestamp}`;
 
     return msg;

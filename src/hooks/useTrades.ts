@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Trade, TradeWithMetrics, TradesSummary } from '@/types/trades';
 import { useCryptoPrices } from './useCryptoPrices';
+import { useIndicatorPerformance } from './useIndicatorPerformance';
+import { ActiveIndicatorState } from '@/types/indicatorPerformanceTypes';
 
 const STORAGE_KEY = 'crypto-trades';
 
@@ -32,6 +34,7 @@ const saveToStorage = (trades: Trade[]) => {
 export const useTrades = () => {
   const [trades, setTrades] = useState<Trade[]>(() => loadFromStorage());
   const { data: livePrices } = useCryptoPrices();
+  const { recordClosedTrade } = useIndicatorPerformance();
 
   useEffect(() => {
     saveToStorage(trades);
@@ -44,7 +47,9 @@ export const useTrades = () => {
     quantity: number,
     entryFee: number = 0,
     notes?: string,
-    exchange?: string
+    exchange?: string,
+    signalIndicators?: string[],
+    profileUsed?: string
   ) => {
     const pair = livePrices?.find(p => p.symbol === symbol);
     if (!pair) return;
@@ -61,20 +66,54 @@ export const useTrades = () => {
       entryFee,
       notes,
       exchange,
+      signalIndicators,
+      profileUsed
     };
 
     setTrades(prev => [newTrade, ...prev]);
   }, [livePrices]);
 
   const closeTrade = useCallback((id: string, exitPrice: number, exitFee: number = 0) => {
-    setTrades(prev =>
-      prev.map(trade =>
-        trade.id === id
-          ? { ...trade, exitPrice, exitFee, status: 'closed' as const, closedAt: new Date() }
-          : trade
-      )
-    );
-  }, []);
+    setTrades(prev => {
+      const trade = prev.find(t => t.id === id);
+      if (!trade) return prev;
+      
+      const newTrade = { ...trade, exitPrice, exitFee, status: 'closed' as const, closedAt: new Date() };
+      
+      // Calculate PnL locally to send to performance recorder
+      if (trade.signalIndicators && trade.signalIndicators.length > 0) {
+        const investedValue = trade.quantity * trade.entryPrice;
+        const currentValue = trade.quantity * exitPrice;
+        
+        let pnl = trade.type === 'buy' 
+          ? currentValue - investedValue
+          : investedValue - currentValue;
+          
+        const pnlPercentage = investedValue > 0 ? (pnl / investedValue) * 100 : 0;
+        const isWin = pnlPercentage > 0;
+        
+        // Build active indicators array (all confirmed for now, ideally we'd pass their actual weight/confirmation status from the original signal, but we'll assume they were confirmed if they appeared in signalIndicators, and we'll leave weight default to 100 or fake it for analysis)
+        // In a real scenario we'd track the exact condition at generation time.
+        const activeIndicators: ActiveIndicatorState[] = trade.signalIndicators.map(key => ({
+          key: key as any,
+          weight: 100,
+          confirmed: true 
+        }));
+        
+        // This runs asynchronously in background
+        recordClosedTrade({
+          symbol: trade.symbol,
+          result: isWin ? 'win' : 'loss',
+          profitPercent: pnlPercentage,
+          direction: trade.type === 'buy' ? 'long' : 'short',
+          activeIndicators,
+          profileUsed: trade.profileUsed
+        }).catch(e => console.error("Failed to record trade performance:", e));
+      }
+      
+      return prev.map(t => t.id === id ? newTrade : t);
+    });
+  }, [recordClosedTrade]);
 
   const deleteTrade = useCallback((id: string) => {
     setTrades(prev => prev.filter(trade => trade.id !== id));

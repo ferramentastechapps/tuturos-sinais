@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { Settings, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun, BarChart3, Receipt, FileText, BrainCircuit } from 'lucide-react';
+import { Settings, Settings2, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun, BarChart3, Receipt, FileText, BrainCircuit, Activity } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import {
@@ -115,6 +115,12 @@ export const Header = ({
             </Button>
           </Link>
 
+          <Link to="/symbol-analysis">
+            <Button variant="ghost" size="icon" title="Inteligência de Moedas">
+              <Activity className="w-5 h-5" />
+            </Button>
+          </Link>
+
           <Link to="/ml-analytics">
             <Button variant="ghost" size="icon" title="ML Analytics">
               <BrainCircuit className="w-5 h-5" />
@@ -130,6 +136,12 @@ export const Header = ({
           <Link to="/tax-report">
             <Button variant="ghost" size="icon" title="Impostos">
               <FileText className="w-5 h-5" />
+            </Button>
+          </Link>
+
+          <Link to="/strategy-config">
+            <Button variant="ghost" size="icon" title="Estratégia">
+              <Settings2 className="w-5 h-5" />
             </Button>
           </Link>
 
@@ -248,6 +260,13 @@ export const Header = ({
                   <Button variant="ghost" className="w-full justify-start gap-3">
                     <FileText className="w-5 h-5" />
                     Impostos
+                  </Button>
+                </Link>
+
+                <Link to="/strategy-config" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-3">
+                    <Settings2 className="w-5 h-5" />
+                    Estratégia
                   </Button>
                 </Link>
 
