@@ -270,6 +270,18 @@ async function runSignalCycle(): Promise<void> {
             );
 
             if (signal && signal.quality && signal.quality.score >= 60) {
+                // Prevent duplicate spam: check if we already have a recent signal for this same pair and direction
+                const existingRecent = activeSignals.find(s => 
+                    s.pair === symbol && 
+                    s.type === signal.type && 
+                    (Date.now() - new Date(s.createdAt).getTime()) < 4 * 60 * 60 * 1000 // 4 hours cooldown
+                );
+
+                if (existingRecent) {
+                    logger.debug(`Skipping duplicate signal for ${symbol} (${signal.type}) - cooldown active`);
+                    continue;
+                }
+
                 // ML enrichment
                 if (isModelLoaded()) {
                     try {
