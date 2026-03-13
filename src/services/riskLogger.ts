@@ -43,9 +43,11 @@ const saveLogs = (logs: RiskLogEntry[]): void => {
 
 class RiskLoggerClass {
     private logs: RiskLogEntry[];
+    private recentAlerts: Map<string, number>;
 
     constructor() {
         this.logs = loadLogs();
+        this.recentAlerts = new Map<string, number>();
     }
 
     /**
@@ -292,13 +294,18 @@ class RiskLoggerClass {
 
         // Send critical alerts to Telegram
         if ((entry.severity === 'critical' || entry.severity === 'warning') && telegramConfigManager.isEnabled()) {
-            telegramService.sendRiskAlert({
-                alertType: entry.details?.alertType as string || entry.type,
-                currentValue: (entry.details?.dailyDD as number) || (entry.details?.weeklyDD as number) || 0,
-                limit: (entry.details?.limit as number) || 0,
-                recommendation: entry.message,
-                timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC',
-            }).catch(err => console.error('[RiskLog] Telegram send error:', err));
+            const lastSent = this.recentAlerts.get(entry.message) || 0;
+            // Only send if we haven't sent this exact message in the last 4 hours
+            if (Date.now() - lastSent > 4 * 60 * 60 * 1000) {
+                this.recentAlerts.set(entry.message, Date.now());
+                telegramService.sendRiskAlert({
+                    alertType: entry.details?.alertType as string || entry.type,
+                    currentValue: (entry.details?.dailyDD as number) || (entry.details?.weeklyDD as number) || 0,
+                    limit: (entry.details?.limit as number) || 0,
+                    recommendation: entry.message,
+                    timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC',
+                }).catch(err => console.error('[RiskLog] Telegram send error:', err));
+            }
         }
 
         return entry;
