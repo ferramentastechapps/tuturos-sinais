@@ -21,14 +21,14 @@ function formatUptime(ms: number): string {
 
 export async function sendSystemStartAlert(): Promise<void> {
     startTime = Date.now();
-    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
     const text = [
         `🚀 <b>SISTEMA INICIADO</b>`,
         ``,
         `✅ Signal Engine online`,
         `📊 Monitoramento ativo`,
-        `🕐 ${now} UTC`,
+        `🕐 ${now}`,
     ].join('\n');
 
     try {
@@ -40,14 +40,14 @@ export async function sendSystemStartAlert(): Promise<void> {
 }
 
 export async function sendSystemRestartAlert(previousUptime: number): Promise<void> {
-    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
     const text = [
         `🔧 <b>SISTEMA — signal-engine reiniciado</b>`,
         ``,
         `⏱ Uptime anterior: ${formatUptime(previousUptime)}`,
         `✅ Todos os serviços reconectados`,
-        `🕐 ${now} UTC`,
+        `🕐 ${now}`,
     ].join('\n');
 
     try {

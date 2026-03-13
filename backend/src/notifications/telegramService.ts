@@ -174,7 +174,7 @@ class TelegramService {
             `💼 Posição: ${data.positionSizePercent.toFixed(1)}%`,
             `🔥 Risco: ${data.riskPercent.toFixed(1)}%`,
             ``,
-            `🕐 ${data.timestamp}`,
+            `🕐 ${new Date(data.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].join('\n');
 
         return this.send(text, 'new_signal', data.symbol);
@@ -227,7 +227,7 @@ class TelegramService {
             `Valor atual: ${data.currentValue.toFixed(2)}`,
             `Limite: ${data.limit.toFixed(2)}`,
             `💡 ${data.recommendation}`,
-            `🕐 ${data.timestamp}`,
+            `🕐 ${new Date(data.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].join('\n');
 
         return this.send(text, 'risk_alert');
