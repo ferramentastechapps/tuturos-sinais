@@ -314,6 +314,69 @@ export type Database = {
         }
         Relationships: []
       }
+      trade_signals: {
+        Row: {
+          confidence: number
+          created_at: string
+          entry: number
+          id: string
+          indicators: Json
+          ml_data: Json | null
+          pair: string
+          quality: Json | null
+          risk_reward: number
+          status: string
+          stop_loss: number
+          take_profit: number
+          take_profit_1: number | null
+          take_profit_2: number | null
+          take_profit_3: number | null
+          timeframe: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          entry: number
+          id: string
+          indicators?: Json
+          ml_data?: Json | null
+          pair: string
+          quality?: Json | null
+          risk_reward?: number
+          status?: string
+          stop_loss: number
+          take_profit: number
+          take_profit_1?: number | null
+          take_profit_2?: number | null
+          take_profit_3?: number | null
+          timeframe?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          entry?: number
+          id?: string
+          indicators?: Json
+          ml_data?: Json | null
+          pair?: string
+          quality?: Json | null
+          risk_reward?: number
+          status?: string
+          stop_loss?: number
+          take_profit?: number
+          take_profit_1?: number | null
+          take_profit_2?: number | null
+          take_profit_3?: number | null
+          timeframe?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
