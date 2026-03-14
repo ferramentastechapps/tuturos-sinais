@@ -104,7 +104,7 @@ export const indicatorPerformanceService = {
         const existing = existingRecords && (existingRecords as any[]).length > 0 ? (existingRecords as any[])[0] : null;
         const isWin = trade.result === 'win';
         
-        const updateData: Record<string, string | number> = {
+        const updateData: Record<string, any> = {
           user_id: userId,
           symbol: trade.symbol,
           indicator_key: ind.key,

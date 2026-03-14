@@ -275,7 +275,7 @@ export const saveProfile = async (
       .single();
 
     if (error) throw error;
-    return fromSupabaseRow(data as Record<string, unknown>);
+    return fromSupabaseRow(data as unknown as Record<string, unknown>);
   } catch (err) {
     console.warn('[StrategyProfileService] Save error:', err);
     return stats;
