@@ -155,7 +155,7 @@ export const indicatorPerformanceService = {
     }
     
     const { data, error } = await supabase
-      .from('indicator_performance_by_symbol')
+      .from('indicator_performance_by_symbol' as any)
       .select('*')
       .eq('user_id', userId)
       .eq('symbol', symbol);
@@ -165,7 +165,7 @@ export const indicatorPerformanceService = {
       return [];
     }
     
-    return data as IndicatorPerformanceRecord[];
+    return (data as any[]) as IndicatorPerformanceRecord[];
   },
   
   /**

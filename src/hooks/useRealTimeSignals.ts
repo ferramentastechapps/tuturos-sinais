@@ -36,11 +36,10 @@ const generateLocalMockSignal = (symbol?: string): TradeSignal => {
     quality: {
       score: 65 + Math.floor(Math.random() * 30),
       factors: ['Momentum forte', 'Volume subindo'],
-      warnings: []
     },
     riskReward: 2.0,
     confidence: 70 + Math.floor(Math.random() * 25),
-    createdAt: new Date().toISOString()
+    createdAt: new Date()
   };
 };
 

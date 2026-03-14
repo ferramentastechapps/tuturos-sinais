@@ -100,11 +100,7 @@ export const useIndicatorPerformance = (symbol?: string) => {
     const newProfile = utilGenerateOptimizedProfile(summary);
     
     try {
-      await createProfile({
-        name: newProfile.name,
-        description: newProfile.description,
-        indicators: newProfile.indicators
-      });
+      await createProfile(newProfile.name);
       
       toast({
         title: "Perfil Otimizado Gerado! 🎯",
