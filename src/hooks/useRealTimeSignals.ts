@@ -14,9 +14,13 @@ const generateLocalMockSignal = (symbol?: string): TradeSignal => {
   const pairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT', 'DOGEUSDT', 'AVAXUSDT'];
   const p = symbol || pairs[Math.floor(Math.random() * pairs.length)];
   const type = Math.random() > 0.5 ? 'long' : 'short';
-  const entry = p === 'BTCUSDT' ? 65000 + Math.random() * 5000 : 
-               p === 'ETHUSDT' ? 3200 + Math.random() * 400 : 
-               p === 'SOLUSDT' ? 140 + Math.random() * 20 : 100 * Math.random();
+  
+  const basePrices: Record<string, number> = {
+    BTCUSDT: 70000, ETHUSDT: 2100, SOLUSDT: 90, BNBUSDT: 650,
+    ADAUSDT: 0.27, XRPUSDT: 1.4, DOGEUSDT: 0.096, AVAXUSDT: 15
+  };
+  const base = basePrices[p] || 100;
+  const entry = base + (Math.random() - 0.5) * base * 0.05;
   
   const tpOffset = entry * 0.02;
   const slOffset = entry * 0.01;
