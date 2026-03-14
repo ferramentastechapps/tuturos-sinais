@@ -34,7 +34,6 @@ import { RiskDisclaimer } from '@/components/trading/RiskDisclaimer';
 import BacktestWidget from '@/components/dashboard/BacktestWidget';
 
 // Data & Types
-import { tradeSignals } from '@/data/mockData';
 import { CryptoPair, TechnicalIndicator } from '@/types/trading';
 import { getCoinSignalScores } from '@/services/dashboardDataService';
 
@@ -146,10 +145,10 @@ const Index = () => {
     clearAlerts,
   } = useAlerts({ enableSound: soundEnabled });
 
-  // Market Monitor
+  // Market Monitor — usa sinais reais do Supabase
   useMarketMonitor({
     pairs: cryptoPairs,
-    signals: tradeSignals,
+    signals: enrichedSignals,
     onTPHit: triggerTPAlert,
     onSLHit: triggerSLAlert,
     onHighVolatility: triggerVolatilityAlert,
