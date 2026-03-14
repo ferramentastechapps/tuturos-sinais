@@ -177,6 +177,9 @@ export const generateOptimizedProfile = (summary: SymbolPerformanceSummary): Str
     name: `${symbol} Otimizado (Auto)`,
     description: `Gerado automaticamente via ML/Análise baseado em histórico. WR Geral: ${summary.globalWinRate.toFixed(1)}%`,
     isPreset: false,
+    isDefault: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     indicators: {} as unknown as IndicatorsMap
   };
 

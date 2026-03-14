@@ -94,17 +94,17 @@ export const indicatorPerformanceService = {
       for (const ind of trade.activeIndicators) {
         // Fetch existing first to update running totals
         const { data: existingRecords } = await supabase
-          .from('indicator_performance_by_symbol')
+          .from('indicator_performance_by_symbol' as any)
           .select('*')
           .eq('user_id', userId)
           .eq('symbol', trade.symbol)
           .eq('indicator_key', ind.key)
           .limit(1);
           
-        const existing = existingRecords && existingRecords.length > 0 ? existingRecords[0] : null;
+        const existing = existingRecords && (existingRecords as any[]).length > 0 ? (existingRecords as any[])[0] : null;
         const isWin = trade.result === 'win';
         
-        const updateData: Record<string, string | number> = {
+        const updateData: Record<string, any> = {
           user_id: userId,
           symbol: trade.symbol,
           indicator_key: ind.key,
@@ -133,8 +133,8 @@ export const indicatorPerformanceService = {
         
         // Upsert matching on user_id, symbol, indicator_key via unique constraint
         await supabase
-          .from('indicator_performance_by_symbol')
-          .upsert(updateData, { onConflict: 'user_id,symbol,indicator_key' });
+          .from('indicator_performance_by_symbol' as any)
+          .upsert(updateData as any, { onConflict: 'user_id,symbol,indicator_key' });
       }
     } catch (e) {
       console.error('[indicatorPerformanceService] Failed to record performance:', e);
@@ -155,7 +155,7 @@ export const indicatorPerformanceService = {
     }
     
     const { data, error } = await supabase
-      .from('indicator_performance_by_symbol')
+      .from('indicator_performance_by_symbol' as any)
       .select('*')
       .eq('user_id', userId)
       .eq('symbol', symbol);
@@ -165,7 +165,7 @@ export const indicatorPerformanceService = {
       return [];
     }
     
-    return data as IndicatorPerformanceRecord[];
+    return (data as any[]) as IndicatorPerformanceRecord[];
   },
   
   /**

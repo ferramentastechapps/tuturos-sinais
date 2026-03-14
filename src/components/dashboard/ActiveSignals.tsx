@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TradeSignal } from '@/types/trading';
+import { SignalPerformanceContext } from '@/utils/performanceEnricher';
 import { ArrowUpRight, ArrowDownRight, Target, Clock, Activity, Shield, TrendingUp, Crosshair, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency, formatPercentage } from '@/utils/formatters';

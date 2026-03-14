@@ -14,9 +14,13 @@ const generateLocalMockSignal = (symbol?: string): TradeSignal => {
   const pairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT', 'DOGEUSDT', 'AVAXUSDT'];
   const p = symbol || pairs[Math.floor(Math.random() * pairs.length)];
   const type = Math.random() > 0.5 ? 'long' : 'short';
-  const entry = p === 'BTCUSDT' ? 65000 + Math.random() * 5000 : 
-               p === 'ETHUSDT' ? 3200 + Math.random() * 400 : 
-               p === 'SOLUSDT' ? 140 + Math.random() * 20 : 100 * Math.random();
+  
+  const basePrices: Record<string, number> = {
+    BTCUSDT: 70000, ETHUSDT: 2100, SOLUSDT: 90, BNBUSDT: 650,
+    ADAUSDT: 0.27, XRPUSDT: 1.4, DOGEUSDT: 0.096, AVAXUSDT: 15
+  };
+  const base = basePrices[p] || 100;
+  const entry = base + (Math.random() - 0.5) * base * 0.05;
   
   const tpOffset = entry * 0.02;
   const slOffset = entry * 0.01;
@@ -36,11 +40,10 @@ const generateLocalMockSignal = (symbol?: string): TradeSignal => {
     quality: {
       score: 65 + Math.floor(Math.random() * 30),
       factors: ['Momentum forte', 'Volume subindo'],
-      warnings: []
     },
     riskReward: 2.0,
     confidence: 70 + Math.floor(Math.random() * 25),
-    createdAt: new Date().toISOString()
+    createdAt: new Date()
   };
 };
 
@@ -54,8 +57,9 @@ export const useRealTimeSignals = (options: UseRealTimeSignalsOptions = {}) => {
     queryKey: ['real-time-signals'],
     queryFn: async () => {
       if (!isBackendAvailable) {
-        // Se não tiver backend, começamos com 3 sinais mockados
-        return Array.from({ length: 3 }).map(() => generateLocalMockSignal(symbol));
+        // Generate initial mock signals with diverse pairs
+        const initialPairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT', 'DOGEUSDT', 'AVAXUSDT'];
+        return initialPairs.slice(0, 8).map(p => generateLocalMockSignal(p));
       }
       const { data } = await apiClient.get<TradeSignal[]>('/signals', {
         params: { limit },

@@ -16,7 +16,8 @@ import { telegramConfigManager } from '@/services/telegramConfigManager';
 import { SignalNotificationData } from '@/types/telegram';
 import { indicatorPerformanceService } from '@/services/indicatorPerformanceService';
 import { computeSymbolSummary } from '@/utils/indicatorEfficacy';
-import { formatPerformanceForTelegram, enrichSignalWithPerformance } from '@/utils/performanceEnricher';
+import { formatPerformanceForTelegram, enrichSignalWithPerformance, SignalPerformanceContext } from '@/utils/performanceEnricher';
+import { TradeSignal } from '@/types/trading';
 
 export interface AlertConfig {
     symbol: string;
