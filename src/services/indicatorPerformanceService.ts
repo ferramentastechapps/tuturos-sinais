@@ -133,8 +133,8 @@ export const indicatorPerformanceService = {
         
         // Upsert matching on user_id, symbol, indicator_key via unique constraint
         await supabase
-          .from('indicator_performance_by_symbol')
-          .upsert(updateData, { onConflict: 'user_id,symbol,indicator_key' });
+          .from('indicator_performance_by_symbol' as any)
+          .upsert(updateData as any, { onConflict: 'user_id,symbol,indicator_key' });
       }
     } catch (e) {
       console.error('[indicatorPerformanceService] Failed to record performance:', e);
