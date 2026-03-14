@@ -94,14 +94,14 @@ export const indicatorPerformanceService = {
       for (const ind of trade.activeIndicators) {
         // Fetch existing first to update running totals
         const { data: existingRecords } = await supabase
-          .from('indicator_performance_by_symbol')
+          .from('indicator_performance_by_symbol' as any)
           .select('*')
           .eq('user_id', userId)
           .eq('symbol', trade.symbol)
           .eq('indicator_key', ind.key)
           .limit(1);
           
-        const existing = existingRecords && existingRecords.length > 0 ? existingRecords[0] : null;
+        const existing = existingRecords && (existingRecords as any[]).length > 0 ? (existingRecords as any[])[0] : null;
         const isWin = trade.result === 'win';
         
         const updateData: Record<string, string | number> = {
