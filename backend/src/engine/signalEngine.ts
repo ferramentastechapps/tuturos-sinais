@@ -5,6 +5,7 @@ import { config } from '../lib/config.js';
 import { bybitConnector } from '../exchange/bybitConnector.js';
 import { predictSignal, isModelLoaded } from '../ml/mlPredictionService.js';
 import { telegramService } from '../notifications/telegramService.js';
+import { supabase } from '../lib/supabaseClient.js';
 import type { TradeSignal, TechnicalIndicator, OHLCPoint, CryptoPair } from '../types/trading.js';
 
 // ──── State ────
