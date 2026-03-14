@@ -57,8 +57,9 @@ export const useRealTimeSignals = (options: UseRealTimeSignalsOptions = {}) => {
     queryKey: ['real-time-signals'],
     queryFn: async () => {
       if (!isBackendAvailable) {
-        // Se não tiver backend, começamos com 3 sinais mockados
-        return Array.from({ length: 3 }).map(() => generateLocalMockSignal(symbol));
+        // Generate initial mock signals with diverse pairs
+        const initialPairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT', 'DOGEUSDT', 'AVAXUSDT'];
+        return initialPairs.slice(0, 8).map(p => generateLocalMockSignal(p));
       }
       const { data } = await apiClient.get<TradeSignal[]>('/signals', {
         params: { limit },
