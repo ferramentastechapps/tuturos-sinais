@@ -387,6 +387,43 @@ async function runSignalCycle(): Promise<void> {
     // Move to history
     signalHistory = [...newSignals, ...signalHistory].slice(0, 500);
 
+    // Persist to Supabase
+    if (newSignals.length > 0) {
+        try {
+            const rows = newSignals.map(s => ({
+                id: s.id,
+                pair: s.pair,
+                type: s.type,
+                entry: s.entry,
+                take_profit: s.takeProfit,
+                take_profit_1: s.takeProfit1 || null,
+                take_profit_2: s.takeProfit2 || null,
+                take_profit_3: s.takeProfit3 || null,
+                stop_loss: s.stopLoss,
+                risk_reward: s.riskReward,
+                timeframe: s.timeframe,
+                status: s.status,
+                confidence: s.confidence,
+                indicators: s.indicators,
+                quality: s.quality || null,
+                ml_data: s.mlData || null,
+                created_at: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+            }));
+
+            const { error } = await supabase
+                .from('trade_signals')
+                .upsert(rows, { onConflict: 'id' });
+
+            if (error) {
+                logger.warn('Failed to persist signals to Supabase', { error: error.message });
+            } else {
+                logger.info(`Persisted ${rows.length} signals to Supabase`);
+            }
+        } catch (dbError) {
+            logger.warn('Supabase persistence error', { error: dbError });
+        }
+    }
+
     logger.info(`Signal cycle complete: ${newSignals.length} new signals`, {
         totalActive: activeSignals.length,
         signalsToday,
