@@ -119,6 +119,63 @@ export type Database = {
         }
         Relationships: []
       }
+      indicator_performance_by_symbol: {
+        Row: {
+          avg_loss_when_confirmed: number | null
+          avg_profit_when_confirmed: number | null
+          created_at: string | null
+          id: string
+          indicator_key: string
+          last_updated: string | null
+          losses_when_confirmed: number | null
+          losses_when_not_confirmed: number | null
+          symbol: string
+          total_confirmed: number | null
+          total_loss: number | null
+          total_profit: number | null
+          total_trades: number | null
+          user_id: string | null
+          wins_when_confirmed: number | null
+          wins_when_not_confirmed: number | null
+        }
+        Insert: {
+          avg_loss_when_confirmed?: number | null
+          avg_profit_when_confirmed?: number | null
+          created_at?: string | null
+          id?: string
+          indicator_key: string
+          last_updated?: string | null
+          losses_when_confirmed?: number | null
+          losses_when_not_confirmed?: number | null
+          symbol: string
+          total_confirmed?: number | null
+          total_loss?: number | null
+          total_profit?: number | null
+          total_trades?: number | null
+          user_id?: string | null
+          wins_when_confirmed?: number | null
+          wins_when_not_confirmed?: number | null
+        }
+        Update: {
+          avg_loss_when_confirmed?: number | null
+          avg_profit_when_confirmed?: number | null
+          created_at?: string | null
+          id?: string
+          indicator_key?: string
+          last_updated?: string | null
+          losses_when_confirmed?: number | null
+          losses_when_not_confirmed?: number | null
+          symbol?: string
+          total_confirmed?: number | null
+          total_loss?: number | null
+          total_profit?: number | null
+          total_trades?: number | null
+          user_id?: string | null
+          wins_when_confirmed?: number | null
+          wins_when_not_confirmed?: number | null
+        }
+        Relationships: []
+      }
       ml_models: {
         Row: {
           created_at: string
@@ -216,6 +273,42 @@ export type Database = {
           display_name?: string | null
           id?: string
           notification_preferences?: Json | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      strategy_profiles: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          indicators: Json
+          is_default: boolean
+          is_preset: boolean
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          indicators?: Json
+          is_default?: boolean
+          is_preset?: boolean
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          indicators?: Json
+          is_default?: boolean
+          is_preset?: boolean
+          name?: string
           updated_at?: string
           user_id?: string
         }
