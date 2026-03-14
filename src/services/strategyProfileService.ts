@@ -234,7 +234,7 @@ export const loadUserProfiles = async (userId: string | null): Promise<StrategyP
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    const userProfiles = (data || []).map(fromSupabaseRow);
+    const userProfiles = ((data || []) as any[]).map(fromSupabaseRow);
     return mergeWithPresets(userProfiles);
   } catch (err) {
     console.warn('[StrategyProfileService] Supabase error, using localStorage:', err);
