@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, isBackendAvailable } from '@/services/apiClient';
-import { useWebSocket } from '@/hooks/useWebSocket';
-import { useEffect, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useEffect } from 'react';
 import { TradeSignal } from '@/types/trading';
 
 interface UseRealTimeSignalsOptions {
@@ -9,112 +8,97 @@ interface UseRealTimeSignalsOptions {
   limit?: number;
 }
 
-// Generate a realistic-looking mock signal for local testing
-const generateLocalMockSignal = (symbol?: string): TradeSignal => {
-  const pairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT', 'DOGEUSDT', 'AVAXUSDT'];
-  const p = symbol || pairs[Math.floor(Math.random() * pairs.length)];
-  const type = Math.random() > 0.5 ? 'long' : 'short';
-  
-  const basePrices: Record<string, number> = {
-    BTCUSDT: 70000, ETHUSDT: 2100, SOLUSDT: 90, BNBUSDT: 650,
-    ADAUSDT: 0.27, XRPUSDT: 1.4, DOGEUSDT: 0.096, AVAXUSDT: 15
-  };
-  const base = basePrices[p] || 100;
-  const entry = base + (Math.random() - 0.5) * base * 0.05;
-  
-  const tpOffset = entry * 0.02;
-  const slOffset = entry * 0.01;
-  const tp = type === 'long' ? entry + tpOffset : entry - tpOffset;
-  const sl = type === 'long' ? entry - slOffset : entry + slOffset;
-
-  return {
-    id: `signal-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    pair: p,
-    type,
-    entry,
-    takeProfit: tp,
-    stopLoss: sl,
-    timeframe: '5m',
-    status: 'active',
-    indicators: ['RSI', 'MACD', 'EMA'],
-    quality: {
-      score: 65 + Math.floor(Math.random() * 30),
-      factors: ['Momentum forte', 'Volume subindo'],
-    },
-    riskReward: 2.0,
-    confidence: 70 + Math.floor(Math.random() * 25),
-    createdAt: new Date()
-  };
-};
+// Map Supabase row to TradeSignal
+const mapRowToSignal = (row: any): TradeSignal => ({
+  id: row.id,
+  pair: row.pair,
+  type: row.type,
+  entry: row.entry,
+  takeProfit: row.take_profit,
+  takeProfit1: row.take_profit_1 || undefined,
+  takeProfit2: row.take_profit_2 || undefined,
+  takeProfit3: row.take_profit_3 || undefined,
+  stopLoss: row.stop_loss,
+  riskReward: row.risk_reward,
+  timeframe: row.timeframe,
+  status: row.status,
+  confidence: row.confidence,
+  indicators: Array.isArray(row.indicators) ? row.indicators : [],
+  quality: row.quality || undefined,
+  mlData: row.ml_data || undefined,
+  createdAt: new Date(row.created_at),
+});
 
 export const useRealTimeSignals = (options: UseRealTimeSignalsOptions = {}) => {
   const { symbol, limit = 50 } = options;
   const queryClient = useQueryClient();
-  const { on, off, isConnected, subscribe } = useWebSocket();
-  const localGenRef = useRef<NodeJS.Timeout>();
 
   const { data: signals = [], isLoading, error } = useQuery<TradeSignal[]>({
     queryKey: ['real-time-signals'],
     queryFn: async () => {
-      if (!isBackendAvailable) {
-        // Generate initial mock signals with diverse pairs
-        const initialPairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT', 'DOGEUSDT', 'AVAXUSDT'];
-        return initialPairs.slice(0, 8).map(p => generateLocalMockSignal(p));
+      const { data, error } = await supabase
+        .from('trade_signals' as any)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('[useRealTimeSignals] Error fetching signals:', error);
+        return [];
       }
-      const { data } = await apiClient.get<TradeSignal[]>('/signals', {
-        params: { limit },
-      });
-      return data;
+
+      return ((data as any[]) || []).map(mapRowToSignal);
     },
-    staleTime: Infinity,
+    staleTime: 30_000, // 30s
+    refetchInterval: 60_000, // Refetch every 60s as fallback
   });
 
-  // Socket effect para quando TIVER backend
+  // Realtime subscription for new signals
   useEffect(() => {
-    if (!isBackendAvailable) return;
-    if (isConnected) {
-      subscribe('signals');
-    }
-
-    const handleNewSignal = (newSignal: TradeSignal) => {
-      queryClient.setQueryData<TradeSignal[]>(['real-time-signals'], (oldSignals) => {
-        const current = oldSignals || [];
-        if (current.some(s => s.id === newSignal.id)) return current;
-        return [newSignal, ...current].slice(0, 50);
-      });
-    };
-
-    if (isConnected) {
-      on('signals', handleNewSignal);
-    }
+    const channel = supabase
+      .channel('trade-signals-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'trade_signals',
+        },
+        (payload) => {
+          const newSignal = mapRowToSignal(payload.new);
+          queryClient.setQueryData<TradeSignal[]>(['real-time-signals'], (old) => {
+            const current = old || [];
+            if (current.some(s => s.id === newSignal.id)) return current;
+            return [newSignal, ...current].slice(0, 50);
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'trade_signals',
+        },
+        (payload) => {
+          const updated = mapRowToSignal(payload.new);
+          queryClient.setQueryData<TradeSignal[]>(['real-time-signals'], (old) => {
+            if (!old) return [updated];
+            return old.map(s => s.id === updated.id ? updated : s);
+          });
+        }
+      )
+      .subscribe();
 
     return () => {
-      off('signals', handleNewSignal);
+      supabase.removeChannel(channel);
     };
-  }, [isConnected, on, off, queryClient, subscribe]);
-
-  // Intervalo local mockado para quando NÃO TIVER backend
-  useEffect(() => {
-    if (isBackendAvailable) return;
-    
-    // Gerar um sinal a cada 20 segundos para o Dashboard parecer Vivo
-    localGenRef.current = setInterval(() => {
-      const newSignal = generateLocalMockSignal(symbol);
-      queryClient.setQueryData<TradeSignal[]>(['real-time-signals'], (oldSignals) => {
-        const current = oldSignals || [];
-        return [newSignal, ...current].slice(0, 50);
-      });
-    }, 20000);
-
-    return () => {
-      if (localGenRef.current) clearInterval(localGenRef.current);
-    };
-  }, [symbol, queryClient]);
+  }, [queryClient]);
 
   const filteredSignals = signals.filter(s => {
     if (symbol && s.pair !== symbol) return false;
     return true;
   });
 
-  return { data: filteredSignals, isLoading: isLoading && isBackendAvailable, error };
+  return { data: filteredSignals, isLoading, error };
 };
