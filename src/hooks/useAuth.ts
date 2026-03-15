@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { User, Session } from '@supabase/supabase-js';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import {
+  getSession,
+  clearSession,
+  isSessionValid,
+  ADMIN_USER_ID,
+  type AdminSession,
+} from '@/lib/adminAuth';
 
 export interface Profile {
   id: string;
@@ -17,171 +23,60 @@ export interface Profile {
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [session, setSession] = useState<AdminSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  // Fetch user profile
-  const fetchProfile = useCallback(async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error) throw error;
-      setProfile(data as Profile | null);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    }
-  }, []);
-
-  // Set up auth state listener
   useEffect(() => {
-    // Set up listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Defer profile fetch to avoid blocking
-          setTimeout(() => fetchProfile(session.user.id), 0);
-        } else {
-          setProfile(null);
-        }
-        
-        if (event === 'SIGNED_IN') {
-          toast.success('Login realizado com sucesso!');
-        } else if (event === 'SIGNED_OUT') {
-          toast.info('Logout realizado');
-        }
-      }
-    );
-
-    // THEN get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [fetchProfile]);
-
-  const signUp = useCallback(async (email: string, password: string, displayName?: string) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: window.location.origin,
-          data: {
-            full_name: displayName,
-          },
-        },
-      });
-
-      if (error) throw error;
-
-      if (data.user && !data.session) {
-        toast.info('Verifique seu email para confirmar o cadastro');
-      }
-
-      return { data, error: null };
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao criar conta');
-      return { data: null, error };
-    }
-  }, []);
-
-  const signIn = useCallback(async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao fazer login');
-      return { data: null, error };
-    }
-  }, []);
-
-  const signInWithGoogle = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-        },
-      });
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao fazer login com Google');
-      return { data: null, error };
-    }
-  }, []);
-
-  const signInWithGithub = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
-        options: {
-          redirectTo: window.location.origin,
-        },
-      });
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao fazer login com GitHub');
-      return { data: null, error };
-    }
+    const s = getSession();
+    setSession(s);
+    setLoading(false);
   }, []);
 
   const signOut = useCallback(async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao fazer logout');
-    }
+    clearSession();
+    setSession(null);
+    toast.info('Sessão encerrada com sucesso');
+    navigate('/login');
+  }, [navigate]);
+
+  // Stub kept for backwards compatibility — no-op in admin mode
+  const signIn = useCallback(async (_email: string, _password: string) => {
+    return { data: null, error: null };
   }, []);
 
-  const updateProfile = useCallback(async (updates: Partial<Pick<Profile, 'display_name' | 'avatar_url' | 'notification_preferences'>>) => {
-    if (!user) return { error: new Error('Not authenticated') };
+  const signUp = useCallback(async (_email: string, _password: string, _displayName?: string) => {
+    return { data: null, error: new Error('Cadastro não permitido') };
+  }, []);
 
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('user_id', user.id);
+  const signInWithGoogle = useCallback(async () => {
+    toast.error('Login social não disponível');
+    return { data: null, error: new Error('Not available') };
+  }, []);
 
-      if (error) throw error;
+  const signInWithGithub = useCallback(async () => {
+    toast.error('Login social não disponível');
+    return { data: null, error: new Error('Not available') };
+  }, []);
 
-      setProfile(prev => prev ? { ...prev, ...updates } : null);
-      toast.success('Perfil atualizado!');
-      return { error: null };
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao atualizar perfil');
-      return { error };
-    }
-  }, [user]);
+  const updateProfile = useCallback(async (_updates: Partial<Pick<Profile, 'display_name' | 'avatar_url' | 'notification_preferences'>>) => {
+    return { error: null };
+  }, []);
+
+  const isAuthenticated = isSessionValid();
+
+  const user = isAuthenticated
+    ? {
+        id: ADMIN_USER_ID,
+        email: session?.email ?? 'ferramentastech.apps@gmail.com',
+        user_metadata: { full_name: 'Admin' },
+      }
+    : null;
 
   return {
     user,
     session,
-    profile,
+    profile: null as Profile | null,
     loading,
     signUp,
     signIn,
@@ -189,6 +84,6 @@ export function useAuth() {
     signInWithGithub,
     signOut,
     updateProfile,
-    isAuthenticated: !!user,
+    isAuthenticated,
   };
 }

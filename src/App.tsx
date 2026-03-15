@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
+import { PrivateRoute } from "@/components/auth/PrivateRoute";
+import Login from "./pages/Login";
 import Index from "./pages/Index";
 import Portfolio from "./pages/Portfolio";
 import Trades from "./pages/Trades";
@@ -30,20 +32,25 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/portfolio" element={<Portfolio />} />
-            <Route path="/trades" element={<Trades />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/tax-report" element={<TaxReport />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/risk-management" element={<RiskManagement />} />
-            <Route path="/backtesting" element={<Backtesting />} />
-            <Route path="/ml-analytics" element={<MLAnalytics />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/paper-trading" element={<PaperTrading />} />
-            <Route path="/strategy-config" element={<StrategyConfig />} />
-            <Route path="/symbol-analysis" element={<SymbolAnalysis />} />
+            {/* Public route — only accessible without auth */}
+            <Route path="/login" element={<Login />} />
+
+            {/* Protected routes — require valid admin session */}
+            <Route path="/" element={<PrivateRoute><Index /></PrivateRoute>} />
+            <Route path="/portfolio" element={<PrivateRoute><Portfolio /></PrivateRoute>} />
+            <Route path="/trades" element={<PrivateRoute><Trades /></PrivateRoute>} />
+            <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
+            <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />
+            <Route path="/tax-report" element={<PrivateRoute><TaxReport /></PrivateRoute>} />
+            <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+            <Route path="/risk-management" element={<PrivateRoute><RiskManagement /></PrivateRoute>} />
+            <Route path="/backtesting" element={<PrivateRoute><Backtesting /></PrivateRoute>} />
+            <Route path="/ml-analytics" element={<PrivateRoute><MLAnalytics /></PrivateRoute>} />
+            <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+            <Route path="/paper-trading" element={<PrivateRoute><PaperTrading /></PrivateRoute>} />
+            <Route path="/strategy-config" element={<PrivateRoute><StrategyConfig /></PrivateRoute>} />
+            <Route path="/symbol-analysis" element={<PrivateRoute><SymbolAnalysis /></PrivateRoute>} />
+
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
