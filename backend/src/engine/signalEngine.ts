@@ -114,12 +114,14 @@ function getIndicatorSignal(name: string, value: number): 'bullish' | 'bearish' 
 
 function generateSignalFromData(
     symbol: string,
-    ohlc: OHLCPoint[],
+    ohlc: OHLCPoint[], // 1h data
     currentPrice: number,
     high24h: number,
     low24h: number,
     volume24h: number,
     fundingRate: number,
+    ohlc15m?: OHLCPoint[],
+    ohlc4h?: OHLCPoint[]
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
@@ -154,15 +156,44 @@ function generateSignalFromData(
     let type: 'long' | 'short';
     let score: number;
     const confluences: string[] = [];
+    
+    // --- MTF LOGIC INJECTION ---
+    const mtfContext = { macro: [] as string[], medium: [] as string[], micro: [] as string[] };
+    let macroTrend: 'long' | 'short' | 'neutral' = 'neutral';
+    
+    if (ohlc4h && ohlc4h.length >= 50) {
+        const closes4h = ohlc4h.map(c => c.close);
+        const ema200_4h = calculateEMA(closes4h, 200).pop() || currentPrice;
+        if (currentPrice > ema200_4h) {
+            macroTrend = 'long';
+            mtfContext.macro.push('Preço acima da EMA 200 (4H) ✅');
+        } else {
+            macroTrend = 'short';
+            mtfContext.macro.push('Preço abaixo da EMA 200 (4H) ❌');
+        }
+    }
+    
+    if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ✅');
+    if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ❌');
+    
+    if (ohlc15m && ohlc15m.length >= 20) {
+        const closes15m = ohlc15m.map(c => c.close);
+        const rsi15 = calculateRSI(closes15m);
+        if (rsi15 < 35) mtfContext.micro.push('Reversão de curto prazo (RSI 15m oversold)');
+        if (rsi15 > 65) mtfContext.micro.push('Recuo de curto prazo (RSI 15m overbought)');
+    }
 
     if (bullishCount >= 4) {
+        // MTF Filter: Swing trades shouldn't counter-trend the 4H
+        if (macroTrend === 'short') return null;
         type = 'long';
         score = 50 + bullishCount * 7;
-        confluences.push(`${bullishCount} indicadores bullish`);
+        confluences.push(`${bullishCount} indicadores bullish (1H)`);
     } else if (bearishCount >= 4) {
+        if (macroTrend === 'long') return null;
         type = 'short';
         score = 50 + bearishCount * 7;
-        confluences.push(`${bearishCount} indicadores bearish`);
+        confluences.push(`${bearishCount} indicadores bearish (1H)`);
     } else {
         return null; // Not enough confluence
     }
@@ -219,6 +250,11 @@ function generateSignalFromData(
 
     const riskReward = tp1Distance / stopLossDistance;
 
+    // Definir tipo de trade e narrativa baseada no MTF
+    const tradeType = macroTrend !== 'neutral' ? 'Swing Trade' : 'Day Trade';
+    const expectedDuration = tradeType === 'Swing Trade' ? '3-5 dias' : '12-24 horas';
+    const contextNarrative = `${symbol} demonstra forte presença ${type === 'long' ? 'compradora' : 'vendedora'} no momento. Após avaliar múltiplos timeframes, o contexto micro apoia uma operação com Retorno ao Risco favorável de 1:${riskReward.toFixed(1)} para esse ${tradeType}.`;
+
     return {
         id: `${symbol}-${Date.now()}`,
         pair: symbol,
@@ -239,7 +275,11 @@ function generateSignalFromData(
             score,
             factors: confluences,
         },
-    };
+        tradeType,
+        expectedDuration,
+        mtfContext,
+        contextNarrative,
+    } as any; // Cast to bypass strict type here if backend Type hasn't caught the frontend MTF extensions
 }
 
 // ──── Engine Loop ────
@@ -259,6 +299,9 @@ async function runSignalCycle(): Promise<void> {
             }
             if (ohlc.length < 50) continue;
 
+            const ohlc15m = await bybitConnector.fetchKlines(symbol, '15', 50);
+            const ohlc4h = await bybitConnector.fetchKlines(symbol, '240', 200);
+
             const ticker = bybitConnector.getTicker(symbol);
             const currentPrice = ticker?.lastPrice || ohlc[ohlc.length - 1].close;
             const high24h = ticker?.highPrice24h || Math.max(...ohlc.slice(-24).map(c => c.high));
@@ -267,7 +310,7 @@ async function runSignalCycle(): Promise<void> {
             const fundingRate = parseFloat(ticker?.fundingRate || '0');
 
             const signal = generateSignalFromData(
-                symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate
+                symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h
             );
 
             if (signal && signal.quality && signal.quality.score >= 60) {
@@ -340,6 +383,7 @@ async function runSignalCycle(): Promise<void> {
                 // Send Telegram notification
                 if (telegramService.isEnabled && signal.quality.score >= config.telegram.minScore) {
                     try {
+                        const anySignal = signal as any; // Para usar os paramétros suplementares MTF
                         await telegramService.sendNewSignal({
                             type: signal.type,
                             symbol: signal.pair,
@@ -363,6 +407,10 @@ async function runSignalCycle(): Promise<void> {
                             positionSizePercent: 10,
                             riskPercent: 2,
                             timestamp: new Date().toISOString(),
+                            tradeType: anySignal.tradeType,
+                            expectedDuration: anySignal.expectedDuration,
+                            mtfContext: anySignal.mtfContext,
+                            contextNarrative: anySignal.contextNarrative,
                         });
                         signalsSent++;
                     } catch (telegramError) {
@@ -406,6 +454,9 @@ async function runSignalCycle(): Promise<void> {
                 confidence: s.confidence,
                 indicators: s.indicators,
                 quality: s.quality || null,
+                trade_type: (s as any).tradeType || 'Day Trade',
+                expected_duration: (s as any).expectedDuration || '12-24 horas',
+                context: (s as any).contextNarrative || '',
                 ml_data: s.mlData || null,
                 created_at: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
             }));
