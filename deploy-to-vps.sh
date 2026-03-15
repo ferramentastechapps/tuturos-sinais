@@ -128,9 +128,15 @@ ssh $VPS_USER@$VPS_HOST << EOF
      echo -e "\nRodando script interno de deploy..."
      bash infrastructure/deploy.sh || { echo -e "ERRO: Falha durante a execução de infrastructure/deploy.sh!"; exit 1; }
   else
-     echo -e "\nAviso: infrastructure/deploy.sh não encontrado ou sem permissão de execução, utilizando npm diretos..."
+     echo -e "\nAviso: infrastructure/deploy.sh não encontrado ou sem permissão de execução, utilizando comandos diretos..."
+     # Build Frontend
      npm install
      npm run build
+     # Build Backend
+     cd backend
+     npm install
+     npm run build
+     cd ..
   fi
   
   # Reiniciar processos do PM2
