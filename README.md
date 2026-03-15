@@ -69,6 +69,23 @@ VITE_SUPABASE_ANON_KEY="sua-chave-anonima"
 # Configure o token nos segredos da Edge Function no Supabase.
 ```
 
+## 🚀 Script Automático de Deploy
+
+O projeto inclui o script `deploy-to-vps.sh` para facilitar a publicação do código diretamente para a VPS configurada. Ele realiza validações, comita no Git e faz o login SSH remotamente para atualizar a aplicação.
+
+### Como dar permissão de execução:
+No Linux/Mac ou terminais Bash no Windows:
+```bash
+chmod +x deploy-to-vps.sh
+```
+
+### Como usar:
+Basta rodar o script passando a mensagem de commit da modificação:
+```bash
+./deploy-to-vps.sh "Minha mensagem de atualização"
+```
+*(Ele se encarregará de fazer o add, commit e push para a origin main e rodar o pull remotamente)*
+
 ## 🤖 Configuração do Bot Telegram
 
 1. Crie um bot com o [@BotFather](https://t.me/BotFather) e obtenha o Token.
