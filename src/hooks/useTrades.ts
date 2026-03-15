@@ -11,6 +11,7 @@ const loadFromStorage = (): Trade[] => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return [];
       return parsed.map((trade: Trade) => ({
         ...trade,
         createdAt: new Date(trade.createdAt),

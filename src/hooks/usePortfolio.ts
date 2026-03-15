@@ -10,6 +10,7 @@ const loadFromStorage = (): PortfolioAsset[] => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return [];
       return parsed.map((asset: PortfolioAsset) => ({
         ...asset,
         createdAt: new Date(asset.createdAt),

@@ -47,7 +47,7 @@ export const useRealTimeSignals = (options: UseRealTimeSignalsOptions = {}) => {
         return [];
       }
 
-      return ((data as any[]) || []).map(mapRowToSignal);
+      return (Array.isArray(data) ? data : []).map(mapRowToSignal);
     },
     staleTime: 30_000, // 30s
     refetchInterval: 60_000, // Refetch every 60s as fallback
@@ -95,10 +95,10 @@ export const useRealTimeSignals = (options: UseRealTimeSignalsOptions = {}) => {
     };
   }, [queryClient]);
 
-  const filteredSignals = signals.filter(s => {
+  const filteredSignals = Array.isArray(signals) ? signals.filter(s => {
     if (symbol && s.pair !== symbol) return false;
     return true;
-  });
+  }) : [];
 
   return { data: filteredSignals, isLoading, error };
 };

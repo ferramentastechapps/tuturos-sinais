@@ -14,8 +14,8 @@ export const useCryptoPrices = () => {
     queryKey: ['crypto-prices'],
     queryFn: async () => {
       if (isBackendAvailable) {
-        const { data } = await apiClient.get<CryptoPair[]>('/market');
-        return data;
+        const { data } = await apiClient.get<any>('/market');
+        return Array.isArray(data) ? data : [];
       }
       // Fallback to CoinGecko
       return fetchCryptoPrices();
@@ -35,7 +35,7 @@ export const useCryptoPrices = () => {
 
     const handlePriceUpdate = (newPrices: Record<string, number>) => {
       queryClient.setQueryData<CryptoPair[]>(['crypto-prices'], (oldPrices) => {
-        if (!oldPrices) return [];
+        if (!Array.isArray(oldPrices)) return [];
         return oldPrices.map(p => {
           const newPrice = newPrices[p.symbol];
           if (!newPrice) return p;

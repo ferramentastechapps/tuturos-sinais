@@ -58,6 +58,7 @@ const Index = () => {
   
   // Enrich signals with performance context
   const enrichedSignals = useMemo(() => {
+    if (!Array.isArray(allSignals)) return [];
     return allSignals.map(signal => {
       const summary = getSymbolAnalysis(signal.pair);
       return enrichSignalWithPerformance(signal, summary);
