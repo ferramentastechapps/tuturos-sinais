@@ -157,10 +157,15 @@ class TelegramService {
             `  TP${tp.level}: $${tp.price.toFixed(2)} (+${tp.percent.toFixed(1)}%)`
         ).join('\n');
 
-        const text = [
+        const textLines = [
             `${emoji} <b>SINAL ${dir} — ${data.symbol}</b>`,
+            data.tradeType ? `⏱️ Estilo: ${data.tradeType} (Aprox. ${data.expectedDuration})` : null,
             `🎯 Score: ${data.score}/100 (${data.scoreLabel})`,
-            `📊 Timeframe: ${data.timeframe}`,
+            data.mtfContext ? `` : null,
+            data.mtfContext ? `<b>🔍 Análise Multi-Timeframe</b>` : null,
+            data.mtfContext ? `  <b>Macro:</b> ${data.mtfContext.macro.join(' | ') || 'Neutro'}` : null,
+            data.mtfContext ? `  <b>Médio:</b> ${data.mtfContext.medium.join(' | ') || 'Neutro'}` : null,
+            data.mtfContext ? `  <b>Micro:</b> ${data.mtfContext.micro.join(' | ') || 'Neutro'}` : null,
             ``,
             `💰 Preço: $${data.currentPrice.toFixed(2)}`,
             `📥 Entrada: $${data.entryZone.min.toFixed(2)} - $${data.entryZone.max.toFixed(2)}`,
@@ -169,13 +174,19 @@ class TelegramService {
             `🎯 Take Profits:`,
             tps,
             ``,
-            `📈 R:R ${data.riskReward.toFixed(1)}`,
+            `📈 R:R 1:${data.riskReward.toFixed(1)}`,
             `⚡ Alavancagem: ${data.leverage}x`,
             `💼 Posição: ${data.positionSizePercent.toFixed(1)}%`,
             `🔥 Risco: ${data.riskPercent.toFixed(1)}%`,
+            data.contextNarrative ? `` : null,
+            data.contextNarrative ? `📝 <b>Contexto:</b> <i>${data.contextNarrative}</i>` : null,
+            data.performanceSummary ? `` : null,
+            data.performanceSummary ? `🏆 <b>Performance Histórica (Eficácia)</b>:\n${data.performanceSummary}` : null,
             ``,
             `🕐 ${new Date(data.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
-        ].join('\n');
+        ];
+
+        const text = textLines.filter(line => line !== null).join('\n');
 
         return this.send(text, 'new_signal', data.symbol);
     }
@@ -276,6 +287,49 @@ class TelegramService {
     getQueueSize(): number {
         return this.queue.length;
     }
+
+    async sendTakeProfitNotification(signal: any, tp: any, currentPrice: number): Promise<TelegramSendResult> {
+        const text = [
+            `✅ <b>TAKE PROFIT ATINGIDO — ${signal.pair}</b>`,
+            `🎯 <b>Alvo ${tp.level} alcançado!</b>`,
+            ``,
+            `💰 Preço Atual: $${currentPrice.toFixed(4)}`,
+            signal.trade_type ? `📈 Estilo: ${signal.trade_type}` : null,
+            tp.level === 1 ? `🛡️ Stop Loss movido para o Breakeven ou trailing ativado.` : null,
+            ``,
+            `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+        ].filter(line => line !== null).join('\n');
+        return this.send(text, 'take_profit', signal.pair);
+    }
+
+    async sendStopLossNotification(signal: any, currentPrice: number): Promise<TelegramSendResult> {
+        const text = [
+            `❌ <b>STOP LOSS ATINGIDO — ${signal.pair}</b>`,
+            `Trade encerrado.`,
+            ``,
+            `💰 Preço de Saída: $${currentPrice.toFixed(4)}`,
+            ``,
+            `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+        ].join('\n');
+        return this.send(text, 'stop_loss', signal.pair);
+    }
+
+    async sendTrailingStopUpdate(signal: any, currentPrice: number, oldSl: number, newSl: number): Promise<TelegramSendResult> {
+        const text = [
+            `🛡️ <b>TRAILING STOP ATUALIZADO — ${signal.pair}</b>`,
+            `O preço moveu a favor da operação.`,
+            ``,
+            `💰 Preço Atual: $${currentPrice.toFixed(4)}`,
+            `🔒 Novo Stop: $${newSl.toFixed(4)} (Anterior: $${oldSl.toFixed(4)})`,
+            ``,
+            `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+        ].join('\n');
+        return this.send(text, 'take_profit', signal.pair);
+    }
 }
 
 export const telegramService = new TelegramService();
+
+export const sendTPNotification = (signal: any, tp: any, currentPrice: number) => telegramService.sendTakeProfitNotification(signal, tp, currentPrice);
+export const sendSLNotification = (signal: any, currentPrice: number) => telegramService.sendStopLossNotification(signal, currentPrice);
+export const sendTrailingStopUpdate = (signal: any, currentPrice: number, oldSl: number, newSl: number) => telegramService.sendTrailingStopUpdate(signal, currentPrice, oldSl, newSl);

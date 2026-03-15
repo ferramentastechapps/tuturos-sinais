@@ -8,12 +8,14 @@ O **Tuturos Sinais** é uma plataforma completa que monitora o mercado de cripto
 
 ### Funcionalidades Principais
 
-- **Sinais em Tempo Real**: Monitoramento de múltiplos pares USDT perpétuos.
-- **Machine Learning**: Modelo preditivo que atribui probabilidade de sucesso a cada sinal.
+- **Sinais em Tempo Real**: Monitoramento de múltiplos pares USDT perpétuos simultaneamente.
+- **Análise Multi-Timeframe (MTF)**: Validação de tendências cruzadas em 15M, 1H e 4H para gerar sinais filtrados de alta qualificação (Scalping, Day Trade e Swing Trade).
+- **Trade Tracker e Trailing Stop**: Acompanhamento automático dos sinais abertos em tempo real via WebSocket com auto-ativação de trailing stops (step-based) após o Take Profit 1.
+- **Machine Learning**: Modelo preditivo avançado que atribui probabilidade de sucesso e atua como filtro.
 - **Gestão de Risco Dinâmica**: Ajuste automático de Stop Loss e Alavancagem baseado na volatilidade (ATR), Funding Rate e Sentimento do Mercado.
-- **Dashboard Interativo**: Gráficos avançados, painel de sinais e métricas de portfólio.
-- **Notificações Telegram**: Alertas instantâneos para novos sinais, Take Profits e Stop Losses (via Edge Function segura).
-- **Integração Binance Futures**: Dados de preço, funding rate e open interest em tempo real.
+- **Dashboard Interativo**: Gráficos avançados, painel de sinais ativos e métricas de desempenho.
+- **Notificações Telegram**: Alertas ricos detalhando contextos MTF, parciais atingidas (TPs), saídas (SL) e relatórios automatizados diários/semanais.
+- **Integração Binance Futures e Bybit**: Dados de preço (REST e WebSocket), funding rate e open interest em tempo real.
 
 ## 🔄 Fluxo do Sistema
 

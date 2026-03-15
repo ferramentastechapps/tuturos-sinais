@@ -22,10 +22,13 @@ import { AdjustedRiskConfig } from '@/types/riskProfiles';
 export interface AdvancedSignalInput {
   symbol: string;
   currentPrice: number;
-  indicators: TechnicalIndicator[];
+  indicators: TechnicalIndicator[]; // Legacy (can be 1H)
   high24h: number;
   low24h: number;
-  ohlcData?: OHLCPoint[];
+  ohlcData?: OHLCPoint[]; // fallback
+  ohlcData15m?: OHLCPoint[];
+  ohlcData1h?: OHLCPoint[];
+  ohlcData4h?: OHLCPoint[];
   volume24h?: number;
   futuresData?: FuturesOverview; // Dados de futuros (Binance)
   change24h?: number; // Needed for risk calculation
@@ -63,6 +66,12 @@ export interface SignalRiskData {
   blockReason?: string;
 }
 
+export interface MTFContext {
+  macro: string[];
+  medium: string[];
+  micro: string[];
+}
+
 export interface AdvancedSignal {
   type: 'long' | 'short';
   entry: number;
@@ -80,6 +89,10 @@ export interface AdvancedSignal {
   smartMoney?: SmartMoneyContext;
   riskData?: SignalRiskData; // Dados detalhados de risco
   profileInfo?: SignalProfileInfo; // Profile-aware scoring info
+  tradeType?: 'Scalping' | 'Day Trade' | 'Swing Trade';
+  expectedDuration?: string;
+  mtfContext?: MTFContext;
+  contextNarrative?: string;
   mlData?: {
     probability: number;
     predictedClass: 0 | 1;
@@ -327,7 +340,80 @@ const extractMarketConditions = (input: AdvancedSignalInput): MarketConditions =
 export const generateAdvancedSignal = (
   input: AdvancedSignalInput
 ): AdvancedSignal | null => {
-  const { currentPrice, indicators, high24h, low24h, ohlcData, volume24h, futuresData, strategyProfile } = input;
+  const { currentPrice, indicators, high24h, low24h, volume24h, futuresData, strategyProfile } = input;
+  const ohlcData = input.ohlcData1h || input.ohlcData; // Default to 1H for legacy
+  
+  // Analisadores de Múltiplos Timeframes
+  let mtfContext: MTFContext = { macro: [], medium: [], micro: [] };
+  let isMacroAligned = true;
+  let isMicroAligned = true;
+  let detectedType: 'Scalping' | 'Day Trade' | 'Swing Trade' = 'Day Trade';
+  let expectedDuration = '12-24 horas';
+  
+  // MTF 4H Analysis (Macro Trend)
+  let macroTrend: 'long' | 'short' | 'neutral' = 'neutral';
+  if (input.ohlcData4h && input.ohlcData4h.length >= 200) {
+      const closes4h = input.ohlcData4h.map(d => d.close);
+      const ema50_4h = calculateEMA(closes4h, 50).pop() || currentPrice;
+      const ema200_4h = calculateEMA(closes4h, 200).pop() || currentPrice;
+      if (currentPrice > ema200_4h && currentPrice > ema50_4h) {
+          macroTrend = 'long';
+          mtfContext.macro.push('Preço acima da EMA 50 e 200 ✅');
+      } else if (currentPrice < ema200_4h && currentPrice < ema50_4h) {
+          macroTrend = 'short';
+          mtfContext.macro.push('Preço abaixo da EMA 50 e 200 ❌');
+      }
+      const adx4hResult = calculateADXFromOHLC(input.ohlcData4h, 14);
+      if (adx4hResult.length > 0 && adx4hResult[adx4hResult.length - 1].adx > 25) {
+          mtfContext.macro.push(`ADX > 25 (Tendência forte) ✅`);
+      }
+  }
+
+  // MTF 1H Analysis (Medium Trend Setup)
+  let mediumTrend: 'long' | 'short' | 'neutral' = 'neutral';
+  if (input.ohlcData1h && input.ohlcData1h.length >= 200) {
+      const smMedium = analyzeSmartMoney(input.ohlcData1h);
+      const rsi1h = calculateRSI(input.ohlcData1h.map(d => ({timestamp: d.timestamp, price: d.close})), 14).pop()?.value || 50;
+      if (rsi1h < 40) mtfContext.medium.push('RSI em região sobrevendida ✅');
+      if (rsi1h > 60) mtfContext.medium.push('RSI em região sobrecomprada ❌');
+      if (smMedium.orderBlocks.some(ob => ob.type === 'bullish' && currentPrice >= ob.bottom && currentPrice <= ob.top * 1.05)) {
+          mtfContext.medium.push('Order Block de suporte válido ✅');
+          mediumTrend = 'long';
+      } else if (smMedium.orderBlocks.some(ob => ob.type === 'bearish' && currentPrice <= ob.top && currentPrice >= ob.bottom * 0.95)) {
+          mtfContext.medium.push('Order Block de resistência válido ❌');
+          mediumTrend = 'short';
+      }
+  }
+
+  // MTF 15M Analysis (Micro Entry Timing)
+  let microTrend: 'long' | 'short' | 'neutral' = 'neutral';
+  if (input.ohlcData15m && input.ohlcData15m.length >= 20) {
+      const mPatterns = analyzeCandlestickPatterns(input.ohlcData15m, macroTrend !== 'neutral' ? macroTrend : 'long');
+      if (mPatterns.patterns.length > 0) {
+          mtfContext.micro.push(`Padrão ${mPatterns.patterns[0].name} detectado ✅`);
+          microTrend = macroTrend !== 'neutral' ? macroTrend : 'long';
+      }
+      const cvd15 = analyzeCVD(input.ohlcData15m);
+      if (cvd15.currentTrend === 'accumulation') {
+          mtfContext.micro.push('CVD Positivo (Acumulação M15) ✅');
+          if (microTrend === 'neutral') microTrend = 'long';
+      } else if (cvd15.currentTrend === 'distribution') {
+          mtfContext.micro.push('CVD Negativo (Distribuição M15) ❌');
+          if (microTrend === 'neutral') microTrend = 'short';
+      }
+  }
+
+  // Trade Type Definition
+  if (macroTrend !== 'neutral' && mediumTrend === macroTrend) {
+      detectedType = 'Swing Trade';
+      expectedDuration = '3-5 dias';
+  } else if (mediumTrend !== 'neutral' && microTrend === mediumTrend) {
+      detectedType = 'Day Trade';
+      expectedDuration = '12-24 horas';
+  } else {
+      detectedType = 'Scalping';
+      expectedDuration = '1-3 horas';
+  }
 
   // 1. Get Base Risk Config & Market Conditions & Adjusted Risk
   const baseConfig = riskConfigManager.getConfig(input.symbol);
@@ -337,7 +423,7 @@ export const generateAdvancedSignal = (
   // Count bullish and bearish signals
   const bullishCount = indicators.filter(i => i.signal === 'bullish').length;
   const bearishCount = indicators.filter(i => i.signal === 'bearish').length;
-  const totalSignals = indicators.length;
+  const totalSignals = indicators.length || 1;
 
   const bullishPercent = (bullishCount / totalSignals) * 100;
   const bearishPercent = (bearishCount / totalSignals) * 100;
@@ -772,6 +858,14 @@ export const generateAdvancedSignal = (
       };
     }
 
+    // Rejection on MTF divergence
+    if (detectedType === 'Swing Trade' && macroTrend === 'short') {
+        warnings.push('Sinal LONG rejeitado pois contradiz tendência macro de 4H (Bearish).');
+        return null;
+    }
+
+    const narrative = `${input.symbol} demonstra forte presença compradora no momento. Após avaliar múltiplos timeframes, o contexto micro apoia uma reversão, confirmada por suporte no timeframe médio. Retorno ao risco de 1:${riskReward.toFixed(1)} oferece margem favorável para esse ${detectedType}.`;
+
     return {
       type: 'long',
       entry: parseFloat(entry.toFixed(2)),
@@ -780,7 +874,7 @@ export const generateAdvancedSignal = (
       riskReward: parseFloat(riskReward.toFixed(2)),
       confidence: Math.max(Math.min(Math.round(confidence), 95), 60),
       indicators: reasons,
-      timeframe: '4H',
+      timeframe: '1H',
       quality: {
         score: profileInfo ? profileInfo.normalizedScore : Math.max(Math.min(Math.round(qualityScore), 100), 0),
         factors: qualityFactors,
@@ -790,6 +884,10 @@ export const generateAdvancedSignal = (
       smartMoney: smartMoneyCtx,
       riskData,
       profileInfo,
+      tradeType: detectedType,
+      expectedDuration: expectedDuration,
+      mtfContext: mtfContext,
+      contextNarrative: narrative,
       takeProfit1: parseFloat(tp1.toFixed(2)),
       takeProfit2: parseFloat(tp2.toFixed(2)),
       takeProfit3: parseFloat(tp3.toFixed(2)),
@@ -1165,6 +1263,14 @@ export const generateAdvancedSignal = (
       };
     }
 
+    // Rejection on MTF divergence
+    if (detectedType === 'Swing Trade' && macroTrend === 'long') {
+        warnings.push('Sinal SHORT rejeitado pois contradiz tendência macro de 4H (Bullish).');
+        return null;
+    }
+
+    const narrative = `${input.symbol} demonstra forte presença vendedora no momento. Após avaliar múltiplos timeframes, o contexto micro apoia uma reversão de baixa, confirmada por resistência no timeframe médio. Retorno ao risco de 1:${riskReward.toFixed(1)} oferece margem favorável para esse ${detectedType}.`;
+
     return {
       type: 'short',
       entry: parseFloat(entry.toFixed(2)),
@@ -1173,7 +1279,7 @@ export const generateAdvancedSignal = (
       riskReward: parseFloat(riskReward.toFixed(2)),
       confidence: Math.max(Math.min(Math.round(confidence), 95), 60),
       indicators: reasons,
-      timeframe: '4H',
+      timeframe: '1H',
       quality: {
         score: profileInfoShort ? profileInfoShort.normalizedScore : Math.max(Math.min(Math.round(qualityScore), 100), 0),
         factors: qualityFactors,
@@ -1183,6 +1289,10 @@ export const generateAdvancedSignal = (
       smartMoney: smartMoneyCtx,
       riskData,
       profileInfo: profileInfoShort,
+      tradeType: detectedType,
+      expectedDuration: expectedDuration,
+      mtfContext: mtfContext,
+      contextNarrative: narrative,
       takeProfit1: parseFloat(tp1.toFixed(2)),
       takeProfit2: parseFloat(tp2.toFixed(2)),
       takeProfit3: parseFloat(tp3.toFixed(2)),

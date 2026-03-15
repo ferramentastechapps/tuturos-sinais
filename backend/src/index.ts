@@ -22,6 +22,7 @@ import {
     startSystemMonitor,
 } from './notifications/systemAlerts.js';
 import { initBot } from './bot.js';
+import { startSummaryJobs } from './jobs/summaryJobs.js';
 
 const app = express();
 const server = createServer(app);
@@ -142,6 +143,9 @@ async function bootstrap(): Promise<void> {
 
     // 7. Initialize Telegram Bot commands and listeners
     initBot();
+
+    // 8. Iniciar jobs agendados (ex: relatórios diários)
+    startSummaryJobs();
 }
 
 // ──── Graceful Shutdown ────

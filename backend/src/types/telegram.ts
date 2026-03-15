@@ -66,6 +66,15 @@ export interface SignalNotificationData {
     positionSizePercent: number;
     riskPercent: number;
     timestamp: string;
+    tradeType?: string;
+    expectedDuration?: string;
+    contextNarrative?: string;
+    mtfContext?: {
+        macro: string[];
+        medium: string[];
+        micro: string[];
+    };
+    performanceSummary?: string;
 }
 
 export interface TakeProfitNotificationData {

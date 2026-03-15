@@ -14,6 +14,137 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_signals: {
+        Row: {
+          context: string | null
+          created_at: string
+          entry_range_high: number
+          entry_range_low: number
+          expected_duration: string | null
+          id: string
+          initial_stop_loss: number
+          last_check_time: string | null
+          last_price_checked: number | null
+          pair: string
+          score: number | null
+          status: string
+          stop_loss: number
+          take_profits: Json
+          telegram_message_id: string | null
+          trade_type: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          context?: string | null
+          created_at?: string
+          entry_range_high: number
+          entry_range_low: number
+          expected_duration?: string | null
+          id?: string
+          initial_stop_loss: number
+          last_check_time?: string | null
+          last_price_checked?: number | null
+          pair: string
+          score?: number | null
+          status?: string
+          stop_loss: number
+          take_profits: Json
+          telegram_message_id?: string | null
+          trade_type: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          context?: string | null
+          created_at?: string
+          entry_range_high?: number
+          entry_range_low?: number
+          expected_duration?: string | null
+          id?: string
+          initial_stop_loss?: number
+          last_check_time?: string | null
+          last_price_checked?: number | null
+          pair?: string
+          score?: number | null
+          status?: string
+          stop_loss?: number
+          take_profits?: Json
+          telegram_message_id?: string | null
+          trade_type?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      daily_summaries: {
+        Row: {
+          created_at: string
+          full_report_text: string | null
+          id: string
+          losers: number
+          pnl: number
+          summary_date: string
+          total_signals: number
+          winners: number
+        }
+        Insert: {
+          created_at?: string
+          full_report_text?: string | null
+          id?: string
+          losers?: number
+          pnl?: number
+          summary_date: string
+          total_signals?: number
+          winners?: number
+        }
+        Update: {
+          created_at?: string
+          full_report_text?: string | null
+          id?: string
+          losers?: number
+          pnl?: number
+          summary_date?: string
+          total_signals?: number
+          winners?: number
+        }
+        Relationships: []
+      }
+      signal_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          message: string | null
+          price_at_event: number
+          signal_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          message?: string | null
+          price_at_event: number
+          signal_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          message?: string | null
+          price_at_event?: number
+          signal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_events_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "active_signals"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       indicator_alert_config: {
         Row: {
           adx_strong_trend: number
