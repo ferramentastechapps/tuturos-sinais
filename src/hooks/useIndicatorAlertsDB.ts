@@ -54,17 +54,58 @@ function dbRowToConfig(row: any): IndicatorAlertConfig {
   };
 }
 
+// Helper: show toast + optional browser notification
+function showNotification(
+  info: { icon: string; label: string },
+  symbol: string,
+  message: string,
+  direction: 'bullish' | 'bearish',
+  browserNotifications: boolean
+) {
+  toast[direction === 'bullish' ? 'success' : 'warning'](
+    `${info.icon} ${info.label}`,
+    { description: `${symbol}: ${message}` }
+  );
+
+  if (browserNotifications && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(`${info.icon} ${info.label} - ${symbol}`, {
+        body: message,
+        icon: '/favicon.ico',
+        tag: `indicator-${info.label}-${symbol}`,
+        requireInteraction: false,
+      });
+    } catch { /* ignore */ }
+  }
+}
+
+const LOCAL_STORAGE_KEY = 'indicator-alerts-fallback';
+
 export function useIndicatorAlertsDB(options: UseIndicatorAlertsDBOptions = {}) {
   const { maxAlerts = 100 } = options;
   const { user, isAuthenticated } = useAuth();
   const [alerts, setAlerts] = useState<IndicatorAlert[]>([]);
   const [config, setConfig] = useState<IndicatorAlertConfig>(DEFAULT_INDICATOR_ALERT_CONFIG);
   const [loading, setLoading] = useState(true);
+  // Track whether Supabase is usable — fall back to localStorage silently if not
+  const dbAvailableRef = useRef<boolean>(true);
   const lastAlertTimeRef = useRef<Map<string, number>>(new Map());
 
-  // Load alerts from database
+  // Load alerts from database (falls back to localStorage on RLS error)
   const loadAlerts = useCallback(async () => {
     if (!user) return;
+
+    if (!dbAvailableRef.current) {
+      // Already known to be unavailable — load from localStorage
+      try {
+        const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setAlerts(parsed.map((a: IndicatorAlert) => ({ ...a, timestamp: new Date(a.timestamp) })));
+        }
+      } catch { /* ignore */ }
+      return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -74,17 +115,26 @@ export function useIndicatorAlertsDB(options: UseIndicatorAlertsDBOptions = {}) 
         .order('created_at', { ascending: false })
         .limit(maxAlerts);
 
-      if (error) throw error;
+      if (error) {
+        // RLS or permission error — mark DB unavailable, don't crash
+        if (error.code === '42501' || error.message?.includes('row-level security') || error.message?.includes('401')) {
+          console.warn('[useIndicatorAlertsDB] RLS blocked read — switching to localStorage fallback');
+          dbAvailableRef.current = false;
+        } else {
+          console.error('[useIndicatorAlertsDB] Load alerts error:', error.message);
+        }
+        return;
+      }
 
       setAlerts(data?.map(dbRowToAlert) || []);
-    } catch (error) {
-      console.error('Error loading alerts:', error);
+    } catch (error: any) {
+      console.error('[useIndicatorAlertsDB] Error loading alerts:', error?.message);
     }
   }, [user, maxAlerts]);
 
-  // Load config from database
+  // Load config from database (silent on RLS error)
   const loadConfig = useCallback(async () => {
-    if (!user) return;
+    if (!user || !dbAvailableRef.current) return;
 
     try {
       const { data, error } = await supabase
@@ -93,13 +143,21 @@ export function useIndicatorAlertsDB(options: UseIndicatorAlertsDBOptions = {}) 
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '42501' || error.message?.includes('row-level security') || error.message?.includes('401')) {
+          console.warn('[useIndicatorAlertsDB] RLS blocked config read — using defaults');
+          dbAvailableRef.current = false;
+        } else {
+          console.error('[useIndicatorAlertsDB] Load config error:', error.message);
+        }
+        return;
+      }
 
       if (data) {
         setConfig(dbRowToConfig(data));
       }
-    } catch (error) {
-      console.error('Error loading config:', error);
+    } catch (error: any) {
+      console.error('[useIndicatorAlertsDB] Error loading config:', error?.message);
     }
   }, [user]);
 
@@ -137,53 +195,68 @@ export function useIndicatorAlertsDB(options: UseIndicatorAlertsDBOptions = {}) 
 
     const info = INDICATOR_ALERT_INFO[type];
 
-    try {
-      const { data, error } = await supabase
-        .from('indicator_alerts')
-        .insert({
-          user_id: user.id,
-          type,
-          symbol,
-          indicator_name: indicatorName,
-          value,
-          threshold,
-          message,
-          direction,
-        })
-        .select()
-        .single();
+    // Build the alert locally first (used for both DB and localStorage fallback)
+    const localAlert: IndicatorAlert = {
+      id: `ind_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      type,
+      symbol,
+      indicatorName,
+      value,
+      threshold,
+      message,
+      timestamp: new Date(),
+      read: false,
+      direction,
+    };
 
-      if (error) throw error;
+    lastAlertTimeRef.current.set(`${symbol}-${type}`, Date.now());
 
-      const newAlert = dbRowToAlert(data);
-      setAlerts(prev => [newAlert, ...prev].slice(0, maxAlerts));
-      lastAlertTimeRef.current.set(`${symbol}-${type}`, Date.now());
+    // Try to persist to Supabase — silently fall back on RLS error
+    if (dbAvailableRef.current) {
+      try {
+        const { data, error } = await supabase
+          .from('indicator_alerts')
+          .insert({
+            user_id: user.id,
+            type,
+            symbol,
+            indicator_name: indicatorName,
+            value,
+            threshold,
+            message,
+            direction,
+          })
+          .select()
+          .single();
 
-      // Show toast notification
-      toast[direction === 'bullish' ? 'success' : 'warning'](
-        `${info.icon} ${info.label}`,
-        { description: `${symbol}: ${message}` }
-      );
-
-      // Send browser notification if enabled
-      if (config.browserNotifications && 'Notification' in window && Notification.permission === 'granted') {
-        try {
-          new Notification(`${info.icon} ${info.label} - ${symbol}`, {
-            body: message,
-            icon: '/favicon.ico',
-            tag: `indicator-${type}-${symbol}`,
-            requireInteraction: false,
-          });
-        } catch (e) {
-          console.error('Failed to show browser notification:', e);
+        if (error) {
+          if (error.code === '42501' || error.message?.includes('row-level security') || error.message?.includes('401')) {
+            console.warn('[useIndicatorAlertsDB] RLS blocked insert — switching to localStorage fallback');
+            dbAvailableRef.current = false;
+          } else {
+            console.error('[useIndicatorAlertsDB] Insert error:', error.message);
+          }
+          // Fall through to localStorage save below
+        } else if (data) {
+          const dbAlert = dbRowToAlert(data);
+          setAlerts(prev => [dbAlert, ...prev].slice(0, maxAlerts));
+          showNotification(info, symbol, message, direction, config.browserNotifications);
+          return dbAlert;
         }
+      } catch (err: any) {
+        console.error('[useIndicatorAlertsDB] Supabase error:', err?.message);
+        // Fall through to localStorage
       }
-
-      return newAlert;
-    } catch (error) {
-      console.error('Error adding alert:', error);
-      return null;
     }
+
+    // LocalStorage fallback
+    setAlerts(prev => {
+      const updated = [localAlert, ...prev].slice(0, maxAlerts);
+      try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+      return updated;
+    });
+    showNotification(info, symbol, message, direction, config.browserNotifications);
+    return localAlert;
   }, [config.enabled, config.browserNotifications, canTriggerAlert, user, maxAlerts]);
 
   const checkIndicators = useCallback((
