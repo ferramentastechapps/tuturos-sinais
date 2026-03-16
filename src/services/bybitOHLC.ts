@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+// Removed Supabase import since we use absolute REST public calls
 
 export interface OHLCPoint {
   timestamp: number;
@@ -64,17 +64,9 @@ export const fetchBybitOHLC = async (
   limit: number = 200
 ): Promise<OHLCPoint[]> => {
   const bybitSymbol = toBybitSymbol(symbol);
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'owchjtzucnhsvlkwdapn';
-  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const url = `https://api.bybit.com/v5/market/kline?category=linear&symbol=${bybitSymbol}&interval=${interval}&limit=${limit}`;
 
-  const url = `https://${projectId}.supabase.co/functions/v1/bybit-proxy?symbol=${bybitSymbol}&interval=${interval}&limit=${limit}`;
-
-  const response = await fetch(url, {
-    headers: {
-      'apikey': anonKey,
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error(`Bybit proxy error: ${response.status}`);

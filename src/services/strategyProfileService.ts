@@ -1,8 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 // Strategy Profile Service — CRUD, Presets, Export/Import
 // ═══════════════════════════════════════════════════════════
-
-import { supabase } from '@/integrations/supabase/client';
 import {
   StrategyProfile,
   IndicatorsMap,
@@ -207,39 +205,10 @@ const mergeWithPresets = (userProfiles: StrategyProfile[]): StrategyProfile[] =>
   return [...presets, ...userProfiles];
 };
 
-// ──────────── Supabase CRUD ────────────
-
-const fromSupabaseRow = (row: Record<string, unknown>): StrategyProfile =>
-  computeProfileStats({
-    id: row.id as string,
-    name: row.name as string,
-    description: (row.description as string) || '',
-    isPreset: false,
-    isDefault: (row.is_default as boolean) || false,
-    indicators: (row.indicators as IndicatorsMap) || getDefaultIndicatorsMap(),
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
-  });
+// ──────────── Profile CRUD (Local Only) ────────────
 
 export const loadUserProfiles = async (userId: string | null): Promise<StrategyProfile[]> => {
-  if (!userId) {
-    return mergeWithPresets(readLocalProfiles());
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('strategy_profiles' as any)
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    const userProfiles = ((data || []) as any[]).map(fromSupabaseRow);
-    return mergeWithPresets(userProfiles);
-  } catch (err) {
-    console.warn('[StrategyProfileService] Supabase error, using localStorage:', err);
-    return mergeWithPresets(readLocalProfiles());
-  }
+  return mergeWithPresets(readLocalProfiles());
 };
 
 export const saveProfile = async (
@@ -247,60 +216,20 @@ export const saveProfile = async (
   userId: string | null
 ): Promise<StrategyProfile> => {
   const stats = computeProfileStats(profile);
-
-  if (!userId) {
-    const existing = readLocalProfiles();
-    const idx = existing.findIndex(p => p.id === stats.id);
-    if (idx >= 0) existing[idx] = stats;
-    else existing.unshift(stats);
-    writeLocalProfiles(existing);
-    return stats;
-  }
-
-  try {
-    const row = {
-      id: stats.id.startsWith('preset_') ? undefined : stats.id,
-      user_id: userId,
-      name: stats.name,
-      description: stats.description,
-      is_preset: false,
-      is_default: stats.isDefault,
-      indicators: stats.indicators,
-    };
-
-    const { data, error } = await supabase
-      .from('strategy_profiles' as any)
-      .upsert(row, { onConflict: 'id' })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return fromSupabaseRow(data as unknown as Record<string, unknown>);
-  } catch (err) {
-    console.warn('[StrategyProfileService] Save error:', err);
-    return stats;
-  }
+  const existing = readLocalProfiles();
+  const idx = existing.findIndex(p => p.id === stats.id);
+  if (idx >= 0) existing[idx] = stats;
+  else existing.unshift(stats);
+  writeLocalProfiles(existing);
+  return stats;
 };
 
 export const deleteProfile = async (
   id: string,
   userId: string | null
 ): Promise<void> => {
-  if (!userId) {
-    const existing = readLocalProfiles().filter(p => p.id !== id);
-    writeLocalProfiles(existing);
-    return;
-  }
-
-  try {
-    await supabase
-      .from('strategy_profiles' as any)
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
-  } catch (err) {
-    console.warn('[StrategyProfileService] Delete error:', err);
-  }
+  const existing = readLocalProfiles().filter(p => p.id !== id);
+  writeLocalProfiles(existing);
 };
 
 export const setDefaultProfile = async (
@@ -312,33 +241,8 @@ export const setDefaultProfile = async (
     ...p,
     isDefault: p.id === id,
   }));
-
-  if (!userId) {
-    const userProfiles = updated.filter(p => !p.isPreset);
-    writeLocalProfiles(userProfiles);
-    return updated;
-  }
-
-  try {
-    // Clear all defaults for user first
-    await supabase
-      .from('strategy_profiles' as any)
-      .update({ is_default: false })
-      .eq('user_id', userId);
-
-    // Set the new default if it's a user profile
-    const target = updated.find(p => p.id === id && !p.isPreset);
-    if (target) {
-      await supabase
-        .from('strategy_profiles' as any)
-        .update({ is_default: true })
-        .eq('id', id)
-        .eq('user_id', userId);
-    }
-  } catch (err) {
-    console.warn('[StrategyProfileService] SetDefault error:', err);
-  }
-
+  const userProfiles = updated.filter(p => !p.isPreset);
+  writeLocalProfiles(userProfiles);
   return updated;
 };
 

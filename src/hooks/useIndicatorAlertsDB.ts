@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+
 import { 
   IndicatorAlert, 
   IndicatorAlertType, 
@@ -94,71 +94,24 @@ export function useIndicatorAlertsDB(options: UseIndicatorAlertsDBOptions = {}) 
   // Load alerts from database (falls back to localStorage on RLS error)
   const loadAlerts = useCallback(async () => {
     if (!user) return;
-
-    if (!dbAvailableRef.current) {
-      // Already known to be unavailable — load from localStorage
-      try {
-        const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          setAlerts(parsed.map((a: IndicatorAlert) => ({ ...a, timestamp: new Date(a.timestamp) })));
-        }
-      } catch { /* ignore */ }
-      return;
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('indicator_alerts')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(maxAlerts);
-
-      if (error) {
-        // RLS or permission error — mark DB unavailable, don't crash
-        if (error.code === '42501' || error.message?.includes('row-level security') || error.message?.includes('401')) {
-          console.warn('[useIndicatorAlertsDB] RLS blocked read — switching to localStorage fallback');
-          dbAvailableRef.current = false;
-        } else {
-          console.error('[useIndicatorAlertsDB] Load alerts error:', error.message);
-        }
-        return;
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setAlerts(parsed.map((a: IndicatorAlert) => ({ ...a, timestamp: new Date(a.timestamp) })));
       }
-
-      setAlerts(data?.map(dbRowToAlert) || []);
-    } catch (error: any) {
-      console.error('[useIndicatorAlertsDB] Error loading alerts:', error?.message);
-    }
+    } catch { /* ignore */ }
   }, [user, maxAlerts]);
 
   // Load config from database (silent on RLS error)
   const loadConfig = useCallback(async () => {
-    if (!user || !dbAvailableRef.current) return;
-
+    if (!user) return;
     try {
-      const { data, error } = await supabase
-        .from('indicator_alert_config')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (error) {
-        if (error.code === '42501' || error.message?.includes('row-level security') || error.message?.includes('401')) {
-          console.warn('[useIndicatorAlertsDB] RLS blocked config read — using defaults');
-          dbAvailableRef.current = false;
-        } else {
-          console.error('[useIndicatorAlertsDB] Load config error:', error.message);
-        }
-        return;
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY + '_config');
+      if (stored) {
+        setConfig(JSON.parse(stored));
       }
-
-      if (data) {
-        setConfig(dbRowToConfig(data));
-      }
-    } catch (error: any) {
-      console.error('[useIndicatorAlertsDB] Error loading config:', error?.message);
-    }
+    } catch { /* ignore */ }
   }, [user]);
 
   // Load data when user changes
@@ -210,44 +163,6 @@ export function useIndicatorAlertsDB(options: UseIndicatorAlertsDBOptions = {}) 
     };
 
     lastAlertTimeRef.current.set(`${symbol}-${type}`, Date.now());
-
-    // Try to persist to Supabase — silently fall back on RLS error
-    if (dbAvailableRef.current) {
-      try {
-        const { data, error } = await supabase
-          .from('indicator_alerts')
-          .insert({
-            user_id: user.id,
-            type,
-            symbol,
-            indicator_name: indicatorName,
-            value,
-            threshold,
-            message,
-            direction,
-          })
-          .select()
-          .single();
-
-        if (error) {
-          if (error.code === '42501' || error.message?.includes('row-level security') || error.message?.includes('401')) {
-            console.warn('[useIndicatorAlertsDB] RLS blocked insert — switching to localStorage fallback');
-            dbAvailableRef.current = false;
-          } else {
-            console.error('[useIndicatorAlertsDB] Insert error:', error.message);
-          }
-          // Fall through to localStorage save below
-        } else if (data) {
-          const dbAlert = dbRowToAlert(data);
-          setAlerts(prev => [dbAlert, ...prev].slice(0, maxAlerts));
-          showNotification(info, symbol, message, direction, config.browserNotifications);
-          return dbAlert;
-        }
-      } catch (err: any) {
-        console.error('[useIndicatorAlertsDB] Supabase error:', err?.message);
-        // Fall through to localStorage
-      }
-    }
 
     // LocalStorage fallback
     setAlerts(prev => {
@@ -553,112 +468,43 @@ export function useIndicatorAlertsDB(options: UseIndicatorAlertsDBOptions = {}) 
 
   const markAsRead = useCallback(async (alertId: string) => {
     if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('indicator_alerts')
-        .update({ read: true })
-        .eq('id', alertId)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      setAlerts(prev => prev.map(alert => 
-        alert.id === alertId ? { ...alert, read: true } : alert
-      ));
-    } catch (error) {
-      console.error('Error marking alert as read:', error);
-    }
+    setAlerts(prev => {
+      const updated = prev.map(alert => alert.id === alertId ? { ...alert, read: true } : alert);
+      try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+      return updated;
+    });
   }, [user]);
 
   const markAllAsRead = useCallback(async () => {
     if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('indicator_alerts')
-        .update({ read: true })
-        .eq('user_id', user.id)
-        .eq('read', false);
-
-      if (error) throw error;
-
-      setAlerts(prev => prev.map(alert => ({ ...alert, read: true })));
-    } catch (error) {
-      console.error('Error marking all alerts as read:', error);
-    }
+    setAlerts(prev => {
+      const updated = prev.map(alert => ({ ...alert, read: true }));
+      try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+      return updated;
+    });
   }, [user]);
 
   const clearAlerts = useCallback(async () => {
     if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('indicator_alerts')
-        .delete()
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      setAlerts([]);
-      toast.success('Histórico de alertas limpo');
-    } catch (error) {
-      console.error('Error clearing alerts:', error);
-      toast.error('Erro ao limpar alertas');
-    }
+    setAlerts([]);
+    try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([])); } catch { /* ignore */ }
+    toast.success('Histórico de alertas limpo');
   }, [user]);
 
   const deleteAlert = useCallback(async (alertId: string) => {
     if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('indicator_alerts')
-        .delete()
-        .eq('id', alertId)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      setAlerts(prev => prev.filter(alert => alert.id !== alertId));
-    } catch (error) {
-      console.error('Error deleting alert:', error);
-    }
+    setAlerts(prev => {
+      const updated = prev.filter(alert => alert.id !== alertId);
+      try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+      return updated;
+    });
   }, [user]);
 
   const updateConfig = useCallback(async (updates: Partial<IndicatorAlertConfig>) => {
     if (!user) return;
-
     const newConfig = { ...config, ...updates };
     setConfig(newConfig);
-
-    try {
-      const { error } = await supabase
-        .from('indicator_alert_config')
-        .update({
-          enabled: newConfig.enabled,
-          browser_notifications: newConfig.browserNotifications,
-          rsi_oversold: newConfig.rsiOversold,
-          rsi_overbought: newConfig.rsiOverbought,
-          stoch_oversold: newConfig.stochOversold,
-          stoch_overbought: newConfig.stochOverbought,
-          enable_macd_cross: newConfig.enableMacdCross,
-          enable_ema_cross: newConfig.enableEmaCross,
-          enable_bollinger_touch: newConfig.enableBollingerTouch,
-          enable_ichimoku_signals: newConfig.enableIchimokuSignals,
-          enable_adx_cross: newConfig.enableAdxCross,
-          adx_strong_trend: newConfig.adxStrongTrend,
-          enable_atr_alerts: newConfig.enableAtrAlerts,
-          atr_high_volatility: newConfig.atrHighVolatility,
-          atr_low_volatility: newConfig.atrLowVolatility,
-        })
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating config:', error);
-      toast.error('Erro ao salvar configurações');
-    }
+    try { localStorage.setItem(LOCAL_STORAGE_KEY + '_config', JSON.stringify(newConfig)); } catch { /* ignore */ }
   }, [user, config]);
 
   const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
