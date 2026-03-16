@@ -184,16 +184,23 @@ function generateSignalFromData(
     }
 
     if (bullishCount >= 4) {
-        // MTF Filter: Swing trades shouldn't counter-trend the 4H
-        if (macroTrend === 'short') return null;
         type = 'long';
-        score = 50 + bullishCount * 7;
-        confluences.push(`${bullishCount} indicadores bullish (1H)`);
+        if (macroTrend === 'short') {
+            score = 45 + bullishCount * 5; // Reduced score for counter-trend
+            confluences.push(`${bullishCount} ind. bullish contra macro-tendência`);
+        } else {
+            score = 50 + bullishCount * 7;
+            confluences.push(`${bullishCount} ind. bullish a favor da tendência`);
+        }
     } else if (bearishCount >= 4) {
-        if (macroTrend === 'long') return null;
         type = 'short';
-        score = 50 + bearishCount * 7;
-        confluences.push(`${bearishCount} indicadores bearish (1H)`);
+        if (macroTrend === 'long') {
+            score = 45 + bearishCount * 5; // Reduced score for counter-trend
+            confluences.push(`${bearishCount} ind. bearish contra macro-tendência`);
+        } else {
+            score = 50 + bearishCount * 7;
+            confluences.push(`${bearishCount} ind. bearish a favor da tendência`);
+        }
     } else {
         return null; // Not enough confluence
     }
@@ -226,11 +233,15 @@ function generateSignalFromData(
     if (score < 55) return null;
 
     // Calculate levels
+    let atrMultiplier = type === macroTrend ? 1.5 : 1.0; // Tighter stops for counter trend
     const atrPercent = currentPrice > 0 ? (atr / currentPrice * 100) : 2;
-    const stopLossDistance = Math.max(atrPercent * 1.5, 1);
-    const tp1Distance = stopLossDistance * 1.5;
-    const tp2Distance = stopLossDistance * 2.5;
-    const tp3Distance = stopLossDistance * 4;
+    const stopLossDistance = Math.max(atrPercent * atrMultiplier, 1);
+    
+    // Adjust Take Profit targets based on trend alignment
+    const tpScale = type === macroTrend ? 1 : 0.6; // Smaller targets for counter trend
+    const tp1Distance = stopLossDistance * 1.5 * tpScale;
+    const tp2Distance = stopLossDistance * 2.5 * tpScale;
+    const tp3Distance = stopLossDistance * 4 * tpScale;
 
     let entry: number, stopLoss: number, tp1: number, tp2: number, tp3: number;
 
@@ -251,9 +262,19 @@ function generateSignalFromData(
     const riskReward = tp1Distance / stopLossDistance;
 
     // Definir tipo de trade e narrativa baseada no MTF
-    const tradeType = macroTrend !== 'neutral' ? 'Swing Trade' : 'Day Trade';
-    const expectedDuration = tradeType === 'Swing Trade' ? '3-5 dias' : '12-24 horas';
-    const contextNarrative = `${symbol} demonstra forte presença ${type === 'long' ? 'compradora' : 'vendedora'} no momento. Após avaliar múltiplos timeframes, o contexto micro apoia uma operação com Retorno ao Risco favorável de 1:${riskReward.toFixed(1)} para esse ${tradeType}.`;
+    let tradeType = 'Day Trade';
+    let expectedDuration = '12-24 horas';
+    let contextNarrative = `${symbol} demonstra presença ${type === 'long' ? 'compradora' : 'vendedora'}. `;
+    
+    if (type === macroTrend) {
+        tradeType = 'Swing Trade';
+        expectedDuration = '2-5 dias';
+        contextNarrative += `O sinal está alinhado com a tendência macro (4H), proporcionando um Swing Trade com R:R de 1:${riskReward.toFixed(1)}.`;
+    } else {
+        tradeType = 'Day Trade (Contra-tendência)';
+        expectedDuration = '4-12 horas';
+        contextNarrative += `Atenção: Operação contra a tendência macro (4H). Alvos reduzidos para um Day Trade rápido com R:R de 1:${riskReward.toFixed(1)}.`;
+    }
 
     return {
         id: `${symbol}-${Date.now()}`,
