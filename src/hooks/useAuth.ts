@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -65,13 +65,15 @@ export function useAuth() {
 
   const isAuthenticated = isSessionValid();
 
-  const user = isAuthenticated
-    ? {
-        id: ADMIN_USER_ID,
-        email: session?.email ?? 'ferramentastech.apps@gmail.com',
-        user_metadata: { full_name: 'Admin' },
-      }
-    : null;
+  const user = useMemo(() => {
+    return isAuthenticated
+      ? {
+          id: ADMIN_USER_ID,
+          email: session?.email ?? 'ferramentastech.apps@gmail.com',
+          user_metadata: { full_name: 'Admin' },
+        }
+      : null;
+  }, [isAuthenticated, session?.email]);
 
   return {
     user,
