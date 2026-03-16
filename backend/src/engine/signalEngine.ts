@@ -456,7 +456,7 @@ async function runSignalCycle(): Promise<void> {
                 quality: s.quality || null,
                 trade_type: (s as any).tradeType || 'Day Trade',
                 expected_duration: (s as any).expectedDuration || '12-24 horas',
-                context: (s as any).contextNarrative || '',
+                context: undefined, // Column not yet in schema — omit to avoid persist errors
                 ml_data: s.mlData || null,
                 created_at: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
             }));

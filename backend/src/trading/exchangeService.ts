@@ -205,7 +205,7 @@ class ExchangeService {
                 takeProfit: String(req.takeProfit1),
                 slTriggerBy: 'LastPrice',
                 tpTriggerBy: 'LastPrice',
-                timeInForce: 'GoodTillCancel',
+                timeInForce: 'GTC',
                 reduceOnly: false,
             });
 
@@ -253,7 +253,7 @@ class ExchangeService {
                 orderType: 'Market',
                 qty: pos.qty,
                 reduceOnly: true,
-                timeInForce: 'GoodTillCancel',
+                timeInForce: 'GTC',
             });
 
             if (closeRes.retCode !== 0) {

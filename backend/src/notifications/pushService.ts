@@ -50,7 +50,9 @@ export const broadcastPushNotification = async (payload: { title: string; body: 
             .select('*');
 
         if (error) {
-            throw error;
+            // Table doesn't exist yet — silently skip, don't throw
+            logger.warn('Push subscriptions table not available, skipping broadcast', { error: error.message });
+            return;
         }
 
         if (!subscriptions || subscriptions.length === 0) {

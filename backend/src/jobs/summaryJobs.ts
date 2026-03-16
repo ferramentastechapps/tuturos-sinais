@@ -13,7 +13,6 @@ export function startSummaryJobs() {
         logger.info('[SummaryJobs] Executando job de sumário diário...');
         await generateAndSendSummary('daily');
     }, {
-        scheduled: true,
         timezone: 'UTC'
     });
 
@@ -22,7 +21,6 @@ export function startSummaryJobs() {
         logger.info('[SummaryJobs] Executando job de sumário semanal...');
         await generateAndSendSummary('weekly');
     }, {
-        scheduled: true,
         timezone: 'UTC'
     });
 }
