@@ -9,7 +9,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 export const isBackendAvailable = !!API_URL;
 
 export const apiClient = axios.create({
-    baseURL: API_URL || 'http://localhost:3001/api',
+    baseURL: API_URL ? (API_URL.endsWith('/api') ? API_URL : `${API_URL.replace(/\/$/, '')}/api`) : 'http://localhost:3001/api',
     headers: {
         'Content-Type': 'application/json',
     },
