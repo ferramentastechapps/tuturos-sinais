@@ -17,6 +17,13 @@ const RATE_LIMIT_PER_MINUTE = 20;
 const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 
+const formatPrice = (price: number): string => {
+    if (price >= 100) return price.toFixed(2);
+    if (price >= 1) return price.toFixed(3);
+    if (price >= 0.01) return price.toFixed(4);
+    return price.toFixed(5);
+};
+
 interface QueueItem {
     chatId: string;
     text: string;
@@ -155,7 +162,7 @@ class TelegramService {
         const emoji = data.type === 'long' ? '🟢' : '🔴';
         const dir = data.type.toUpperCase();
         const tps = data.takeProfits.map(tp =>
-            `  TP${tp.level}: $${tp.price.toFixed(2)} (+${tp.percent.toFixed(1)}%)`
+            `  TP${tp.level}: $${formatPrice(tp.price)} (+${tp.percent.toFixed(1)}%)`
         ).join('\n');
 
         const textLines = [
@@ -168,9 +175,9 @@ class TelegramService {
             data.mtfContext ? `  <b>Médio:</b> ${data.mtfContext.medium.join(' | ') || 'Neutro'}` : null,
             data.mtfContext ? `  <b>Micro:</b> ${data.mtfContext.micro.join(' | ') || 'Neutro'}` : null,
             ``,
-            `💰 Preço: $${data.currentPrice.toFixed(2)}`,
-            `📥 Entrada: $${data.entryZone.min.toFixed(2)} - $${data.entryZone.max.toFixed(2)}`,
-            `❌ Stop Loss: $${data.stopLoss.price.toFixed(2)} (-${data.stopLoss.percent.toFixed(1)}%)`,
+            `💰 Preço: $${formatPrice(data.currentPrice)}`,
+            `📥 Entrada: $${formatPrice(data.entryZone.min)} - $${formatPrice(data.entryZone.max)}`,
+            `❌ Stop Loss: $${formatPrice(data.stopLoss.price)} (-${data.stopLoss.percent.toFixed(1)}%)`,
             ``,
             `🎯 Take Profits:`,
             tps,
@@ -192,7 +199,7 @@ class TelegramService {
         // Dispara o Push Notification paralelamente
         broadcastPushNotification({
             title: `Sinal ${dir} — ${data.symbol}`,
-            body: `Entrada: $${data.entryZone.min.toFixed(2)} | Alvo: $${data.takeProfits[0]?.price.toFixed(2)} | Risco: ${data.riskPercent.toFixed(1)}%`,
+            body: `Entrada: $${formatPrice(data.entryZone.min)} | Alvo: $${formatPrice(data.takeProfits[0]?.price)} | Risco: ${data.riskPercent.toFixed(1)}%`,
         }).catch(err => logger.error('Web Push failed to broadcast', { error: err.message }));
 
         return this.send(text, 'new_signal', data.symbol);
@@ -283,10 +290,10 @@ class TelegramService {
         ];
 
         if (data.action === 'open') {
-            lines.push(`💰 Entrada: $${data.entryPrice.toFixed(2)}`);
+            lines.push(`💰 Entrada: $${formatPrice(data.entryPrice)}`);
         } else {
-            lines.push(`💰 Entrada: $${data.entryPrice.toFixed(2)}`);
-            lines.push(`📤 Saída: $${data.exitPrice?.toFixed(2) || 'N/A'}`);
+            lines.push(`💰 Entrada: $${formatPrice(data.entryPrice)}`);
+            lines.push(`📤 Saída: $${data.exitPrice ? formatPrice(data.exitPrice) : 'N/A'}`);
             lines.push(`${pnlEmoji} PnL: ${(data.pnlPercent || 0) > 0 ? '+' : ''}${(data.pnlPercent || 0).toFixed(2)}%`);
             if (data.exitReason) lines.push(`📋 Motivo: ${data.exitReason}`);
         }
@@ -311,7 +318,7 @@ class TelegramService {
             `✅ <b>TAKE PROFIT ATINGIDO — ${signal.pair}</b>`,
             `🎯 <b>Alvo ${tp.level} alcançado!</b>`,
             ``,
-            `💰 Preço Atual: $${currentPrice.toFixed(4)}`,
+            `💰 Preço Atual: $${formatPrice(currentPrice)}`,
             signal.trade_type ? `📈 Estilo: ${signal.trade_type}` : null,
             tp.level === 1 ? `🛡️ Stop Loss movido para o Breakeven ou trailing ativado.` : null,
             ``,
@@ -325,7 +332,7 @@ class TelegramService {
             `❌ <b>STOP LOSS ATINGIDO — ${signal.pair}</b>`,
             `Trade encerrado.`,
             ``,
-            `💰 Preço de Saída: $${currentPrice.toFixed(4)}`,
+            `💰 Preço de Saída: $${formatPrice(currentPrice)}`,
             ``,
             `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].join('\n');
@@ -337,8 +344,8 @@ class TelegramService {
             `🛡️ <b>TRAILING STOP ATUALIZADO — ${signal.pair}</b>`,
             `O preço moveu a favor da operação.`,
             ``,
-            `💰 Preço Atual: $${currentPrice.toFixed(4)}`,
-            `🔒 Novo Stop: $${newSl.toFixed(4)} (Anterior: $${oldSl.toFixed(4)})`,
+            `💰 Preço Atual: $${formatPrice(currentPrice)}`,
+            `🔒 Novo Stop: $${formatPrice(newSl)} (Anterior: $${formatPrice(oldSl)})`,
             ``,
             `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].join('\n');
