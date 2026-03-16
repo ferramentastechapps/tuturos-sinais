@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Save, User, Bell, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import { registerPushNotifications, unsubscribePushNotifications } from '@/services/pushNotifications';
 
 export default function Profile() {
   const { user, profile, isAuthenticated, loading, updateProfile } = useAuth();
@@ -35,6 +36,16 @@ export default function Profile() {
       setEmailNotifications(profile.notification_preferences?.emailNotifications ?? false);
     }
   }, [profile]);
+
+  const handleBrowserNotificationToggle = async (checked: boolean) => {
+    if (checked) {
+      const success = await registerPushNotifications();
+      setBrowserNotifications(success);
+    } else {
+      await unsubscribePushNotifications();
+      setBrowserNotifications(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -150,7 +161,7 @@ export default function Profile() {
               </div>
               <Switch
                 checked={browserNotifications}
-                onCheckedChange={setBrowserNotifications}
+                onCheckedChange={handleBrowserNotificationToggle}
               />
             </div>
             <Separator />

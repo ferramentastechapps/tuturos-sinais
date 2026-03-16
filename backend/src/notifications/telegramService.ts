@@ -11,6 +11,7 @@ import type {
     FundingRateAlertData,
     RiskAlertNotificationData,
 } from '../types/telegram.js';
+import { broadcastPushNotification } from './pushService.js';
 
 const RATE_LIMIT_PER_MINUTE = 20;
 const RETRY_MAX_ATTEMPTS = 3;
@@ -188,6 +189,12 @@ class TelegramService {
 
         const text = textLines.filter(line => line !== null).join('\n');
 
+        // Dispara o Push Notification paralelamente
+        broadcastPushNotification({
+            title: `Sinal ${dir} — ${data.symbol}`,
+            body: `Entrada: $${data.entryZone.min.toFixed(2)} | Alvo: $${data.takeProfits[0]?.price.toFixed(2)} | Risco: ${data.riskPercent.toFixed(1)}%`,
+        }).catch(err => logger.error('Web Push failed to broadcast', { error: err.message }));
+
         return this.send(text, 'new_signal', data.symbol);
     }
 
@@ -202,6 +209,12 @@ class TelegramService {
             data.worstTrade ? `💔 Pior: ${data.worstTrade.symbol} (${data.worstTrade.pnlPercent.toFixed(2)}%)` : '',
         ].filter(Boolean).join('\n');
 
+        // Dispara o Push Notification paralelamente
+        broadcastPushNotification({
+            title: `Resumo Diário — ${data.date}`,
+            body: `PnL: ${data.pnlPercent > 0 ? '+' : ''}${data.pnlPercent.toFixed(2)}% | Wins: ${data.winners} | Losses: ${data.losers}`,
+        }).catch(err => logger.error('Web Push failed to broadcast', { error: err.message }));
+
         return this.send(text, 'daily_summary');
     }
 
@@ -214,6 +227,11 @@ class TelegramService {
             data.liquidations ? `💥 Liquidações: $${(data.liquidations / 1e6).toFixed(1)}M` : '',
             `💡 ${data.recommendation}`,
         ].filter(Boolean).join('\n');
+
+        broadcastPushNotification({
+            title: `Alerta de Mercado — ${data.symbol}`,
+            body: `${data.description} | ${data.recommendation}`,
+        }).catch(err => logger.error('Web Push failed to broadcast', { error: err.message }));
 
         return this.send(text, 'market_alert', data.symbol);
     }

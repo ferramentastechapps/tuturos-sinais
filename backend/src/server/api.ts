@@ -10,6 +10,8 @@ import { isModelLoaded } from '../ml/mlPredictionService.js';
 import { telegramService } from '../notifications/telegramService.js';
 import { getUptime, getUptimeMs } from '../notifications/systemAlerts.js';
 import { getConnectedClients } from './wsServer.js';
+import pushRoutes from './routes/pushRoutes.js';
+import tradeRoutes from './routes/tradeRoutes.js';
 
 const router = Router();
 
@@ -248,5 +250,10 @@ router.post('/settings', (req: Request, res: Response) => {
         res.status(500).json({ error: error.message });
     }
 });
+// ──── Notification Integrations ────
+router.use('/push', pushRoutes);
+
+// ──── Live Trading ────
+router.use('/trade', tradeRoutes);
 
 export { router as apiRouter };

@@ -21,6 +21,7 @@ import MLAnalytics from "./pages/MLAnalytics";
 import PaperTrading from "./pages/PaperTrading";
 import StrategyConfig from "./pages/StrategyConfig";
 import SymbolAnalysis from "./pages/SymbolAnalysis";
+import { BottomNav } from "@/components/layout/BottomNav";
 
 const queryClient = new QueryClient();
 
@@ -54,6 +55,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <BottomNav />
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>

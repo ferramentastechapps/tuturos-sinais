@@ -55,6 +55,9 @@ export interface TradeSignal {
     score: number;
     factors: string[];
   };
+  tradeType?: 'Scalping' | 'Day Trade' | 'Swing Trade' | string;
+  expectedDuration?: string;
+  context?: string;
   smartMoney?: {
     orderBlocks: any[];
     fvgs: any[];

@@ -298,88 +298,90 @@ export default function StrategyConfig() {
           )}
 
           {/* Preset Profiles */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Perfis Pré-configurados</p>
-            {presetProfiles.map(profile => (
-              <button
-                key={profile.id}
-                className={cn(
-                  "w-full text-left p-3 rounded-xl border transition-all duration-200",
-                  activeProfile?.id === profile.id
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-card hover:border-primary/40 hover:bg-muted/30"
-                )}
-                onClick={() => setActiveProfile(profile)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-lg">{PRESET_ICONS[profile.id] || '⚙️'}</span>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{profile.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{profile.totalActiveIndicators} indicadores</p>
-                    </div>
-                  </div>
-                  {profile.isDefault && <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />}
-                  {activeProfile?.id === profile.id && (
-                    <CheckCircle className="w-3.5 h-3.5 text-primary ml-auto" />
+          <div className="space-y-3">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1">Perfis Pré-configurados</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              {presetProfiles.map(profile => (
+                <button
+                  key={profile.id}
+                  className={cn(
+                    "relative flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-200 gap-2",
+                    activeProfile?.id === profile.id
+                      ? "border-primary bg-primary/10 shadow-sm"
+                      : "border-border bg-card hover:border-primary/40 hover:bg-muted/30 hover:-translate-y-0.5"
                   )}
-                </div>
-              </button>
-            ))}
+                  onClick={() => setActiveProfile(profile)}
+                >
+                  {/* Padrão / Active indicator */}
+                  <div className="absolute top-2 right-2 flex gap-1">
+                    {profile.isDefault && <Star className="w-3 h-3 text-amber-400 fill-amber-400" />}
+                    {activeProfile?.id === profile.id && <CheckCircle className="w-3 h-3 text-primary" />}
+                  </div>
+                  
+                  <span className="text-3xl mt-2">{PRESET_ICONS[profile.id] || '⚙️'}</span>
+                  <div className="text-center w-full">
+                    <p className="text-[11px] font-bold text-foreground leading-tight truncate">{profile.name}</p>
+                    <p className="text-[9px] text-muted-foreground mt-0.5">{profile.totalActiveIndicators} indicadores</p>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Custom Profiles */}
           {customProfiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Meus Perfis</p>
-              {customProfiles.map(profile => (
-                <div
-                  key={profile.id}
-                  className={cn(
-                    "w-full p-3 rounded-xl border transition-all duration-200",
-                    activeProfile?.id === profile.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-card hover:border-primary/40 hover:bg-muted/30"
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <button className="flex-1 text-left" onClick={() => setActiveProfile(profile)}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">⚙️</span>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{profile.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{profile.totalActiveIndicators} indicadores</p>
-                        </div>
+            <div className="space-y-3 pt-2">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1">Meus Perfis</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {customProfiles.map(profile => (
+                  <div
+                    key={profile.id}
+                    className={cn(
+                      "relative group flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-200 gap-2",
+                      activeProfile?.id === profile.id
+                        ? "border-primary bg-primary/10 shadow-sm"
+                        : "border-border bg-card hover:border-primary/40 hover:bg-muted/30 hover:-translate-y-0.5"
+                    )}
+                  >
+                    {/* Dropdown Menu (absolute top right) */}
+                    <div className="absolute top-1 right-1">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 opacity-50 group-hover:opacity-100">
+                            <MoreVertical className="w-3 h-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setDefault(profile.id)}>
+                            <Star className="w-3.5 h-3.5 mr-2" />Definir como padrão
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDuplicate(profile)}>
+                            <Copy className="w-3.5 h-3.5 mr-2" />Duplicar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport(profile)}>
+                            <Download className="w-3.5 h-3.5 mr-2" />Exportar JSON
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => handleDelete(profile.id, profile.name)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-2" />Deletar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    <button className="flex flex-col items-center justify-center w-full mt-2" onClick={() => setActiveProfile(profile)}>
+                      <span className="text-3xl">⚙️</span>
+                      <div className="text-center w-full mt-2">
+                        <p className="text-[11px] font-bold text-foreground leading-tight truncate px-1">{profile.name}</p>
+                        <p className="text-[9px] text-muted-foreground mt-0.5">{profile.totalActiveIndicators} ind.</p>
                       </div>
                     </button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setDefault(profile.id)}>
-                          <Star className="w-3.5 h-3.5 mr-2" />Definir como padrão
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDuplicate(profile)}>
-                          <Copy className="w-3.5 h-3.5 mr-2" />Duplicar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleExport(profile)}>
-                          <Download className="w-3.5 h-3.5 mr-2" />Exportar JSON
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => handleDelete(profile.id, profile.name)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 mr-2" />Deletar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 

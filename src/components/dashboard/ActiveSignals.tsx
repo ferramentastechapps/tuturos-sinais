@@ -14,6 +14,7 @@ import { SignalPerformanceContext } from '@/utils/performanceEnricher';
 import { ArrowUpRight, ArrowDownRight, Target, Clock, Activity, Shield, TrendingUp, Crosshair, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency, formatPercentage } from '@/utils/formatters';
+import { ExecuteTradeModal } from '@/components/trading/ExecuteTradeModal';
 
 interface ActiveSignalsProps {
     signals: TradeSignal[];
@@ -22,6 +23,8 @@ interface ActiveSignalsProps {
 
 export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) => {
     const [selectedSignal, setSelectedSignal] = useState<TradeSignal | null>(null);
+    const [executeSignal, setExecuteSignal] = useState<TradeSignal | null>(null);
+    const [executeModalOpen, setExecuteModalOpen] = useState(false);
 
     const activeSignals = signals.filter(s => s.status === 'active');
     const closedSignals = signals.filter(s => s.status !== 'active');
@@ -49,256 +52,101 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
         return (
             <div
                 key={signal.id}
-                className="p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors cursor-pointer"
-                onClick={() => setSelectedSignal(signal)}
+                className={cn(
+                    "p-5 rounded-xl border bg-card transition-all relative overflow-hidden group hover:border-primary/50 shadow-sm hover:shadow-md",
+                    isLong ? "border-l-4 border-l-signal-buy" : "border-l-4 border-l-signal-sell"
+                )}
             >
-                {/* Row 1: Symbol + Direction + Status */}
-                <div className="flex items-center justify-between mb-3">
+                {/* Score background gradient effect */}
+                <div className={cn(
+                    "absolute top-0 right-0 w-32 h-32 opacity-[0.03] blur-2xl -z-10 group-hover:opacity-10 transition-opacity",
+                    isLong ? "bg-signal-buy" : "bg-signal-sell"
+                )} />
+
+                {/* Header: Direction, Symbol, Score */}
+                <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                        <img
-                            src={`https://unavatar.io/crypto/${signal.pair.replace('USDT', '')}`}
-                            alt={signal.pair}
-                            className="w-6 h-6 rounded-full"
-                            onError={(e) => (e.currentTarget.style.display = 'none')}
-                        />
-                        <span className="font-bold text-foreground">{signal.pair}</span>
                         <Badge
                             variant="outline"
                             className={cn(
-                                "font-bold text-[10px] px-1.5 py-0",
-                                isLong
-                                    ? "bg-signal-buy/10 text-signal-buy border-signal-buy/20"
-                                    : "bg-signal-sell/10 text-signal-sell border-signal-sell/20"
+                                "font-bold text-xs px-2 py-0.5 border-transparent shadow-sm",
+                                isLong ? "bg-signal-buy text-white" : "bg-signal-sell text-white"
                             )}
                         >
-                            {isLong ? 'LONG' : 'SHORT'}
+                            {isLong ? '🟢 LONG' : '🔴 SHORT'}
+                        </Badge>
+                        <span className="font-bold text-lg text-foreground tracking-tight">{signal.pair}</span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5 font-medium">Score</span>
+                        <Badge variant="outline" className={cn(
+                            "font-bold font-mono text-sm px-2 py-0.5 shadow-sm",
+                            score >= 80 ? "bg-signal-buy/10 text-signal-buy border-signal-buy/20" : 
+                            score >= 50 ? "bg-warning/10 text-warning border-warning/20" : 
+                            "bg-signal-sell/10 text-signal-sell border-signal-sell/20"
+                        )}>
+                            {score}/100
                         </Badge>
                     </div>
-                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] px-1.5 py-0">
-                        {signal.status === 'active' ? 'Ativo' : signal.status}
-                    </Badge>
                 </div>
 
-                {/* Row 2: Timeframe + Time */}
-                <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {signal.timeframe || '4H'}
-                    </span>
-                    <span>{getRelativeTime(new Date(signal.createdAt).getTime())}</span>
-                    {(signal as TradeSignal & { profileInfo?: { profileName: string, activeIndicators: number, totalIndicators: number } }).profileInfo && (
-                        <Badge
-                            variant="outline"
-                            className="ml-auto bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] px-1.5 py-0 flex items-center gap-1"
-                        >
-                            <Settings2 className="w-2.5 h-2.5" />
-                            {(signal as TradeSignal & { profileInfo?: { profileName: string, activeIndicators: number, totalIndicators: number } }).profileInfo?.profileName}
-                            <span className="text-[9px] opacity-70">
-                                {(signal as TradeSignal & { profileInfo?: { profileName: string, activeIndicators: number, totalIndicators: number } }).profileInfo?.activeIndicators}/{(signal as TradeSignal & { profileInfo?: { profileName: string, activeIndicators: number, totalIndicators: number } }).profileInfo?.totalIndicators}
-                            </span>
-                        </Badge>
-                    )}
+                {/* Subheader: Trade Type & Duration */}
+                <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground/80">{signal.tradeType || 'Day Trade'}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {signal.expectedDuration || signal.timeframe || '12-24h'}</span>
+                    <span className="ml-auto text-[10px] bg-muted/50 px-2 py-0.5 rounded-3xl">{getRelativeTime(new Date(signal.createdAt).getTime())}</span>
                 </div>
 
-                {/* Row 3: Entry / TP / SL — VERTICAL rows, label left value right */}
-                <div className="space-y-1.5 mb-3 p-3 rounded-lg bg-muted/20 border border-border/50">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Entrada</span>
-                        <span className="text-sm font-mono font-bold text-primary">
-                            {formatCurrency(signal.entry)}
-                        </span>
+                <div className="w-full h-px bg-border/50 mb-4" />
+
+                {/* Prices: Entry & Current/TP/SL context */}
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div className="space-y-1">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Entrada Target</p>
+                        <p className="text-sm font-mono font-bold text-foreground">{formatCurrency(signal.entry)}</p>
                     </div>
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs text-signal-buy">TP (Principal)</span>
-                        <span className="text-sm font-mono font-bold text-signal-buy">
-                            {formatCurrency(signal.takeProfit)}
-                        </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs text-signal-sell">Stop Loss</span>
-                        <span className="text-sm font-mono font-bold text-signal-sell">
-                            {formatCurrency(signal.stopLoss)}
-                        </span>
+                    {/* Target Progress */}
+                    <div className="space-y-1 text-right">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{signal.status === 'active' ? 'Alvo Inicial (TP1)' : 'Alvo Final'}</p>
+                        <p className={cn(
+                            "text-sm font-mono font-bold",
+                            isLong ? "text-signal-buy" : "text-signal-sell"
+                        )}>
+                            {formatCurrency(signal.takeProfit1 || signal.takeProfit)}
+                        </p>
                     </div>
                 </div>
-
-                {/* Row 4: Multi-TP rows (if available) */}
-                {(signal.takeProfit1 || signal.takeProfit2 || signal.takeProfit3) && (
-                    <div className="space-y-1 mb-3 p-2.5 rounded-lg bg-muted/10 border border-border/30">
-                        {signal.takeProfit1 && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-[11px] text-muted-foreground">TP1 (1.5R)</span>
-                                <span className="text-xs font-mono text-signal-buy">{formatCurrency(signal.takeProfit1)}</span>
-                            </div>
-                        )}
-                        {signal.takeProfit2 && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-[11px] text-muted-foreground">TP2 (2.5R)</span>
-                                <span className="text-xs font-mono text-signal-buy">{formatCurrency(signal.takeProfit2)}</span>
-                            </div>
-                        )}
-                        {signal.takeProfit3 && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-[11px] text-muted-foreground">TP3 (4R)</span>
-                                <span className="text-xs font-mono text-signal-buy">{formatCurrency(signal.takeProfit3)}</span>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Row 5: R:R + Score + Confidence — also vertical rows */}
-                <div className="space-y-2 mb-3">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                            <Shield className="w-3.5 h-3.5" /> Risco/Retorno
-                        </span>
-                        <span className="font-mono font-bold text-foreground">1:{getRR(signal)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                            <TrendingUp className="w-3.5 h-3.5" /> Qualidade do Sinal
-                        </span>
-                        <span className={cn(
-                            "font-bold",
-                            score >= 80 ? "text-signal-buy" : score >= 50 ? "text-warning" : "text-signal-sell"
-                        )}>{score}/100</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                            className={cn(
-                                "h-full rounded-full transition-all",
-                                score >= 80 ? "bg-signal-buy" : score >= 50 ? "bg-warning" : "bg-signal-sell"
-                            )}
-                            style={{ width: `${score}%` }}
-                        />
-                    </div>
-
-                    {confidence > 0 && (
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground flex items-center gap-1">
-                                <Crosshair className="w-3.5 h-3.5" /> Confiança IA
-                            </span>
-                            <span className="font-bold text-foreground">{Math.round(confidence)}%</span>
-                        </div>
-                    )}
-
-                    {signal.mlData && (
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground flex items-center gap-1">
-                                <Activity className="w-3.5 h-3.5 text-blue-400" /> Score ML (Beta)
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <span className={cn(
-                                    "font-bold",
-                                    signal.mlData.probability > 0.6 ? "text-green-400" : "text-yellow-400"
-                                )}>
-                                    {(signal.mlData.probability * 100).toFixed(0)}%
-                                </span>
-                                {signal.mlData.predictedClass === 1 ? (
-                                    <Badge variant="outline" className="text-[10px] h-5 bg-green-500/10 border-green-500/20 text-green-400">WIN</Badge>
-                                ) : (
-                                    <Badge variant="outline" className="text-[10px] h-5 bg-red-500/10 border-red-500/20 text-red-400">LOSS</Badge>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                
+                {/* Risk and additional context */}
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-5 bg-muted/30 p-2.5 rounded-lg border border-border/50">
+                    <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> R:R 1:{getRR(signal)}</span>
+                    <span className="flex items-center gap-1.5 text-signal-sell/90 font-medium">SL {formatCurrency(signal.stopLoss)}</span>
                 </div>
 
-                {/* Row 6: Confluence indicators as badges */}
-                {signal.indicators && signal.indicators.length > 0 && (
-                    <div className="pt-3 border-t border-border/50">
-                        <p className="text-[10px] text-muted-foreground uppercase mb-2">Fatores de Confluência:</p>
-                        <div className="flex flex-wrap gap-1.5">
-                            {signal.indicators.slice(0, 5).map((ind, i) => (
-                                <Badge
-                                    key={i}
-                                    variant="outline"
-                                    className="text-[10px] px-2 py-0.5 bg-muted/50 border-border text-muted-foreground"
-                                >
-                                    {ind}
-                                </Badge>
-                            ))}
-                            {signal.indicators.length > 5 && (
-                                <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-muted/50 border-border text-muted-foreground">
-                                    +{signal.indicators.length - 5}
-                                </Badge>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Quality factors */}
-                {signal.quality?.factors && signal.quality.factors.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                        {signal.quality.factors.slice(0, 3).map((factor, i) => (
-                            <p key={i} className="text-xs text-muted-foreground pl-2 border-l-2 border-muted">
-                                {factor}
-                            </p>
-                        ))}
-                        {signal.quality.factors.length > 3 && (
-                            <p className="text-xs text-muted-foreground pl-2">
-                                +{signal.quality.factors.length - 3} mais
-                            </p>
+                {/* Action Buttons */}
+                <div className="flex gap-2 w-full mt-2">
+                    <Button 
+                        variant="outline" 
+                        className="flex-1 bg-background hover:bg-muted hover:text-foreground font-semibold text-xs h-10 border-border/80 shadow-sm"
+                        onClick={(e) => { e.stopPropagation(); setSelectedSignal(signal); }}
+                    >
+                        📊 Ver Análise
+                    </Button>
+                    <Button 
+                        className={cn(
+                            "flex-1 font-semibold text-xs h-10 shadow-md hover:shadow-lg transition-all",
+                            isLong ? "bg-signal-buy hover:bg-signal-buy/90 text-white" : "bg-signal-sell hover:bg-signal-sell/90 text-white"
                         )}
-                    </div>
-                )}
-
-                {/* Performance Context (Histórico) */}
-                {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext && (
-                    <details className="mt-3 text-xs border border-border/50 rounded-lg overflow-hidden group">
-                        <summary className="p-2.5 bg-muted/20 cursor-pointer flex justify-between items-center outline-none hover:bg-muted/40 transition-colors">
-                            <span className="font-semibold flex items-center gap-1.5 text-muted-foreground group-open:text-primary transition-colors">
-                                📊 Histórico deste par
-                            </span>
-                        </summary>
-                        <div className="p-2.5 pt-1 space-y-2 bg-muted/10 border-t border-border/30">
-                            {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.insufficientData ? (
-                                <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/20">
-                                    ⏳ Dados insuficientes (&lt;10 trades)
-                                </Badge>
-                            ) : (
-                                <>
-                                    <div className="flex justify-between items-center text-[10px] sm:text-xs">
-                                        <span className="text-muted-foreground">Win Rate Geral ({signal.pair}):</span>
-                                        <span className="font-bold">{(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.globalWinRate}%</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-[10px] sm:text-xs">
-                                        <span className="text-muted-foreground">Profit Factor:</span>
-                                        <span className="font-bold">{(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.globalProfitFactor}x</span>
-                                    </div>
-                                    
-                                    {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.confirmedTopExcerpts.length ? (
-                                        <div className="pt-1 mt-1 border-t border-border/30">
-                                            <span className="text-[10px] text-muted-foreground block mb-1">Top Indicadores Confirmados:</span>
-                                            <div className="space-y-1">
-                                                {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.confirmedTopExcerpts.map((ind: { name: string, stars: string, winRate: number }, i: number) => (
-                                                    <div key={i} className="flex justify-between items-center text-[10px] bg-background/50 p-1 px-1.5 rounded">
-                                                        <span className="truncate max-w-[120px]">{ind.name} {ind.stars}</span>
-                                                        <span className="text-signal-buy font-medium">{ind.winRate}% WR</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ) : null}
-                                    
-                                    {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.weakExcerpts.length ? (
-                                        <div className="pt-1 mt-1 border-t border-border/30">
-                                            <span className="text-[10px] text-muted-foreground block mb-1">Atenção (Fraquezas no par):</span>
-                                            <div className="space-y-1">
-                                                {(signal as unknown as TradeSignal & { performanceContext?: SignalPerformanceContext }).performanceContext?.weakExcerpts.map((ind: { name: string, winRate: number }, i: number) => (
-                                                    <div key={i} className="flex justify-between items-center text-[10px] bg-red-500/5 p-1 px-1.5 rounded border border-red-500/10">
-                                                        <span className="truncate max-w-[120px] opacity-80">{ind.name}</span>
-                                                        <span className="text-red-400 font-medium">{ind.winRate}% WR</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ) : null}
-                                </>
-                            )}
-                        </div>
-                    </details>
-                )}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setExecuteSignal(signal);
+                            setExecuteModalOpen(true);
+                        }}
+                    >
+                        ⚡ Executar Trade
+                    </Button>
+                </div>
             </div>
         );
     };
@@ -439,6 +287,35 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Execute Trade Modal */}
+            <ExecuteTradeModal
+                open={executeModalOpen}
+                onClose={() => { setExecuteModalOpen(false); setExecuteSignal(null); }}
+                signal={executeSignal ? {
+                    id: executeSignal.id,
+                    symbol: executeSignal.symbol || executeSignal.pair,
+                    direction: executeSignal.type as 'long' | 'short',
+                    currentPrice: executeSignal.currentPrice || executeSignal.entry,
+                    entryZone: {
+                        min: executeSignal.entryZone?.low ?? (executeSignal.entry * 0.998),
+                        max: executeSignal.entryZone?.high ?? (executeSignal.entry * 1.002),
+                    },
+                    stopLoss: {
+                        price: executeSignal.stopLoss,
+                        percent: executeSignal.stopLossPercent ?? Math.abs((executeSignal.stopLoss - executeSignal.entry) / executeSignal.entry * 100),
+                    },
+                    takeProfits: [
+                        { level: 1, price: executeSignal.takeProfit1 || executeSignal.takeProfit, percent: Math.abs(((executeSignal.takeProfit1 || executeSignal.takeProfit) - executeSignal.entry) / executeSignal.entry * 100) },
+                        ...(executeSignal.takeProfit2 ? [{ level: 2, price: executeSignal.takeProfit2, percent: Math.abs((executeSignal.takeProfit2 - executeSignal.entry) / executeSignal.entry * 100) }] : []),
+                    ],
+                    leverage: executeSignal.leverage || 5,
+                    riskPercent: executeSignal.riskPercent || 2,
+                    riskReward: parseFloat(getRR(executeSignal)),
+                    quality: executeSignal.quality,
+                    confidence: executeSignal.confidence || 0,
+                } : null}
+            />
         </div>
     );
 };

@@ -86,77 +86,85 @@
   }
 
   .dark {
-    --background: 220 20% 6%;
-    --foreground: 210 20% 95%;
+    /* Background: #0A0E27 */
+    --background: 232 59% 10%;
+    /* Texto primario: #FFFFFF */
+    --foreground: 0 0% 100%;
 
-    --card: 220 18% 10%;
-    --card-foreground: 210 20% 95%;
+    /* Cards: #141B34 */
+    --card: 227 44% 14%;
+    --card-foreground: 0 0% 100%;
 
-    --popover: 220 18% 12%;
-    --popover-foreground: 210 20% 95%;
+    --popover: 227 44% 14%;
+    --popover-foreground: 0 0% 100%;
 
-    --primary: 174 72% 50%;
-    --primary-foreground: 220 20% 6%;
+    /* Azul destaque: #4C6FFF */
+    --primary: 228 100% 65%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 16%;
-    --secondary-foreground: 210 20% 85%;
+    --secondary: 227 44% 20%;
+    /* Texto secundário: #8B92B0 */
+    --secondary-foreground: 229 21% 62%;
 
-    --muted: 220 15% 18%;
-    --muted-foreground: 215 15% 55%;
+    --muted: 227 44% 18%;
+    --muted-foreground: 229 21% 62%;
 
-    --accent: 174 72% 50%;
-    --accent-foreground: 220 20% 6%;
+    --accent: 228 100% 65%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 55%;
-    --destructive-foreground: 210 40% 98%;
+    /* Vermelho perda: #FF4D6A */
+    --destructive: 350 100% 65%;
+    --destructive-foreground: 0 0% 100%;
 
-    --success: 142 72% 45%;
-    --success-foreground: 220 20% 6%;
+    /* Verde lucro: #00D9A3 */
+    --success: 165 100% 43%;
+    --success-foreground: 232 59% 10%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 220 20% 6%;
+    /* Amarelo alerta: #FFB800 */
+    --warning: 43 100% 50%;
+    --warning-foreground: 232 59% 10%;
 
-    --border: 220 15% 18%;
-    --input: 220 15% 14%;
-    --ring: 174 72% 50%;
+    --border: 227 44% 20%;
+    --input: 227 44% 18%;
+    --ring: 228 100% 65%;
 
     /* Trading specific */
-    --bullish: 142 72% 45%;
-    --bearish: 0 72% 55%;
-    --neutral: 220 15% 50%;
+    --bullish: 165 100% 43%;
+    --bearish: 350 100% 65%;
+    --neutral: 229 21% 62%;
 
     /* Signal colors — dashboard accent palette */
-    --signal-buy: 160 100% 39%;
-    --signal-sell: 352 100% 63%;
+    --signal-buy: 165 100% 43%;
+    --signal-sell: 350 100% 65%;
     --signal-alert: 43 100% 50%;
-    --signal-info: 214 100% 65%;
+    --signal-info: 228 100% 65%;
 
     /* Chart colors */
-    --chart-line: 174 72% 50%;
-    --chart-area: 174 72% 50%;
-    --chart-grid: 220 15% 15%;
-    --chart-candle-up: 160 100% 39%;
-    --chart-candle-down: 352 100% 63%;
+    --chart-line: 228 100% 65%;
+    --chart-area: 228 100% 65%;
+    --chart-grid: 227 44% 20%;
+    --chart-candle-up: 165 100% 43%;
+    --chart-candle-down: 350 100% 65%;
 
     /* Gradient tokens */
-    --gradient-bullish: linear-gradient(135deg, hsl(160 100% 39%), hsl(160 100% 29%));
-    --gradient-bearish: linear-gradient(135deg, hsl(352 100% 63%), hsl(352 100% 53%));
-    --gradient-primary: linear-gradient(135deg, hsl(174 72% 50%), hsl(174 72% 40%));
-    --gradient-card: linear-gradient(180deg, hsl(220 18% 12%), hsl(220 18% 8%));
+    --gradient-bullish: linear-gradient(135deg, hsl(165 100% 43%), hsl(165 100% 33%));
+    --gradient-bearish: linear-gradient(135deg, hsl(350 100% 65%), hsl(350 100% 55%));
+    --gradient-primary: linear-gradient(135deg, hsl(228 100% 65%), hsl(228 100% 55%));
+    --gradient-card: linear-gradient(180deg, hsl(227 44% 16%), hsl(227 44% 12%));
 
     /* Glow effects */
-    --glow-bullish: 0 0 20px hsl(160 100% 39% / 0.3);
-    --glow-bearish: 0 0 20px hsl(352 100% 63% / 0.3);
-    --glow-primary: 0 0 20px hsl(174 72% 50% / 0.3);
+    --glow-bullish: 0 0 20px hsl(165 100% 43% / 0.3);
+    --glow-bearish: 0 0 20px hsl(350 100% 65% / 0.3);
+    --glow-primary: 0 0 20px hsl(228 100% 65% / 0.3);
 
-    --sidebar-background: 220 18% 8%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 174 72% 50%;
-    --sidebar-primary-foreground: 220 20% 6%;
-    --sidebar-accent: 220 15% 14%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 220 15% 15%;
-    --sidebar-ring: 174 72% 50%;
+    --sidebar-background: 232 59% 10%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 228 100% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 227 44% 18%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 227 44% 20%;
+    --sidebar-ring: 228 100% 65%;
   }
 }
 
