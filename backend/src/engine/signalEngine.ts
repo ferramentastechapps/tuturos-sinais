@@ -96,6 +96,108 @@ export function calculateADX(ohlc: OHLCPoint[], period = 14): number {
     return Math.abs(plusDI - minusDI) / diSum * 100;
 }
 
+export function calculateVWAP(ohlc: OHLCPoint[]): number {
+    if (ohlc.length === 0) return 0;
+    let cumulativeVolume = 0;
+    let cumulativeTypicalPriceVolume = 0;
+
+    for (let i = 0; i < ohlc.length; i++) {
+        const candle = ohlc[i];
+        const typicalPrice = (candle.high + candle.low + candle.close) / 3;
+        const volume = candle.volume || 0;
+        
+        cumulativeTypicalPriceVolume += typicalPrice * volume;
+        cumulativeVolume += volume;
+    }
+
+    if (cumulativeVolume === 0) return 0;
+    return cumulativeTypicalPriceVolume / cumulativeVolume;
+}
+
+export function calculateRVOL(ohlc: OHLCPoint[], period = 20): number {
+    if (ohlc.length < period + 1) return 1;
+    
+    // Calcula o volume médio das N últimas velas (excluindo a última que ainda está a formar)
+    const prevCandles = ohlc.slice(-(period + 1), -1);
+    let totalVol = 0;
+    for (let i = 0; i < prevCandles.length; i++) {
+        totalVol += prevCandles[i].volume || 0;
+    }
+    
+    const avgVolume = totalVol / period;
+    if (avgVolume === 0) return 1;
+
+    // Volume da vela actual
+    const currentVolume = ohlc[ohlc.length - 1].volume || 0;
+    
+    // Retorna o RVOL (Ex: 1.5 significa 50% superior ao volume médio)
+    return currentVolume / avgVolume;
+}
+
+// ──── Smart Money Concepts (ICT) ────
+
+export function calculateAnchoredVWAP(ohlc: OHLCPoint[], anchorType: 'day' | 'week' = 'day'): number {
+    if (ohlc.length === 0) return 0;
+    let cumulativeVolume = 0;
+    let cumulativeTypicalPriceVolume = 0;
+    
+    // Encontrar o índice da âncora (ex: início do dia ou da semana em UTC)
+    let anchorIdx = 0;
+    const lastTimestamp = ohlc[ohlc.length - 1].timestamp;
+    const lastDate = new Date(lastTimestamp);
+    
+    for (let i = ohlc.length - 1; i >= 0; i--) {
+        const d = new Date(ohlc[i].timestamp);
+        if (anchorType === 'day' && d.getUTCDate() !== lastDate.getUTCDate()) {
+            anchorIdx = i + 1;
+            break;
+        }
+        if (anchorType === 'week' && d.getUTCDay() === 1 && d.getUTCHours() === 0) { // Segunda-feira à meia noite
+            anchorIdx = i;
+            break;
+        }
+    }
+    
+    for (let i = anchorIdx; i < ohlc.length; i++) {
+        const candle = ohlc[i];
+        const typicalPrice = (candle.high + candle.low + candle.close) / 3;
+        const vol = candle.volume || 0;
+        
+        cumulativeTypicalPriceVolume += typicalPrice * vol;
+        cumulativeVolume += vol;
+    }
+    
+    if (cumulativeVolume === 0) return 0;
+    return cumulativeTypicalPriceVolume / cumulativeVolume;
+}
+
+export function detectFVG(ohlc: OHLCPoint[]): { isBullishFvg: boolean, isBearishFvg: boolean } {
+    if (ohlc.length < 3) return { isBullishFvg: false, isBearishFvg: false };
+    const c1 = ohlc[ohlc.length - 3];
+    const c3 = ohlc[ohlc.length - 1];
+    
+    // Bullish FVG: Low da vela 3 é muito MAIOR que a High da vela 1 (GAP de Alta)
+    const isBullishFvg = c3.low > c1.high && c1.close > c1.open; 
+    
+    // Bearish FVG: High da vela 3 é muito MENOR que a Low da vela 1 (GAP de Baixa)
+    const isBearishFvg = c3.high < c1.low && c1.close < c1.open;
+    
+    return { isBullishFvg, isBearishFvg };
+}
+
+export function detectLiquiditySweep(ohlc: OHLCPoint[], high24h: number, low24h: number): { isSweepLow: boolean, isSweepHigh: boolean } {
+    if (ohlc.length === 0) return { isSweepLow: false, isSweepHigh: false };
+    const last = ohlc[ohlc.length - 1]; // Vela Actual
+    
+    // Sweeplow (Caça Stops de Compra): O pavio (Low) rompeu a low das 24h, mas o corpo fechou ACIMA da low24h.
+    const isSweepLow = last.low < low24h && last.close > low24h && last.open > low24h;
+    
+    // Sweephigh (Caça Stops de Venda): O pavio (High) rompeu a high das 24h, mas o corpo fechou ABAIXO da high24h.
+    const isSweepHigh = last.high > high24h && last.close < high24h && last.open < high24h;
+    
+    return { isSweepLow, isSweepHigh };
+}
+
 // ──── Signal Scoring ────
 
 function getIndicatorSignal(name: string, value: number): 'bullish' | 'bearish' | 'neutral' {
@@ -133,6 +235,8 @@ function generateSignalFromData(
     const ema200 = calculateEMA(closes, 200);
     const atr = calculateATR(ohlc);
     const adx = calculateADX(ohlc);
+    const vwap = calculateVWAP(ohlc);
+    const rvol = calculateRVOL(ohlc);
 
     const lastEma20 = ema20[ema20.length - 1] || currentPrice;
     const lastEma50 = ema50[ema50.length - 1] || currentPrice;
@@ -146,6 +250,8 @@ function generateSignalFromData(
         { name: 'EMA 50', value: lastEma50, signal: currentPrice > lastEma50 ? 'bullish' : 'bearish' },
         { name: 'EMA 200', value: lastEma200, signal: currentPrice > lastEma200 ? 'bullish' : 'bearish' },
         { name: 'ADX', value: adx, signal: adx > 25 ? 'bullish' : 'neutral' },
+        { name: 'VWAP', value: vwap, signal: currentPrice > vwap ? 'bullish' : 'bearish' },
+        { name: 'RVOL', value: rvol, signal: rvol > 1.2 ? 'bullish' : 'neutral' },
     ];
 
     // Count confluences
@@ -222,6 +328,67 @@ function generateSignalFromData(
         confluences.push('MACD confirmed');
     }
 
+    // --- SMART MONEY CONCEPTS (ICT) ---
+    const { isBullishFvg, isBearishFvg } = detectFVG(ohlc);
+    const { isSweepLow, isSweepHigh } = detectLiquiditySweep(ohlc, low24h, high24h);
+    const anchoredVwapDay = calculateAnchoredVWAP(ohlc, 'day');
+    
+    // Liquidity Sweeps (Highest weight out of all metrics)
+    if (type === 'long' && isSweepLow) {
+        score += 20;
+        confluences.push('Liquidity Sweep (Reversão de Fundo)');
+        mtfContext.macro.push('Tubarões ativaram Stops de Varejo na mínima do dia! FORTE SINAL LONG 🐋');
+    }
+    if (type === 'short' && isSweepHigh) {
+        score += 20;
+        confluences.push('Liquidity Sweep (Reversão de Topo)');
+        mtfContext.macro.push('Tubarões distribuíram ativando Stops de Compra no topo! FORTE SINAL SHORT 🐋');
+    }
+    
+    // Fair Value Gaps
+    if (type === 'long' && isBullishFvg) {
+        score += 10;
+        confluences.push('FVG Detectado (Gap de Valor Justo de C.)');
+        mtfContext.medium.push('Recuo respeitou um Bloco de Ordens / FVG ✅');
+    }
+    if (type === 'short' && isBearishFvg) {
+        score += 10;
+        confluences.push('FVG Detectado (Gap de Valor Justo de V.)');
+        mtfContext.medium.push('Rali esbarrou em FVG de Venda / Order Block ✅');
+    }
+    
+    // VWAP Ancorada (Daily)
+    if (type === 'long' && currentPrice > anchoredVwapDay) { 
+        score += 5; 
+        confluences.push('Acima Anchored VWAP'); 
+    }
+    if (type === 'short' && currentPrice < anchoredVwapDay) { 
+        score += 5; 
+        confluences.push('Abaixo Anchored VWAP'); 
+    }
+
+    // --- VOLUME & VWAP CONFLUENCE ---
+    // VWAP Alignment: Operating in the right direction according to Institutional Value
+    if (type === 'long' && currentPrice > vwap) { 
+        score += 5; 
+        confluences.push('Acima da VWAP'); 
+    }
+    if (type === 'short' && currentPrice < vwap) { 
+        score += 5; 
+        confluences.push('Abaixo da VWAP'); 
+    }
+
+    // RVOL (Relative Volume): Avoid fakeouts low-liquid entries
+    if (rvol > 1.5) {
+        score += 8;
+        confluences.push('Alto volume (+50%)');
+        mtfContext.micro.push('Rompimento suportado por alto volume Relativo (RVOL) ✅');
+    } else if (rvol < 0.7) {
+        score -= 5; // Penalty for very low volume
+        confluences.push('Falta de volume');
+        mtfContext.micro.push('Baixo volume detectado (risco de falso rompimento) ⚠️');
+    }
+
     // Funding rate contra-trade bonus
     if (type === 'long' && fundingRate < -0.01) { score += 5; confluences.push('Negative funding (contrarian)'); }
     if (type === 'short' && fundingRate > 0.01) { score += 5; confluences.push('Positive funding (contrarian)'); }
@@ -232,16 +399,27 @@ function generateSignalFromData(
     // Minimum score filter
     if (score < 55) return null;
 
-    // Calculate levels
-    let atrMultiplier = type === macroTrend ? 1.5 : 1.0; // Tighter stops for counter trend
+    // --- Smart Money Dynamic ATR Stop Calculation ---
+    // If it's a Sweep, the invalidation level (stop) is extremely close: just below/above the wick that purged liquidity!
+    let stopLossDistance = 0;
     const atrPercent = currentPrice > 0 ? (atr / currentPrice * 100) : 2;
-    const stopLossDistance = Math.max(atrPercent * atrMultiplier, 1);
     
-    // Adjust Take Profit targets based on trend alignment
-    const tpScale = type === macroTrend ? 1 : 0.6; // Smaller targets for counter trend
-    const tp1Distance = stopLossDistance * 1.5 * tpScale;
-    const tp2Distance = stopLossDistance * 2.5 * tpScale;
-    const tp3Distance = stopLossDistance * 4 * tpScale;
+    if (type === 'long' && isSweepLow) {
+        const lowestWick = ohlc[ohlc.length - 1].low;
+        stopLossDistance = ((currentPrice - lowestWick) / currentPrice * 100) * 1.05; // Tight Stop, just 5% below the wick
+    } else if (type === 'short' && isSweepHigh) {
+        const highestWick = ohlc[ohlc.length - 1].high;
+        stopLossDistance = ((highestWick - currentPrice) / currentPrice * 100) * 1.05; // Tight Stop
+    } else {
+        let atrMultiplier = type === macroTrend ? 1.5 : 1.0; 
+        stopLossDistance = Math.max(atrPercent * atrMultiplier, 1);
+    }
+    
+    // Adjust Targets (+ dynamic trailing stop label on Target 3)
+    const tpScale = type === macroTrend ? 1 : 0.6; 
+    let tp1Distance = stopLossDistance * 1.5 * tpScale;
+    let tp2Distance = stopLossDistance * 2.5 * tpScale;
+    let tp3Distance = stopLossDistance * 4 * tpScale; // TP 3 will serve as the Trailing Trigger
 
     let entry: number, stopLoss: number, tp1: number, tp2: number, tp3: number;
 
@@ -357,9 +535,9 @@ async function runSignalCycle(): Promise<void> {
                             dist_ema20: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 20).pop() || currentPrice)) / currentPrice,
                             dist_ema50: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 50).pop() || currentPrice)) / currentPrice,
                             dist_ema200: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 200).pop() || currentPrice)) / currentPrice,
-                            dist_vwap: 0,
+                            dist_vwap: (currentPrice - calculateVWAP(ohlc)) / currentPrice, // Dynamic actual VWAP distance
                             volatility_24h: high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0,
-                            volume_rel: 1,
+                            volume_rel: calculateRVOL(ohlc), // Dynamic RVOL
                             funding_rate: fundingRate,
                             open_interest_var: 0,
                             long_short_ratio: 1,
@@ -426,12 +604,12 @@ async function runSignalCycle(): Promise<void> {
                             confluences: signal.indicators.map(i => ({ name: i, confirmed: true })),
                             leverage: 5,
                             positionSizePercent: 10,
-                            riskPercent: 2,
+                             riskPercent: 2,
                             timestamp: new Date().toISOString(),
-                            tradeType: anySignal.tradeType,
+                            tradeType: isSweepHigh || isSweepLow ? 'Smart Money (ICT)' : anySignal.tradeType,
                             expectedDuration: anySignal.expectedDuration,
                             mtfContext: anySignal.mtfContext,
-                            contextNarrative: anySignal.contextNarrative,
+                            contextNarrative: `${anySignal.contextNarrative} ${isSweepHigh || isSweepLow ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`,
                         });
                         signalsSent++;
                     } catch (telegramError) {

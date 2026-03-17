@@ -61,6 +61,8 @@ export interface TradeSignal {
         orderBlocks: any[];
         fvgs: any[];
         liquidity: any[];
+        isLiquiditySweep?: boolean;
+        fvgZone?: boolean;
     };
     patterns?: string[];
     mlData?: {
