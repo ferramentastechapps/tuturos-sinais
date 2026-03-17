@@ -20,7 +20,7 @@ let engineInterval: NodeJS.Timeout | null = null;
 
 // ──── Simplified Technical Indicators (server-side) ────
 
-function calculateRSI(closes: number[], period = 14): number {
+export function calculateRSI(closes: number[], period = 14): number {
     if (closes.length < period + 1) return 50;
     let gains = 0, losses = 0;
     for (let i = closes.length - period; i < closes.length; i++) {
@@ -35,7 +35,7 @@ function calculateRSI(closes: number[], period = 14): number {
     return 100 - (100 / (1 + rs));
 }
 
-function calculateEMA(data: number[], period: number): number[] {
+export function calculateEMA(data: number[], period: number): number[] {
     if (data.length === 0) return [];
     const k = 2 / (period + 1);
     const result: number[] = [data[0]];
@@ -45,7 +45,7 @@ function calculateEMA(data: number[], period: number): number[] {
     return result;
 }
 
-function calculateMACD(closes: number[]): { macd: number; signal: number; histogram: number } {
+export function calculateMACD(closes: number[]): { macd: number; signal: number; histogram: number } {
     const ema12 = calculateEMA(closes, 12);
     const ema26 = calculateEMA(closes, 26);
     if (ema12.length === 0 || ema26.length === 0) return { macd: 0, signal: 0, histogram: 0 };
@@ -59,7 +59,7 @@ function calculateMACD(closes: number[]): { macd: number; signal: number; histog
     };
 }
 
-function calculateATR(ohlc: OHLCPoint[], period = 14): number {
+export function calculateATR(ohlc: OHLCPoint[], period = 14): number {
     if (ohlc.length < period + 1) return 0;
     const trs: number[] = [];
     for (let i = 1; i < ohlc.length; i++) {
@@ -74,7 +74,7 @@ function calculateATR(ohlc: OHLCPoint[], period = 14): number {
     return recent.reduce((a, b) => a + b, 0) / recent.length;
 }
 
-function calculateADX(ohlc: OHLCPoint[], period = 14): number {
+export function calculateADX(ohlc: OHLCPoint[], period = 14): number {
     if (ohlc.length < period * 2) return 25;
     let plusDM = 0, minusDM = 0, tr = 0;
     for (let i = ohlc.length - period; i < ohlc.length; i++) {
