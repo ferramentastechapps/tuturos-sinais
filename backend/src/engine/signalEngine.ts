@@ -478,6 +478,13 @@ function generateSignalFromData(
         expectedDuration,
         mtfContext,
         contextNarrative,
+        smartMoney: {
+            orderBlocks: [],
+            fvgs: [],
+            liquidity: [],
+            isLiquiditySweep: isSweepHigh || isSweepLow,
+            fvgZone: isBullishFvg || isBearishFvg,
+        }
     } as any; // Cast to bypass strict type here if backend Type hasn't caught the frontend MTF extensions
 }
 
@@ -604,12 +611,12 @@ async function runSignalCycle(): Promise<void> {
                             confluences: signal.indicators.map(i => ({ name: i, confirmed: true })),
                             leverage: 5,
                             positionSizePercent: 10,
-                             riskPercent: 2,
+                            riskPercent: 2,
                             timestamp: new Date().toISOString(),
-                            tradeType: isSweepHigh || isSweepLow ? 'Smart Money (ICT)' : anySignal.tradeType,
+                            tradeType: anySignal.smartMoney?.isLiquiditySweep ? 'Smart Money (ICT)' : anySignal.tradeType,
                             expectedDuration: anySignal.expectedDuration,
                             mtfContext: anySignal.mtfContext,
-                            contextNarrative: `${anySignal.contextNarrative} ${isSweepHigh || isSweepLow ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`,
+                            contextNarrative: `${anySignal.contextNarrative} ${anySignal.smartMoney?.isLiquiditySweep ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`,
                         });
                         signalsSent++;
                     } catch (telegramError) {
