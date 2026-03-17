@@ -384,7 +384,7 @@ function generateSignalFromData(
         confluences.push('Alto volume (+50%)');
         mtfContext.micro.push('Rompimento suportado por alto volume Relativo (RVOL) ✅');
     } else if (rvol < 0.7) {
-        score -= 5; // Penalty for very low volume
+        score -= 20; // Massive penalty for very low volume
         confluences.push('Falta de volume');
         mtfContext.micro.push('Baixo volume detectado (risco de falso rompimento) ⚠️');
     }
@@ -396,8 +396,8 @@ function generateSignalFromData(
     // Cap score
     score = Math.min(score, 100);
 
-    // Minimum score filter
-    if (score < 55) return null;
+    // Minimum score filter (Raised from 55 to 65 because base EMAs trigger inflation)
+    if (score < 65) return null;
 
     // --- Smart Money Dynamic ATR Stop Calculation ---
     // If it's a Sweep, the invalidation level (stop) is extremely close: just below/above the wick that purged liquidity!
