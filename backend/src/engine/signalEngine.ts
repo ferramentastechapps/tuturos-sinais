@@ -327,6 +327,13 @@ function generateSignalFromData(
         return null; // Not enough confluence
     }
 
+    // --- VETO SNIPER EXTREMO ---
+    // Proíbe abrir operação sem Rastro Institucional comprovado (Liquidity Sweep ou FVG)
+    const hasIctValidation = (type === 'long' && (isBullishFvg || isSweepLow)) || (type === 'short' && (isBearishFvg || isSweepHigh));
+    if (!hasIctValidation) {
+        return null; // Aborta! O robô agora só atira se o Tubarão atuar.
+    }
+
     // RSI extremes bonus (Apenas a favor do recuo natural, já que os vetos acima impedem a entrada contrária)
     if (type === 'long' && rsi < 35) { score += 10; confluences.push('RSI oversold'); }
     if (type === 'short' && rsi > 65) { score += 10; confluences.push('RSI overbought'); }
@@ -446,11 +453,11 @@ function generateSignalFromData(
     const riskReward = tp1Distance / stopLossDistance;
 
     // --- GERENCIAMENTO DE RISCO DINÂMICO (SMART SIZING) ---
-    const accountRiskLevel = 2.0; // O usuário topa perder exatamente 2% da banca
+    const accountRiskLevel = 3.0; // Passando para 3% de risco da banca pra aproveitar a nova "Certeza Absoluta" dos trades
     const marginPercent = 10.0;   // O usuário quer empenhar apenas 10% da banca de garantia (posição de entrada)
     
-    // Fórmula Mágica: Leverage = (Risco Aceitável / Distância do Stop) / Porcentagem de Margem Empenhada
-    let dynamicLeverage = Math.round((accountRiskLevel / (stopLossDistance / 100)) / (marginPercent / 100));
+    // Fórmula Mágica Corrigida:
+    let dynamicLeverage = Math.round((accountRiskLevel / stopLossDistance) / (marginPercent / 100));
     
     // Limites de Segurança Institucional de Alavancagem
     if (dynamicLeverage < 2) dynamicLeverage = 2;   // Minimo 2x
