@@ -22,14 +22,26 @@ let engineInterval: NodeJS.Timeout | null = null;
 
 export function calculateRSI(closes: number[], period = 14): number {
     if (closes.length < period + 1) return 50;
-    let gains = 0, losses = 0;
-    for (let i = closes.length - period; i < closes.length; i++) {
+
+    // Seed: média simples dos primeiros N períodos
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
         const diff = closes[i] - closes[i - 1];
-        if (diff > 0) gains += diff;
-        else losses += Math.abs(diff);
+        if (diff > 0) avgGain += diff;
+        else avgLoss += Math.abs(diff);
     }
-    const avgGain = gains / period;
-    const avgLoss = losses / period;
+    avgGain /= period;
+    avgLoss /= period;
+
+    // Suavização de Wilder (EMA recursiva) para o resto dos dados
+    for (let i = period + 1; i < closes.length; i++) {
+        const diff = closes[i] - closes[i - 1];
+        const gain = diff > 0 ? diff : 0;
+        const loss = diff < 0 ? Math.abs(diff) : 0;
+        avgGain = (avgGain * (period - 1) + gain) / period;
+        avgLoss = (avgLoss * (period - 1) + loss) / period;
+    }
+
     if (avgLoss === 0) return 100;
     const rs = avgGain / avgLoss;
     return 100 - (100 / (1 + rs));
@@ -330,7 +342,8 @@ function generateSignalFromData(
 
     // --- SMART MONEY CONCEPTS (ICT) ---
     const { isBullishFvg, isBearishFvg } = detectFVG(ohlc);
-    const { isSweepLow, isSweepHigh } = detectLiquiditySweep(ohlc, low24h, high24h);
+    // FIX: Parâmetros na ordem correta: (ohlc, high24h, low24h)
+    const { isSweepLow, isSweepHigh } = detectLiquiditySweep(ohlc, high24h, low24h);
     const anchoredVwapDay = calculateAnchoredVWAP(ohlc, 'day');
     
     // Liquidity Sweeps (Highest weight out of all metrics)
@@ -519,7 +532,7 @@ async function runSignalCycle(): Promise<void> {
                 symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h
             );
 
-            if (signal && signal.quality && signal.quality.score >= 60) {
+            if (signal && signal.quality && signal.quality.score >= 65) {
                 // Prevent duplicate spam: check if we already have a recent signal for this same pair and direction
                 const existingRecent = activeSignals.find(s => 
                     s.pair === symbol && 
