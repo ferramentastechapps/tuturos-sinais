@@ -1,5 +1,6 @@
 // Signal Engine — Main Entry Point
 // Starts all services: Express API, WebSocket, Bybit connection, Signal engine
+import { tradeTracker } from './trading/tradeTracker.js';
 
 import { createServer } from 'http';
 import express from 'express';
@@ -150,6 +151,9 @@ async function bootstrap(): Promise<void> {
 
     // 9. Iniciar job agendado para retroalimentar o modelo de Machine Learning
     startMLRetrainJob();
+
+    // 10. Start Trade Tracker (Telegram Babá)
+    await tradeTracker.initialize();
 }
 
 // ──── Graceful Shutdown ────

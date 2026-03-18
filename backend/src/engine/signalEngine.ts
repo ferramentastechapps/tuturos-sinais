@@ -7,6 +7,7 @@ import { predictSignal, isModelLoaded, getSymbolId } from '../ml/mlPredictionSer
 import { telegramService } from '../notifications/telegramService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import type { TradeSignal, TechnicalIndicator, OHLCPoint, CryptoPair } from '../types/trading.js';
+import { tradeTracker } from '../trading/tradeTracker.js';
 
 // ──── State ────
 
@@ -619,7 +620,7 @@ async function runSignalCycle(): Promise<void> {
                 if (telegramService.isEnabled && signal.quality.score >= config.telegram.minScore) {
                     try {
                         const anySignal = signal as any; // Para usar os paramétros suplementares MTF
-                        await telegramService.sendNewSignal({
+                        const tgResult = await telegramService.sendNewSignal({
                             type: signal.type,
                             symbol: signal.pair,
                             score: signal.quality.score,
@@ -648,6 +649,28 @@ async function runSignalCycle(): Promise<void> {
                             contextNarrative: `${anySignal.contextNarrative} ${anySignal.smartMoney?.isLiquiditySweep ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`,
                         });
                         signalsSent++;
+
+                        // --- ATIVAR O GESTOR DE POSIÇÕES BABÁ ---
+                        tradeTracker.registerNewSignal({
+                            id: signal.id,
+                            pair: signal.pair,
+                            type: signal.type.toUpperCase() as 'LONG' | 'SHORT',
+                            trade_type: anySignal.tradeType,
+                            entry_range_low: anySignal.entryZone.min,
+                            entry_range_high: anySignal.entryZone.max,
+                            stop_loss: signal.stopLoss,
+                            initial_stop_loss: signal.stopLoss,
+                            take_profits: [
+                                { level: 1, price: signal.takeProfit1 || signal.takeProfit, hit: false },
+                                ...(signal.takeProfit2 ? [{ level: 2, price: signal.takeProfit2, hit: false }] : []),
+                                ...(signal.takeProfit3 ? [{ level: 3, price: signal.takeProfit3, hit: false }] : []),
+                            ],
+                            status: 'ACTIVE',
+                            telegram_message_id: tgResult.messageId?.toString(),
+                            expected_duration: anySignal.expectedDuration,
+                            score: signal.quality.score,
+                        }).catch((e: any) => logger.warn(`[TradeTracker] erro ao registrar: ${e.message}`));
+
                     } catch (telegramError) {
                         logger.warn(`Telegram notification failed for ${symbol}`, { error: telegramError });
                     }

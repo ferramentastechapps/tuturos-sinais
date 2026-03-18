@@ -60,13 +60,23 @@ export class TradeTracker {
   }
 
   public async registerNewSignal(signal: Partial<ActiveSignal>) {
-    // Inserts into DB then tracks
-    const { data, error } = await supabase.from('active_signals').insert([signal]).select().single();
-    if (error) {
-      console.error('[TradeTracker] Error inserting new signal DB', error);
-      return null;
+    console.log(`[TradeTracker] Registering new signal for ${signal.pair}...`);
+    let fullSignal = signal as ActiveSignal;
+    if (!fullSignal.id) {
+        fullSignal.id = `${signal.pair}-${Date.now()}`;
     }
-    const fullSignal = data as any as ActiveSignal;
+
+    try {
+        const { data, error } = await supabase.from('active_signals').insert([signal]).select().single();
+        if (error) {
+            console.warn('[TradeTracker] Supabase warn (Table missing?). Tracking in RAM only.', error.message);
+        } else if (data) {
+            fullSignal = data as any as ActiveSignal;
+        }
+    } catch (e) {
+        console.warn('[TradeTracker] Supabase Exception. Tracking in RAM only.');
+    }
+
     this.addSignalToMemory(fullSignal);
     return fullSignal;
   }
@@ -141,8 +151,10 @@ export class TradeTracker {
       signal.stop_loss = newSl;
       
       // Update DB safely
-      await supabase.from('active_signals').update({ stop_loss: newSl }).eq('id', signal.id);
-      await this.logEvent(signal.id, 'TRAILING_STOP_UPDATED', `Trailing stop moved from ${oldSl} to ${newSl}`, currentPrice);
+      try {
+          await supabase.from('active_signals').update({ stop_loss: newSl }).eq('id', signal.id);
+          this.logEvent(signal.id, 'TRAILING_STOP_UPDATED', `Trailing stop moved from ${oldSl} to ${newSl}`, currentPrice).catch(()=>{});
+      } catch (e) { /* ignore pg error */ }
       
       // Notify Telegram async
       sendTrailingStopUpdate(signal, currentPrice, oldSl, newSl).catch(e => console.error('TG error', e));
@@ -174,14 +186,15 @@ export class TradeTracker {
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
     }
 
-    // Save to DB
-    await supabase.from('active_signals').update({
-      take_profits: signal.take_profits as any,
-      stop_loss: signal.stop_loss,
-      status: signal.status
-    }).eq('id', signal.id);
-
-    await this.logEvent(signal.id, 'TP_HIT', `TP${tp.level} hit at ${currentPrice}`, currentPrice);
+    // Save to DB Safely
+    try {
+        await supabase.from('active_signals').update({
+        take_profits: signal.take_profits as any,
+        stop_loss: signal.stop_loss,
+        status: signal.status
+        }).eq('id', signal.id);
+        this.logEvent(signal.id, 'TP_HIT', `TP${tp.level} hit at ${currentPrice}`, currentPrice).catch(()=>{});
+    } catch (e) { /* ignore */ }
 
     // Notify
     sendTPNotification(signal, tp, currentPrice).catch(e => console.error('TG error', e));
@@ -194,13 +207,14 @@ export class TradeTracker {
     this.removeSignalFromMemory(signal.id, signal.pair);
 
     // ML Feedback Loop - Loss
-    this.submitFeedbackToML(signal, 0, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
+    this.submitFeedbackToML(signal, 0, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
 
-    await supabase.from('active_signals').update({
-      status: signal.status
-    }).eq('id', signal.id);
-
-    await this.logEvent(signal.id, 'SL_HIT', `Stop Loss hit at ${currentPrice}`, currentPrice);
+    try {
+        await supabase.from('active_signals').update({
+            status: signal.status
+        }).eq('id', signal.id);
+        this.logEvent(signal.id, 'SL_HIT', `Stop Loss hit at ${currentPrice}`, currentPrice).catch(()=>{});
+    } catch (e) { /* skip */ }
 
     sendSLNotification(signal, currentPrice).catch(e => console.error('TG error', e));
   }
