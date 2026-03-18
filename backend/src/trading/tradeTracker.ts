@@ -169,6 +169,9 @@ export class TradeTracker {
     if (allHit) {
       signal.status = 'CLOSED_TP';
       this.removeSignalFromMemory(signal.id, signal.pair);
+      
+      // ML Feedback Loop - Win
+      this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
     }
 
     // Save to DB
@@ -189,6 +192,9 @@ export class TradeTracker {
     signal.status = 'CLOSED_SL';
     
     this.removeSignalFromMemory(signal.id, signal.pair);
+
+    // ML Feedback Loop - Loss
+    this.submitFeedbackToML(signal, 0, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
 
     await supabase.from('active_signals').update({
       status: signal.status
@@ -216,6 +222,70 @@ export class TradeTracker {
       priceStream.unsubscribe(pair);
     } else {
       this.activeSignals.set(pair, signals);
+    }
+  }
+
+  /**
+   * ML Feedback Loop
+   * Fetches the original TradeSignal to get `ml_data` and indicators,
+   * then saves the final outcome (1=Win, 0=Loss) to ml_training_data
+   * so the AI can learn from it in the next retraining cycle.
+   */
+  private async submitFeedbackToML(activeSignal: ActiveSignal, outcomeLabel: 0 | 1, finalPrice: number) {
+    console.log(`[TradeTracker] Submitting ML Feedback for ${activeSignal.id} - Outcome: ${outcomeLabel === 1 ? 'WIN' : 'LOSS'}`);
+    try {
+      // 1. Fetch original signal details and ML features
+      const { data: originalSignal, error: fetchErr } = await supabase
+        .from('trade_signals')
+        .select('*')
+        .eq('id', activeSignal.id)
+        .single();
+
+      if (fetchErr || !originalSignal) {
+        console.warn(`[TradeTracker] Original signal ${activeSignal.id} not found for ML Feedback.`);
+        return;
+      }
+
+      // If the signal didn't have ml_data or indicators, it can't be used to train effectively
+      // (However, we should still save it using whatever features we generated at entry if possible).
+      let features: Record<string, any> = {};
+      
+      // Since ml_data in standard DB schema might only hold predictions, 
+      // we could store the actual metrics generated at predictSignal.
+      // But for now, we pass score and basic metrics as feature placeholders if missing.
+      // E.g., The best place to save full feature vectors is during Signal generation, 
+      // but if we store them in `ml_data` we grab them here.
+      if (originalSignal.ml_data && typeof originalSignal.ml_data === 'object') {
+          features = { ...originalSignal.ml_data };
+      }
+
+      // Merge base signal info into features 
+      features.confidence = originalSignal.confidence;
+      features.risk_reward = originalSignal.risk_reward;
+      // You can add more features mapped from the original signal here (like indicators)
+      
+      const entryPrice = (activeSignal.entry_range_low + activeSignal.entry_range_high) / 2;
+      const pnl = activeSignal.type === 'LONG' 
+        ? ((finalPrice - entryPrice) / entryPrice) * 100 
+        : ((entryPrice - finalPrice) / entryPrice) * 100;
+
+      // 2. Insert into training table
+      const { error: insertErr } = await supabase.from('ml_training_data').insert({
+        signal_id: activeSignal.id,
+        symbol: activeSignal.pair,
+        outcome_label: outcomeLabel,
+        outcome_pnl: pnl,
+        entry_time: originalSignal.created_at || new Date().toISOString(),
+        features: features
+      });
+
+      if (insertErr) {
+        console.error(`[TradeTracker] Failed to insert ML Feedback:`, insertErr);
+      } else {
+        console.log(`[TradeTracker] ML Feedback Saved Successfully!`);
+      }
+    } catch (err) {
+      console.error(`[TradeTracker] Unhandled error submitting ML feedback:`, err);
     }
   }
 }

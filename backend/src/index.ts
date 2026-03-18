@@ -23,6 +23,7 @@ import {
 } from './notifications/systemAlerts.js';
 import { initBot } from './bot.js';
 import { startSummaryJobs } from './jobs/summaryJobs.js';
+import { startMLRetrainJob } from './jobs/mlRetrainJob.js';
 
 const app = express();
 const server = createServer(app);
@@ -146,6 +147,9 @@ async function bootstrap(): Promise<void> {
 
     // 8. Iniciar jobs agendados (ex: relatórios diários)
     startSummaryJobs();
+
+    // 9. Iniciar job agendado para retroalimentar o modelo de Machine Learning
+    startMLRetrainJob();
 }
 
 // ──── Graceful Shutdown ────

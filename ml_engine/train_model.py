@@ -12,6 +12,7 @@ import json
 
 # Define the exact feature list order (MUST MATCH featureExtractor.ts)
 FEATURE_COLUMNS = [
+    'symbol_id',
     'rsi', 'adx', 'atr_rel', 'dist_ema20', 'dist_ema50', 'dist_ema200', 'dist_vwap',
     'volatility_24h', 'volume_rel', 'funding_rate', 'open_interest_var', 'long_short_ratio',
     'is_long', 'confidence', 'quality_score', 'confluence_count', 'stop_loss_pct', 

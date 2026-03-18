@@ -3,7 +3,7 @@
 import { logger } from '../lib/logger.js';
 import { config } from '../lib/config.js';
 import { bybitConnector } from '../exchange/bybitConnector.js';
-import { predictSignal, isModelLoaded } from '../ml/mlPredictionService.js';
+import { predictSignal, isModelLoaded, getSymbolId } from '../ml/mlPredictionService.js';
 import { telegramService } from '../notifications/telegramService.js';
 import { supabase } from '../lib/supabaseClient.js';
 import type { TradeSignal, TechnicalIndicator, OHLCPoint, CryptoPair } from '../types/trading.js';
@@ -292,19 +292,19 @@ function generateSignalFromData(
     if (bullishCount >= 4) {
         type = 'long';
         if (macroTrend === 'short') {
-            score = 45 + bullishCount * 5; // Reduced score for counter-trend
-            confluences.push(`${bullishCount} ind. bullish contra macro-tendência`);
+            // Rejeitar sumariamente operações contra a Macro Tendência (4H)
+            return null;
         } else {
-            score = 50 + bullishCount * 7;
+            score = 60 + bullishCount * 5; // Start higher
             confluences.push(`${bullishCount} ind. bullish a favor da tendência`);
         }
     } else if (bearishCount >= 4) {
         type = 'short';
         if (macroTrend === 'long') {
-            score = 45 + bearishCount * 5; // Reduced score for counter-trend
-            confluences.push(`${bearishCount} ind. bearish contra macro-tendência`);
+            // Rejeitar sumariamente operações contra a Macro Tendência (4H)
+            return null;
         } else {
-            score = 50 + bearishCount * 7;
+            score = 60 + bearishCount * 5;
             confluences.push(`${bearishCount} ind. bearish a favor da tendência`);
         }
     } else {
@@ -396,8 +396,8 @@ function generateSignalFromData(
     // Cap score
     score = Math.min(score, 100);
 
-    // Minimum score filter (Raised from 55 to 65 because base EMAs trigger inflation)
-    if (score < 65) return null;
+    // Minimum score filter (Raised significantly to 75 to ensure only high probability setups pass)
+    if (score < 75) return null;
 
     // --- Smart Money Dynamic ATR Stop Calculation ---
     // If it's a Sweep, the invalidation level (stop) is extremely close: just below/above the wick that purged liquidity!
@@ -536,6 +536,7 @@ async function runSignalCycle(): Promise<void> {
                 if (isModelLoaded()) {
                     try {
                         const features = {
+                            symbol_id: getSymbolId(symbol),
                             rsi: calculateRSI(ohlc.map(c => c.close)),
                             adx: calculateADX(ohlc),
                             atr_rel: calculateATR(ohlc) / currentPrice,
@@ -572,8 +573,9 @@ async function runSignalCycle(): Promise<void> {
                             };
 
                             // Filter out signals rejected by ML
-                            if (prediction.probability < 0.4) {
-                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)})`);
+                            // Aumentado drasticamente a exigência do ML para aceitar somente sinais com probabilidade de Win >= 65%
+                            if (prediction.probability < 0.65) {
+                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)} < 0.65)`);
                                 continue;
                             }
                         }

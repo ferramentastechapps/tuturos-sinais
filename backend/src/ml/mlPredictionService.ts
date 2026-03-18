@@ -14,12 +14,27 @@ let inferenceSession: ort.InferenceSession | null = null;
 let modelLoaded = false;
 
 const FEATURE_COLUMNS = [
+    'symbol_id', // NOVO: Consciência de moeda
     'rsi', 'adx', 'atr_rel', 'dist_ema20', 'dist_ema50', 'dist_ema200', 'dist_vwap',
     'volatility_24h', 'volume_rel', 'funding_rate', 'open_interest_var', 'long_short_ratio',
     'is_long', 'confidence', 'quality_score', 'confluence_count', 'stop_loss_pct',
     'take_profit_pct', 'risk_reward', 'hour_of_day', 'day_of_week',
     'btc_trend', 'dominance_btc', 'fear_greed'
 ];
+
+/**
+ * Cria um ID numérico simples a partir do nome do símbolo (ex: BTCUSDT -> 1832039)
+ * Isso ajuda a ML a decorar o comportamento específico de ativos, sem explodir
+ * o número de colunas (como no One-Hot Encoding).
+ */
+export function getSymbolId(symbol: string): number {
+    let hash = 0;
+    for (let i = 0; i < symbol.length; i++) {
+        hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
+        hash = hash & hash; // Convert to 32bit int
+    }
+    return Math.abs(hash); // Garantir sempre positivo
+}
 
 export async function loadModel(): Promise<boolean> {
     if (!config.ml.enabled) {
