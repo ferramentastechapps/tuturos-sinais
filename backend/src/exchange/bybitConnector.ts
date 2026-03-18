@@ -118,13 +118,26 @@ class BybitConnector extends EventEmitter {
                 this.handleWsUpdate(data);
             });
 
+            // Helper function to chunk array (Bybit allows max 10 topics per request)
+            const chunkArray = <T>(arr: T[], size: number): T[][] => {
+                return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+                    arr.slice(i * size, i * size + size)
+                );
+            };
+
             // Subscribe to tickers for all symbols
             const tickerTopics = symbols.map(s => `tickers.${s}`);
-            this.wsClient.subscribeV5(tickerTopics, 'linear');
+            const tickerChunks = chunkArray(tickerTopics, 10);
+            for (const chunk of tickerChunks) {
+                this.wsClient.subscribeV5(chunk, 'linear');
+            }
 
             // Subscribe to 1h klines for signal generation
             const klineTopics = symbols.map(s => `kline.60.${s}`);
-            this.wsClient.subscribeV5(klineTopics, 'linear');
+            const klineChunks = chunkArray(klineTopics, 10);
+            for (const chunk of klineChunks) {
+                this.wsClient.subscribeV5(chunk, 'linear');
+            }
 
             logger.info('Bybit WebSocket subscriptions sent', {
                 tickers: tickerTopics.length,
