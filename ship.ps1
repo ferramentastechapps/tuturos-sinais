@@ -39,7 +39,7 @@ Write-Host "  ✅ Código enviado ao GitHub" -ForegroundColor Green
 Write-Host "`n[2/3] 🚀 Deploying na VPS $VPS..." -ForegroundColor Yellow
 Write-Host "  (Digite a senha SSH se solicitado)`n" -ForegroundColor DarkGray
 
-ssh $VPS @"
+$scriptBody = @"
 set -e
 cd /var/www/signal-dashboard
 echo '  📥 git pull...'
@@ -61,6 +61,11 @@ pm2 restart all --silent
 
 pm2 status
 "@
+
+# Fix Windows CRLF to Linux LF to prevent bash "\r: command not found" errors
+$scriptBody = $scriptBody -replace "`r`n", "`n"
+
+ssh $VPS $scriptBody
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "`n❌ Deploy falhou na VPS." -ForegroundColor Red
