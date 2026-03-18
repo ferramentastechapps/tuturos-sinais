@@ -300,30 +300,34 @@ function generateSignalFromData(
         if (rsi15 < 35) mtfContext.micro.push('Reversão de curto prazo (RSI 15m oversold)');
         if (rsi15 > 65) mtfContext.micro.push('Recuo de curto prazo (RSI 15m overbought)');
     }
+    // --- SMART MONEY CONCEPTS (ICT) ---
+    const { isBullishFvg, isBearishFvg } = detectFVG(ohlc);
+    const { isSweepLow, isSweepHigh } = detectLiquiditySweep(ohlc, high24h, low24h);
+    const anchoredVwapDay = calculateAnchoredVWAP(ohlc, 'day');
 
     if (bullishCount >= 4) {
         type = 'long';
-        if (macroTrend === 'short') {
-            // Rejeitar sumariamente operações contra a Macro Tendência (4H)
-            return null;
-        } else {
-            score = 60 + bullishCount * 5; // Start higher
-            confluences.push(`${bullishCount} ind. bullish a favor da tendência`);
-        }
+        // --- VETOS ABSOLUTOS (ANTI-SARDINHA) ---
+        if (rsi > 65) return null; // Nunca comprar na máxima saturação (Topo)
+        if (rvol < 0.70) return null; // Sem volume / Feriado = Abortar
+        if (macroTrend === 'short' && !isSweepLow && !isBullishFvg) return null; // Contra-tendência só é permitido se for um Trap Institucional (Sweep ou FVG)
+        
+        score = 60 + bullishCount * 5; // Start higher
+        confluences.push(`${bullishCount} ind. bullish`);
     } else if (bearishCount >= 4) {
         type = 'short';
-        if (macroTrend === 'long') {
-            // Rejeitar sumariamente operações contra a Macro Tendência (4H)
-            return null;
-        } else {
-            score = 60 + bearishCount * 5;
-            confluences.push(`${bearishCount} ind. bearish a favor da tendência`);
-        }
+        // --- VETOS ABSOLUTOS (ANTI-SARDINHA) ---
+        if (rsi < 35) return null; // Nunca vender no fundo saturado
+        if (rvol < 0.70) return null; // Sem volume / Feriado = Abortar
+        if (macroTrend === 'long' && !isSweepHigh && !isBearishFvg) return null; // Contra-tendência só é permitido se for Trap Institucional (Sweep ou FVG)
+        
+        score = 60 + bearishCount * 5;
+        confluences.push(`${bearishCount} ind. bearish`);
     } else {
         return null; // Not enough confluence
     }
 
-    // RSI extremes bonus
+    // RSI extremes bonus (Apenas a favor do recuo natural, já que os vetos acima impedem a entrada contrária)
     if (type === 'long' && rsi < 35) { score += 10; confluences.push('RSI oversold'); }
     if (type === 'short' && rsi > 65) { score += 10; confluences.push('RSI overbought'); }
 
@@ -339,12 +343,6 @@ function generateSignalFromData(
         score += 5;
         confluences.push('MACD confirmed');
     }
-
-    // --- SMART MONEY CONCEPTS (ICT) ---
-    const { isBullishFvg, isBearishFvg } = detectFVG(ohlc);
-    // FIX: Parâmetros na ordem correta: (ohlc, high24h, low24h)
-    const { isSweepLow, isSweepHigh } = detectLiquiditySweep(ohlc, high24h, low24h);
-    const anchoredVwapDay = calculateAnchoredVWAP(ohlc, 'day');
     
     // Liquidity Sweeps (Highest weight out of all metrics)
     if (type === 'long' && isSweepLow) {
@@ -390,16 +388,11 @@ function generateSignalFromData(
         score += 5; 
         confluences.push('Abaixo da VWAP'); 
     }
-
     // RVOL (Relative Volume): Avoid fakeouts low-liquid entries
     if (rvol > 1.5) {
         score += 8;
         confluences.push('Alto volume (+50%)');
         mtfContext.micro.push('Rompimento suportado por alto volume Relativo (RVOL) ✅');
-    } else if (rvol < 0.7) {
-        score -= 20; // Massive penalty for very low volume
-        confluences.push('Falta de volume');
-        mtfContext.micro.push('Baixo volume detectado (risco de falso rompimento) ⚠️');
     }
 
     // Funding rate contra-trade bonus
@@ -452,6 +445,17 @@ function generateSignalFromData(
 
     const riskReward = tp1Distance / stopLossDistance;
 
+    // --- GERENCIAMENTO DE RISCO DINÂMICO (SMART SIZING) ---
+    const accountRiskLevel = 2.0; // O usuário topa perder exatamente 2% da banca
+    const marginPercent = 10.0;   // O usuário quer empenhar apenas 10% da banca de garantia (posição de entrada)
+    
+    // Fórmula Mágica: Leverage = (Risco Aceitável / Distância do Stop) / Porcentagem de Margem Empenhada
+    let dynamicLeverage = Math.round((accountRiskLevel / (stopLossDistance / 100)) / (marginPercent / 100));
+    
+    // Limites de Segurança Institucional de Alavancagem
+    if (dynamicLeverage < 2) dynamicLeverage = 2;   // Minimo 2x
+    if (dynamicLeverage > 50) dynamicLeverage = 50; // Cap máximo institucional
+
     // Definir tipo de trade e narrativa baseada no MTF
     let tradeType = 'Day Trade';
     let expectedDuration = '12-24 horas';
@@ -478,6 +482,9 @@ function generateSignalFromData(
         takeProfit3: tp3,
         stopLoss,
         riskReward: Math.round(riskReward * 10) / 10,
+        dynamicLeverage,
+        positionSizePercent: marginPercent,
+        riskPercent: accountRiskLevel,
         timeframe: '1h',
         status: 'active',
         confidence: score,
@@ -624,9 +631,9 @@ async function runSignalCycle(): Promise<void> {
                             ],
                             riskReward: signal.riskReward,
                             confluences: signal.indicators.map(i => ({ name: i, confirmed: true })),
-                            leverage: 5,
-                            positionSizePercent: 10,
-                            riskPercent: 2,
+                            leverage: anySignal.dynamicLeverage || 5,
+                            positionSizePercent: anySignal.positionSizePercent || 10,
+                            riskPercent: anySignal.riskPercent || 2,
                             timestamp: new Date().toISOString(),
                             tradeType: anySignal.smartMoney?.isLiquiditySweep ? 'Smart Money (ICT)' : anySignal.tradeType,
                             expectedDuration: anySignal.expectedDuration,

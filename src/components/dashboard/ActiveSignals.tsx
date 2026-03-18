@@ -216,8 +216,27 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                     </DialogHeader>
 
                     {selectedSignal && (
-                        <div className="grid gap-4 py-4">
-                            {/* Vertical list for entry/TP/SL in modal too */}
+                        <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
+                            {/* Smart Money ICT Badge */}
+                            {(selectedSignal as any).smartMoney?.isLiquiditySweep && (
+                                <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 text-sm font-semibold">
+                                    🐋 ESTRUTURA ICT DETECTADA — Liquidity Sweep (Caça de Stops)
+                                </div>
+                            )}
+                            {(selectedSignal as any).smartMoney?.fvgZone && (
+                                <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-sm font-semibold">
+                                    📊 Fair Value Gap (FVG) Detectado — Sinal de Desequilíbrio
+                                </div>
+                            )}
+
+                            {/* Context Narrative */}
+                            {(selectedSignal as any).contextNarrative && (
+                                <div className="p-3 rounded-lg bg-muted/30 border border-border text-sm text-foreground/80 italic">
+                                    {(selectedSignal as any).contextNarrative}
+                                </div>
+                            )}
+
+                            {/* Entry / TPs / SL */}
                             <div className="space-y-2 p-4 rounded-lg bg-muted/20 border border-border">
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm text-muted-foreground">Entrada</span>
@@ -226,20 +245,46 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-signal-buy">Alvo (TP)</span>
+                                    <span className="text-sm text-signal-buy">🎯 Alvo 1 (TP1)</span>
                                     <div className="text-right">
-                                        <span className="text-lg font-mono font-bold text-signal-buy">
-                                            {formatCurrency(selectedSignal.takeProfit)}
+                                        <span className="text-base font-mono font-bold text-signal-buy">
+                                            {formatCurrency(selectedSignal.takeProfit1 || selectedSignal.takeProfit)}
                                         </span>
                                         <span className="text-xs text-signal-buy/80 ml-2">
-                                            +{formatPercentage(Math.abs((selectedSignal.takeProfit - selectedSignal.entry) / selectedSignal.entry) * 100)}
+                                            +{formatPercentage(Math.abs(((selectedSignal.takeProfit1 || selectedSignal.takeProfit) - selectedSignal.entry) / selectedSignal.entry) * 100)}
                                         </span>
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm text-signal-sell">Stop Loss</span>
+                                {(selectedSignal as any).takeProfit2 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-signal-buy/80">🎯 Alvo 2 (TP2)</span>
+                                        <div className="text-right">
+                                            <span className="text-base font-mono font-semibold text-signal-buy/80">
+                                                {formatCurrency((selectedSignal as any).takeProfit2)}
+                                            </span>
+                                            <span className="text-xs text-signal-buy/60 ml-2">
+                                                +{formatPercentage(Math.abs(((selectedSignal as any).takeProfit2 - selectedSignal.entry) / selectedSignal.entry) * 100)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                                {(selectedSignal as any).takeProfit3 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-amber-400">🚀 Alvo 3 / Trailing Trigger</span>
+                                        <div className="text-right">
+                                            <span className="text-base font-mono font-semibold text-amber-400">
+                                                {formatCurrency((selectedSignal as any).takeProfit3)}
+                                            </span>
+                                            <span className="text-xs text-amber-400/60 ml-2">
+                                                +{formatPercentage(Math.abs(((selectedSignal as any).takeProfit3 - selectedSignal.entry) / selectedSignal.entry) * 100)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                                    <span className="text-sm text-signal-sell">🛡️ Stop Loss</span>
                                     <div className="text-right">
-                                        <span className="text-lg font-mono font-bold text-signal-sell">
+                                        <span className="text-base font-mono font-bold text-signal-sell">
                                             {formatCurrency(selectedSignal.stopLoss)}
                                         </span>
                                         <span className="text-xs text-signal-sell/80 ml-2">
@@ -249,9 +294,36 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                                 </div>
                             </div>
 
+                            {/* MTF Context */}
+                            {(selectedSignal as any).mtfContext && (
+                                <div className="space-y-2">
+                                    <h4 className="text-sm font-medium flex items-center gap-2">
+                                        <TrendingUp className="w-4 h-4" /> Contexto Multi-Timeframe
+                                    </h4>
+                                    <div className="space-y-1.5">
+                                        {(selectedSignal as any).mtfContext.macro?.map((item: string, i: number) => (
+                                            <div key={i} className="text-xs p-2 rounded bg-muted/40 border border-border/50 text-foreground/80">
+                                                📊 <span className="font-medium">Macro (4H):</span> {item}
+                                            </div>
+                                        ))}
+                                        {(selectedSignal as any).mtfContext.medium?.map((item: string, i: number) => (
+                                            <div key={i} className="text-xs p-2 rounded bg-muted/40 border border-border/50 text-foreground/80">
+                                                📈 <span className="font-medium">Médio:</span> {item}
+                                            </div>
+                                        ))}
+                                        {(selectedSignal as any).mtfContext.micro?.map((item: string, i: number) => (
+                                            <div key={i} className="text-xs p-2 rounded bg-muted/40 border border-border/50 text-foreground/80">
+                                                🔍 <span className="font-medium">Micro (15m):</span> {item}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Technical Confluences */}
                             <div className="space-y-2">
                                 <h4 className="text-sm font-medium flex items-center gap-2">
-                                    <Activity className="w-4 h-4" /> Análise Técnica
+                                    <Activity className="w-4 h-4" /> Confluências Técnicas
                                 </h4>
                                 <div className="bg-card p-3 rounded-lg border border-border text-sm space-y-1">
                                     <div className="flex justify-between">
@@ -266,9 +338,28 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                                         )}>{selectedSignal.quality?.score || 0}/100</span>
                                     </div>
                                 </div>
+                                {selectedSignal.indicators && selectedSignal.indicators.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                        {(selectedSignal.indicators as any[]).map((ind: any, i: number) => {
+                                            const label = typeof ind === 'string' ? ind : ind.name;
+                                            const isICT = label?.includes('Liquidity Sweep') || label?.includes('FVG');
+                                            const isVWAP = label?.includes('VWAP') || label?.includes('Anchored');
+                                            return (
+                                                <span key={i} className={cn(
+                                                    "text-[10px] px-2 py-0.5 rounded-full border font-medium",
+                                                    isICT ? "bg-amber-500/15 border-amber-500/30 text-amber-400" :
+                                                    isVWAP ? "bg-blue-500/15 border-blue-500/30 text-blue-400" :
+                                                    "bg-primary/10 border-primary/20 text-primary"
+                                                )}>
+                                                    {label}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="flex justify-end gap-3 mt-4">
+                            <div className="flex justify-end gap-3 mt-2">
                                 <Button variant="outline" onClick={() => setSelectedSignal(null)}>Fechar</Button>
                                 <Button
                                     className={cn(

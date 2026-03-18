@@ -165,6 +165,11 @@ class TelegramService {
             `  TP${tp.level}: $${formatPrice(tp.price)} (+${tp.percent.toFixed(1)}%)`
         ).join('\n');
 
+        const indNames = data.confluences?.map(c => c.name) || [];
+        const hasFVG = indNames.some(n => n?.includes('FVG'));
+        const hasSweep = indNames.some(n => n?.includes('Liquidity Sweep'));
+        const hasAnchoredVWAP = indNames.some(n => n?.includes('Anchored VWAP'));
+
         const textLines = [
             `${emoji} <b>SINAL ${dir} — ${data.symbol}</b>`,
             data.tradeType ? `⏱️ Estilo: ${data.tradeType} (Aprox. ${data.expectedDuration})` : null,
@@ -174,6 +179,11 @@ class TelegramService {
             data.mtfContext ? `  <b>Macro:</b> ${data.mtfContext.macro.join(' | ') || 'Neutro'}` : null,
             data.mtfContext ? `  <b>Médio:</b> ${data.mtfContext.medium.join(' | ') || 'Neutro'}` : null,
             data.mtfContext ? `  <b>Micro:</b> ${data.mtfContext.micro.join(' | ') || 'Neutro'}` : null,
+            ``,
+            `<b>🐋 Filtros Smart Money (ICT)</b>`,
+            `• Caça aos Stops (Sweep): ${hasSweep ? '✅ ATIVO' : '❌ Inativo'}`,
+            `• Fair Value Gap (FVG): ${hasFVG ? '✅ ATIVO' : '❌ Inativo'}`,
+            `• VWAP Ancorada (Macro): ${hasAnchoredVWAP ? '✅ A FAVOR' : '❌ Inativo/Contra'}`,
             ``,
             `💰 Preço: $${formatPrice(data.currentPrice)}`,
             `📥 Entrada: $${formatPrice(data.entryZone.min)} - $${formatPrice(data.entryZone.max)}`,
