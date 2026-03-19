@@ -1,6 +1,6 @@
-import { priceStream, PriceUpdate } from './priceStream';
-import { supabase } from '../lib/supabaseClient';
-import { sendTPNotification, sendSLNotification, sendTrailingStopUpdate } from '../notifications/telegramService';
+import { priceStream, PriceUpdate } from './priceStream.js';
+import { supabase } from '../lib/supabaseClient.js';
+import { sendTPNotification, sendSLNotification, sendTrailingStopUpdate } from '../notifications/telegramService.js';
 
 export interface TakeProfit {
   price: number;
