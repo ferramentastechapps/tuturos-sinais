@@ -59,6 +59,7 @@ export interface BybitEvents {
 
 class BybitConnector extends EventEmitter {
     private wsClient: WebsocketClient | null = null;
+    private wsKlineClient: WebsocketClient | null = null;
     private restClient: RestClientV5;
     private tickers: Map<string, BybitTicker> = new Map();
     private klineData: Map<string, OHLCPoint[]> = new Map();
@@ -81,12 +82,15 @@ class BybitConnector extends EventEmitter {
         logger.info('Connecting to Bybit WebSocket...', { symbols: symbols.length });
 
         try {
-            this.wsClient = new WebsocketClient({
-                market: 'v5',
+            const wsConfig = {
+                market: 'v5' as const,
                 key: config.bybit.apiKey || undefined,
                 secret: config.bybit.apiSecret || undefined,
                 testnet: config.bybit.testnet,
-            });
+            };
+
+            this.wsClient = new WebsocketClient(wsConfig);
+            this.wsKlineClient = new WebsocketClient(wsConfig);
 
             // Helper function to chunk array (Bybit allows max 10 topics per request)
             const chunkArray = <T>(arr: T[], size: number): T[][] => {
@@ -95,54 +99,59 @@ class BybitConnector extends EventEmitter {
                 );
             };
 
-            // Connection events
+            // --- TICKER CLIENT SETUPS ---
             this.wsClient.on('open', async () => {
                 this.connected = true;
                 this.reconnectAttempts = 0;
-                logger.info('Bybit WebSocket connected. Sending chunked subscriptions...');
+                logger.info('Bybit WebSocket (Tickers) connected.');
                 this.emit('connected');
 
-                // Subscribe to tickers for all symbols (10 by 10)
                 const tickerTopics = symbols.map(s => `tickers.${s}`);
                 const tickerChunks = chunkArray(tickerTopics, 10);
                 for (const chunk of tickerChunks) {
                     this.wsClient!.subscribeV5(chunk, 'linear');
-                    await new Promise(r => setTimeout(r, 400)); // Sleep 400ms per packet to respect Bybit limit (10 msgs/sec max)
-                }
-
-                // Subscribe to 1h klines for signal generation
-                const klineTopics = symbols.map(s => `kline.60.${s}`);
-                const klineChunks = chunkArray(klineTopics, 10);
-                for (const chunk of klineChunks) {
-                    this.wsClient!.subscribeV5(chunk, 'linear');
                     await new Promise(r => setTimeout(r, 400));
                 }
-
-                logger.info('Bybit WebSocket subscriptions sent', {
-                    tickers: tickerTopics.length,
-                    klines: klineTopics.length,
-                });
             });
 
             this.wsClient.on('close', () => {
                 this.connected = false;
-                logger.warn('Bybit WebSocket disconnected');
+                logger.warn('Bybit WebSocket (Tickers) disconnected');
                 this.emit('disconnected');
             });
 
             this.wsClient.on('reconnect', () => {
                 this.reconnectAttempts++;
-                logger.info(`Bybit WebSocket reconnecting (attempt ${this.reconnectAttempts})`);
+                logger.info(`Bybit WebSocket (Tickers) reconnecting (attempt ${this.reconnectAttempts})`);
                 this.emit('reconnecting');
             });
 
             this.wsClient.on('error', (err: Error) => {
-                logger.error('Bybit WebSocket error', { error: err.message });
+                logger.error('Bybit WebSocket (Tickers) error', { error: err.message });
                 this.emit('error', err);
             });
 
-            // Market data updates
             this.wsClient.on('update', (data: any) => {
+                this.handleWsUpdate(data);
+            });
+
+            // --- KLINE CLIENT SETUPS ---
+            this.wsKlineClient.on('open', async () => {
+                logger.info('Bybit WebSocket (Klines) connected.');
+
+                const klineTopics = symbols.map(s => `kline.60.${s}`);
+                const klineChunks = chunkArray(klineTopics, 10);
+                for (const chunk of klineChunks) {
+                    this.wsKlineClient!.subscribeV5(chunk, 'linear');
+                    await new Promise(r => setTimeout(r, 400));
+                }
+            });
+
+            this.wsKlineClient.on('close', () => logger.warn('Bybit WebSocket (Klines) disconnected'));
+            this.wsKlineClient.on('reconnect', () => logger.info('Bybit WebSocket (Klines) reconnecting'));
+            this.wsKlineClient.on('error', (err: Error) => logger.error('Bybit WebSocket (Klines) error', { error: err.message }));
+
+            this.wsKlineClient.on('update', (data: any) => {
                 this.handleWsUpdate(data);
             });
         } catch (error) {
@@ -365,8 +374,12 @@ class BybitConnector extends EventEmitter {
             this.wsClient.closeAll();
             this.wsClient = null;
         }
+        if (this.wsKlineClient) {
+            this.wsKlineClient.closeAll();
+            this.wsKlineClient = null;
+        }
         this.connected = false;
-        logger.info('Bybit WebSocket disconnected');
+        logger.info('Bybit WebSockets disconnected');
     }
 }
 
