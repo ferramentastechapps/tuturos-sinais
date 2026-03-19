@@ -463,6 +463,9 @@ function generateSignalFromData(
 
     const riskReward = tp1Distance / stopLossDistance;
 
+    // --- VETO: Recusa sinais com R:R menor que 1:1 ---
+    if (riskReward < 1.0) return null;
+
     // --- GERENCIAMENTO DE RISCO DINÂMICO (SMART SIZING) ---
     const accountRiskLevel = 3.0; // Passando para 3% de risco da banca pra aproveitar a nova "Certeza Absoluta" dos trades
     const marginPercent = 10.0;   // O usuário quer empenhar apenas 10% da banca de garantia (posição de entrada)

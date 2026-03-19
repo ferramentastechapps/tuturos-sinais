@@ -25,6 +25,7 @@ import {
 import { initBot } from './bot.js';
 import { startSummaryJobs } from './jobs/summaryJobs.js';
 import { startMLRetrainJob } from './jobs/mlRetrainJob.js';
+import { priceStream } from './trading/priceStream.js';
 
 const app = express();
 const server = createServer(app);
@@ -107,6 +108,13 @@ async function bootstrap(): Promise<void> {
             const prices: Record<string, number> = {};
             for (const [symbol, ticker] of tickers) {
                 prices[symbol] = ticker.lastPrice;
+                
+                // Bridge live prices to priceStream so tradeTracker can monitor SL/TP
+                priceStream.emit('priceUpdate', {
+                    symbol,
+                    price: ticker.lastPrice,
+                    timestamp: Date.now(),
+                });
             }
             broadcastPrices(prices);
 
