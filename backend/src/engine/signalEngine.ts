@@ -285,21 +285,15 @@ function generateSignalFromData(
         const ema200_4h = calculateEMA(closes4h, 200).pop() || currentPrice;
         if (currentPrice > ema200_4h) {
             macroTrend = 'long';
-            mtfContext.macro.push('Preço acima da EMA 200 (4H) ✅');
         } else {
             macroTrend = 'short';
-            mtfContext.macro.push('Preço abaixo da EMA 200 (4H) ❌');
         }
     }
     
-    if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ✅');
-    if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ❌');
-    
+    let rsi15 = 50;
     if (ohlc15m && ohlc15m.length >= 20) {
         const closes15m = ohlc15m.map(c => c.close);
-        const rsi15 = calculateRSI(closes15m);
-        if (rsi15 < 35) mtfContext.micro.push('Reversão de curto prazo (RSI 15m oversold)');
-        if (rsi15 > 65) mtfContext.micro.push('Recuo de curto prazo (RSI 15m overbought)');
+        rsi15 = calculateRSI(closes15m);
     }
     // --- SMART MONEY CONCEPTS (ICT) ---
     const { isBullishFvg, isBearishFvg } = detectFVG(ohlc);
@@ -313,6 +307,14 @@ function generateSignalFromData(
         if (rvol < 0.70) return null; // Sem volume / Feriado = Abortar
         if (macroTrend === 'short' && !isSweepLow && !isBullishFvg) return null; // Contra-tendência só é permitido se for um Trap Institucional (Sweep ou FVG)
         
+        // Formata MTF para LONG
+        mtfContext.macro.push(macroTrend === 'long' ? 'Preço acima da EMA 200 (4H) ✅' : 'Preço abaixo da EMA 200 (4H) ❌');
+        if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ✅');
+        else if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ❌');
+
+        if (rsi15 < 35) mtfContext.micro.push('Reversão de curto prazo (RSI 15m oversold) ✅');
+        else if (rsi15 > 65) mtfContext.micro.push('Recuo de curto prazo (RSI 15m overbought) ❌');
+
         score = 60 + bullishCount * 5; // Start higher
         confluences.push(`${bullishCount} ind. bullish`);
     } else if (bearishCount >= 4) {
@@ -322,6 +324,14 @@ function generateSignalFromData(
         if (rvol < 0.70) return null; // Sem volume / Feriado = Abortar
         if (macroTrend === 'long' && !isSweepHigh && !isBearishFvg) return null; // Contra-tendência só é permitido se for Trap Institucional (Sweep ou FVG)
         
+        // Formata MTF para SHORT
+        mtfContext.macro.push(macroTrend === 'short' ? 'Preço abaixo da EMA 200 (4H) ✅' : 'Preço acima da EMA 200 (4H) ❌');
+        if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ✅');
+        else if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ❌');
+
+        if (rsi15 > 65) mtfContext.micro.push('Reversão de curto prazo (RSI 15m overbought) ✅');
+        else if (rsi15 < 35) mtfContext.micro.push('Recuo de curto prazo (RSI 15m oversold) ❌');
+
         score = 60 + bearishCount * 5;
         confluences.push(`${bearishCount} ind. bearish`);
     } else {
