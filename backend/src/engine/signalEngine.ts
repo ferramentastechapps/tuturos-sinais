@@ -211,6 +211,98 @@ export function detectLiquiditySweep(ohlc: OHLCPoint[], high24h: number, low24h:
     return { isSweepLow, isSweepHigh };
 }
 
+// ──── Order Block (ICT) Detection ────
+
+export interface OrderBlock {
+    high: number;
+    low: number;
+    midpoint: number;
+    index: number;
+}
+
+/**
+ * detectOrderBlock — Identifies the last candle of the opposite type before a strong impulse
+ * Bullish OB: Last bearish candle before a strong upward move (>= 1.5x ATR)
+ * Bearish OB: Last bullish candle before a strong downward move (>= 1.5x ATR)
+ */
+export function detectOrderBlock(ohlc: OHLCPoint[], atr: number): {
+    bullishOB: OrderBlock | null;
+    bearishOB: OrderBlock | null;
+    priceInBullishOB: boolean;
+    priceInBearishOB: boolean;
+} {
+    if (ohlc.length < 10 || atr === 0) {
+        return { bullishOB: null, bearishOB: null, priceInBullishOB: false, priceInBearishOB: false };
+    }
+
+    const impulseThreshold = atr * 1.5;
+    const currentPrice = ohlc[ohlc.length - 1].close;
+    let bullishOB: OrderBlock | null = null;
+    let bearishOB: OrderBlock | null = null;
+
+    const lookback = Math.min(ohlc.length - 2, 30);
+    for (let i = ohlc.length - 2; i >= ohlc.length - lookback; i--) {
+        const candle = ohlc[i];
+        const nextCandle = ohlc[i + 1];
+
+        if (!bullishOB) {
+            const isBearishCandle = candle.close < candle.open;
+            const isBullishImpulse = (nextCandle.close - nextCandle.open) >= impulseThreshold && nextCandle.close > candle.high;
+            if (isBearishCandle && isBullishImpulse) {
+                bullishOB = { high: candle.open, low: candle.close, midpoint: (candle.open + candle.close) / 2, index: i };
+            }
+        }
+
+        if (!bearishOB) {
+            const isBullishCandle = candle.close > candle.open;
+            const isBearishImpulse = (candle.open - nextCandle.close) >= impulseThreshold && nextCandle.close < candle.low;
+            if (isBullishCandle && isBearishImpulse) {
+                bearishOB = { high: candle.close, low: candle.open, midpoint: (candle.open + candle.close) / 2, index: i };
+            }
+        }
+
+        if (bullishOB && bearishOB) break;
+    }
+
+    const priceInBullishOB = bullishOB !== null && currentPrice >= bullishOB.low && currentPrice <= bullishOB.high;
+    const priceInBearishOB = bearishOB !== null && currentPrice >= bearishOB.low && currentPrice <= bearishOB.high;
+
+    return { bullishOB, bearishOB, priceInBullishOB, priceInBearishOB };
+}
+
+/**
+ * detectSwingStructure — Detects most recent swing low and swing high for structural SL placement
+ */
+export function detectSwingStructure(ohlc: OHLCPoint[], lookback = 15): { swingLow: number; swingHigh: number } {
+    if (ohlc.length < lookback + 4) {
+        const last = ohlc[ohlc.length - 1];
+        return { swingLow: last.low, swingHigh: last.high };
+    }
+
+    let swingLow = Infinity;
+    let swingHigh = -Infinity;
+    const windowSize = 3;
+    const slice = ohlc.slice(-(lookback + windowSize * 2));
+
+    for (let i = windowSize; i < slice.length - windowSize; i++) {
+        const curr = slice[i];
+        const leftCandles = slice.slice(i - windowSize, i);
+        const rightCandles = slice.slice(i + 1, i + 1 + windowSize);
+
+        if (leftCandles.every(c => c.low >= curr.low) && rightCandles.every(c => c.low >= curr.low)) {
+            if (curr.low < swingLow) swingLow = curr.low;
+        }
+        if (leftCandles.every(c => c.high <= curr.high) && rightCandles.every(c => c.high <= curr.high)) {
+            if (curr.high > swingHigh) swingHigh = curr.high;
+        }
+    }
+
+    if (swingLow === Infinity) swingLow = Math.min(...ohlc.slice(-lookback).map(c => c.low));
+    if (swingHigh === -Infinity) swingHigh = Math.max(...ohlc.slice(-lookback).map(c => c.high));
+
+    return { swingLow, swingHigh };
+}
+
 // ──── Signal Scoring ────
 
 function getIndicatorSignal(name: string, value: number): 'bullish' | 'bearish' | 'neutral' {
@@ -299,6 +391,8 @@ function generateSignalFromData(
     const { isBullishFvg, isBearishFvg } = detectFVG(ohlc);
     const { isSweepLow, isSweepHigh } = detectLiquiditySweep(ohlc, high24h, low24h);
     const anchoredVwapDay = calculateAnchoredVWAP(ohlc, 'day');
+    const { bullishOB, bearishOB, priceInBullishOB, priceInBearishOB } = detectOrderBlock(ohlc, atr);
+    const { swingLow, swingHigh } = detectSwingStructure(ohlc, 20);
 
     if (bullishCount >= 4) {
         type = 'long';
@@ -339,10 +433,13 @@ function generateSignalFromData(
     }
 
     // --- VETO SNIPER EXTREMO ---
-    // Proíbe abrir operação sem Rastro Institucional comprovado (Liquidity Sweep ou FVG)
-    const hasIctValidation = (type === 'long' && (isBullishFvg || isSweepLow)) || (type === 'short' && (isBearishFvg || isSweepHigh));
+    // Proíbe abrir operação sem Rastro Institucional comprovado (Liquidity Sweep, FVG ou Order Block)
+    const hasIctValidation = (
+        (type === 'long'  && (isBullishFvg  || isSweepLow  || priceInBullishOB)) ||
+        (type === 'short' && (isBearishFvg  || isSweepHigh || priceInBearishOB))
+    );
     if (!hasIctValidation) {
-        return null; // Aborta! O robô agora só atira se o Tubarão atuar.
+        return null;
     }
 
     // RSI extremes bonus (Apenas a favor do recuo natural, já que os vetos acima impedem a entrada contrária)
@@ -372,6 +469,22 @@ function generateSignalFromData(
         score += 20;
         confluences.push('Liquidity Sweep (Reversão de Topo)');
         mtfContext.macro.push('Tubarões distribuíram ativando Stops de Compra no topo! FORTE SINAL SHORT 🐋');
+    }
+
+    // Order Block (ICT) bonus
+    if (type === 'long' && priceInBullishOB && bullishOB) {
+        score += 15;
+        confluences.push('Order Block Bullish (ICT)');
+        mtfContext.medium.push(`Preço retornou à zona do Order Block ($${bullishOB.low.toFixed(2)} – $${bullishOB.high.toFixed(2)}) ✅`);
+        if (isBullishFvg) { score += 5; confluences.push('OB + FVG Confluence'); }
+        if (currentPrice > anchoredVwapDay) { score += 5; confluences.push('OB + Anchored VWAP'); }
+    }
+    if (type === 'short' && priceInBearishOB && bearishOB) {
+        score += 15;
+        confluences.push('Order Block Bearish (ICT)');
+        mtfContext.medium.push(`Preço retornou à zona de distribuição ($${bearishOB.low.toFixed(2)} – $${bearishOB.high.toFixed(2)}) ✅`);
+        if (isBearishFvg) { score += 5; confluences.push('OB + FVG Confluence'); }
+        if (currentPrice < anchoredVwapDay) { score += 5; confluences.push('OB + Anchored VWAP'); }
     }
     
     // Fair Value Gaps
@@ -423,30 +536,53 @@ function generateSignalFromData(
     // Minimum score filter (Raised significantly to 75 to ensure only high probability setups pass)
     if (score < 75) return null;
 
-    // --- Smart Money Dynamic ATR Stop Calculation ---
-    // If it's a Sweep, the invalidation level (stop) is extremely close: just below/above the wick that purged liquidity!
+    // --- ICT Order Block + Structural Stop + Fibonacci TPs ---
     let stopLossDistance = 0;
     const atrPercent = currentPrice > 0 ? (atr / currentPrice * 100) : 2;
-    
-    if (type === 'long' && isSweepLow) {
+    let obEntryLow = currentPrice * 0.998;
+    let obEntryHigh = currentPrice * 1.002;
+    let usingStructuralStop = false;
+
+    if (type === 'long' && priceInBullishOB && bullishOB) {
+        // ICT: stop below structural swing low with 0.1% buffer
+        const structuralStop = swingLow * 0.999;
+        stopLossDistance = ((currentPrice - structuralStop) / currentPrice) * 100;
+        obEntryLow = bullishOB.low;
+        obEntryHigh = bullishOB.high;
+        usingStructuralStop = true;
+    } else if (type === 'short' && priceInBearishOB && bearishOB) {
+        // ICT: stop above structural swing high with 0.1% buffer
+        const structuralStop = swingHigh * 1.001;
+        stopLossDistance = ((structuralStop - currentPrice) / currentPrice) * 100;
+        obEntryLow = bearishOB.low;
+        obEntryHigh = bearishOB.high;
+        usingStructuralStop = true;
+    } else if (type === 'long' && isSweepLow) {
         const lowestWick = ohlc[ohlc.length - 1].low;
-        stopLossDistance = ((currentPrice - lowestWick) / currentPrice * 100) * 1.05; // Tight Stop, just 5% below the wick
+        stopLossDistance = ((currentPrice - lowestWick) / currentPrice * 100) * 1.05;
     } else if (type === 'short' && isSweepHigh) {
         const highestWick = ohlc[ohlc.length - 1].high;
-        stopLossDistance = ((highestWick - currentPrice) / currentPrice * 100) * 1.05; // Tight Stop
+        stopLossDistance = ((highestWick - currentPrice) / currentPrice * 100) * 1.05;
     } else {
-        let atrMultiplier = type === macroTrend ? 1.5 : 1.0; 
+        const atrMultiplier = type === macroTrend ? 1.5 : 1.0;
         stopLossDistance = Math.max(atrPercent * atrMultiplier, 1);
     }
-    
-    // Adjust Targets (+ dynamic trailing stop label on Target 3)
-    const tpScale = type === macroTrend ? 1 : 0.6; 
-    let tp1Distance = stopLossDistance * 1.5 * tpScale;
-    let tp2Distance = stopLossDistance * 2.5 * tpScale;
-    let tp3Distance = stopLossDistance * 4 * tpScale; // TP 3 will serve as the Trailing Trigger
+
+    // Fibonacci TP extensions when structural stop is used, standard ratio otherwise
+    let tp1Distance: number, tp2Distance: number, tp3Distance: number;
+    if (usingStructuralStop) {
+        // ICT Fibonacci projections from the Order Block midpoint
+        tp1Distance = stopLossDistance * 1.0;   // 1:1 — first target (TP1)
+        tp2Distance = stopLossDistance * 1.618; // Golden ratio extension (TP2)
+        tp3Distance = stopLossDistance * 2.5;   // Major liquidity target (TP3)
+    } else {
+        const tpScale = type === macroTrend ? 1 : 0.6;
+        tp1Distance = stopLossDistance * 1.5 * tpScale;
+        tp2Distance = stopLossDistance * 2.5 * tpScale;
+        tp3Distance = stopLossDistance * 4.0 * tpScale;
+    }
 
     let entry: number, stopLoss: number, tp1: number, tp2: number, tp3: number;
-
     if (type === 'long') {
         entry = currentPrice;
         stopLoss = currentPrice * (1 - stopLossDistance / 100);
@@ -511,22 +647,23 @@ function generateSignalFromData(
         confidence: score,
         createdAt: new Date(),
         indicators: confluences,
-        quality: {
-            score,
-            factors: confluences,
-        },
+        quality: { score, factors: confluences },
         tradeType,
         expectedDuration,
         mtfContext,
         contextNarrative,
+        obEntryZone: usingStructuralStop ? { low: obEntryLow, high: obEntryHigh } : null,
         smartMoney: {
-            orderBlocks: [],
+            orderBlocks: usingStructuralStop
+                ? [{ type, high: obEntryHigh, low: obEntryLow, midpoint: (obEntryLow + obEntryHigh) / 2 }]
+                : [],
             fvgs: [],
             liquidity: [],
             isLiquiditySweep: isSweepHigh || isSweepLow,
             fvgZone: isBullishFvg || isBearishFvg,
+            isOrderBlock: usingStructuralStop,
         }
-    } as any; // Cast to bypass strict type here if backend Type hasn't caught the frontend MTF extensions
+    } as any;
 }
 
 // ──── Engine Loop ────
@@ -633,6 +770,9 @@ async function runSignalCycle(): Promise<void> {
                 if (telegramService.isEnabled && signal.quality.score >= config.telegram.minScore) {
                     try {
                         const anySignal = signal as any; // Para usar os paramétros suplementares MTF
+                        const isOB = anySignal.smartMoney?.isOrderBlock;
+                        const isSweep = anySignal.smartMoney?.isLiquiditySweep;
+                        const obZone = anySignal.obEntryZone;
                         const tgResult = await telegramService.sendNewSignal({
                             type: signal.type,
                             symbol: signal.pair,
@@ -640,7 +780,9 @@ async function runSignalCycle(): Promise<void> {
                             scoreLabel: signal.quality.score >= 80 ? 'Excelente' : signal.quality.score >= 70 ? 'Bom' : 'Moderado',
                             timeframe: signal.timeframe,
                             currentPrice: signal.entry,
-                            entryZone: { min: signal.entry * 0.998, max: signal.entry * 1.002 },
+                            entryZone: obZone
+                                ? { min: obZone.low, max: obZone.high }
+                                : { min: signal.entry * 0.998, max: signal.entry * 1.002 },
                             stopLoss: {
                                 price: signal.stopLoss,
                                 percent: Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100,
@@ -656,10 +798,10 @@ async function runSignalCycle(): Promise<void> {
                             positionSizePercent: anySignal.positionSizePercent || 10,
                             riskPercent: anySignal.riskPercent || 2,
                             timestamp: new Date().toISOString(),
-                            tradeType: anySignal.smartMoney?.isLiquiditySweep ? 'Smart Money (ICT)' : anySignal.tradeType,
+                            tradeType: isSweep ? 'Smart Money (ICT)' : isOB ? 'Order Block (ICT)' : anySignal.tradeType,
                             expectedDuration: anySignal.expectedDuration,
                             mtfContext: anySignal.mtfContext,
-                            contextNarrative: `${anySignal.contextNarrative} ${anySignal.smartMoney?.isLiquiditySweep ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`,
+                            contextNarrative: `${anySignal.contextNarrative} ${isSweep ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : isOB ? '**ORDER BLOCK ICT CONFIRMADO.** Entrada na zona institucional com Stop no swing estrutural. TPs por extensões Fibonacci.' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`,
                         });
                         signalsSent++;
 
