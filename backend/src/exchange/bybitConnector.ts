@@ -88,12 +88,40 @@ class BybitConnector extends EventEmitter {
                 testnet: config.bybit.testnet,
             });
 
+            // Helper function to chunk array (Bybit allows max 10 topics per request)
+            const chunkArray = <T>(arr: T[], size: number): T[][] => {
+                return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+                    arr.slice(i * size, i * size + size)
+                );
+            };
+
             // Connection events
-            this.wsClient.on('open', () => {
+            this.wsClient.on('open', async () => {
                 this.connected = true;
                 this.reconnectAttempts = 0;
-                logger.info('Bybit WebSocket connected');
+                logger.info('Bybit WebSocket connected. Sending chunked subscriptions...');
                 this.emit('connected');
+
+                // Subscribe to tickers for all symbols (10 by 10)
+                const tickerTopics = symbols.map(s => `tickers.${s}`);
+                const tickerChunks = chunkArray(tickerTopics, 10);
+                for (const chunk of tickerChunks) {
+                    this.wsClient!.subscribeV5(chunk, 'linear');
+                    await new Promise(r => setTimeout(r, 100)); // Sleep 100ms per 10 elements to prevent SDK from re-batching!
+                }
+
+                // Subscribe to 1h klines for signal generation
+                const klineTopics = symbols.map(s => `kline.60.${s}`);
+                const klineChunks = chunkArray(klineTopics, 10);
+                for (const chunk of klineChunks) {
+                    this.wsClient!.subscribeV5(chunk, 'linear');
+                    await new Promise(r => setTimeout(r, 100));
+                }
+
+                logger.info('Bybit WebSocket subscriptions sent', {
+                    tickers: tickerTopics.length,
+                    klines: klineTopics.length,
+                });
             });
 
             this.wsClient.on('close', () => {
@@ -116,32 +144,6 @@ class BybitConnector extends EventEmitter {
             // Market data updates
             this.wsClient.on('update', (data: any) => {
                 this.handleWsUpdate(data);
-            });
-
-            // Helper function to chunk array (Bybit allows max 10 topics per request)
-            const chunkArray = <T>(arr: T[], size: number): T[][] => {
-                return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
-                    arr.slice(i * size, i * size + size)
-                );
-            };
-
-            // Subscribe to tickers for all symbols
-            const tickerTopics = symbols.map(s => `tickers.${s}`);
-            const tickerChunks = chunkArray(tickerTopics, 10);
-            for (const chunk of tickerChunks) {
-                this.wsClient.subscribeV5(chunk, 'linear');
-            }
-
-            // Subscribe to 1h klines for signal generation
-            const klineTopics = symbols.map(s => `kline.60.${s}`);
-            const klineChunks = chunkArray(klineTopics, 10);
-            for (const chunk of klineChunks) {
-                this.wsClient.subscribeV5(chunk, 'linear');
-            }
-
-            logger.info('Bybit WebSocket subscriptions sent', {
-                tickers: tickerTopics.length,
-                klines: klineTopics.length,
             });
         } catch (error) {
             logger.error('Failed to connect to Bybit WebSocket', { error });
