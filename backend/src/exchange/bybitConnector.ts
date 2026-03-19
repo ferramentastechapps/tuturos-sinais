@@ -99,6 +99,12 @@ class BybitConnector extends EventEmitter {
                 );
             };
 
+            const tickerTopics = symbols.map(s => `tickers.${s}`);
+            const tickerChunks = chunkArray(tickerTopics, 10);
+            
+            const klineTopics = symbols.map(s => `kline.60.${s}`);
+            const klineChunks = chunkArray(klineTopics, 10);
+
             // --- TICKER CLIENT SETUPS ---
             this.wsClient.on('open', async () => {
                 this.connected = true;
@@ -106,11 +112,10 @@ class BybitConnector extends EventEmitter {
                 logger.info('Bybit WebSocket (Tickers) connected.');
                 this.emit('connected');
 
-                const tickerTopics = symbols.map(s => `tickers.${s}`);
-                const tickerChunks = chunkArray(tickerTopics, 10);
-                for (const chunk of tickerChunks) {
-                    this.wsClient!.subscribeV5(chunk, 'linear');
+                // Queue the rest of ticker chunks (0 was sent to wake up the connection)
+                for (let i = 1; i < tickerChunks.length; i++) {
                     await new Promise(r => setTimeout(r, 400));
+                    this.wsClient!.subscribeV5(tickerChunks[i], 'linear');
                 }
             });
 
@@ -135,15 +140,19 @@ class BybitConnector extends EventEmitter {
                 this.handleWsUpdate(data);
             });
 
+            // Wake up Ticket Client Connection
+            if (tickerChunks.length > 0) {
+                this.wsClient.subscribeV5(tickerChunks[0], 'linear');
+            }
+
             // --- KLINE CLIENT SETUPS ---
             this.wsKlineClient.on('open', async () => {
                 logger.info('Bybit WebSocket (Klines) connected.');
 
-                const klineTopics = symbols.map(s => `kline.60.${s}`);
-                const klineChunks = chunkArray(klineTopics, 10);
-                for (const chunk of klineChunks) {
-                    this.wsKlineClient!.subscribeV5(chunk, 'linear');
+                // Queue the rest of kline chunks
+                for (let i = 1; i < klineChunks.length; i++) {
                     await new Promise(r => setTimeout(r, 400));
+                    this.wsKlineClient!.subscribeV5(klineChunks[i], 'linear');
                 }
             });
 
@@ -154,6 +163,11 @@ class BybitConnector extends EventEmitter {
             this.wsKlineClient.on('update', (data: any) => {
                 this.handleWsUpdate(data);
             });
+
+            // Wake up Kline Client Connection
+            if (klineChunks.length > 0) {
+                this.wsKlineClient.subscribeV5(klineChunks[0], 'linear');
+            }
         } catch (error) {
             logger.error('Failed to connect to Bybit WebSocket', { error });
             throw error;
