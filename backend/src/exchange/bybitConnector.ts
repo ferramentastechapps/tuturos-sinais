@@ -107,7 +107,7 @@ class BybitConnector extends EventEmitter {
                 const tickerChunks = chunkArray(tickerTopics, 10);
                 for (const chunk of tickerChunks) {
                     this.wsClient!.subscribeV5(chunk, 'linear');
-                    await new Promise(r => setTimeout(r, 100)); // Sleep 100ms per 10 elements to prevent SDK from re-batching!
+                    await new Promise(r => setTimeout(r, 400)); // Sleep 400ms per packet to respect Bybit limit (10 msgs/sec max)
                 }
 
                 // Subscribe to 1h klines for signal generation
@@ -115,7 +115,7 @@ class BybitConnector extends EventEmitter {
                 const klineChunks = chunkArray(klineTopics, 10);
                 for (const chunk of klineChunks) {
                     this.wsClient!.subscribeV5(chunk, 'linear');
-                    await new Promise(r => setTimeout(r, 100));
+                    await new Promise(r => setTimeout(r, 400));
                 }
 
                 logger.info('Bybit WebSocket subscriptions sent', {
