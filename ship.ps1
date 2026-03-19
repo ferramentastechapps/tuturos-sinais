@@ -56,9 +56,10 @@ npm install -q
 npm run build
 cd ..
 
-echo '  ♻️  pm2 restart...'
+echo '  ♻️  pm2 cleanup & restart...'
+pm2 delete telegram-bot --silent 2>/dev/null || true
 pm2 restart all --silent
-
+pm2 save --force
 pm2 status
 "@
 
@@ -78,4 +79,4 @@ Write-Host "`n[3/3] ✅ Tudo pronto!" -ForegroundColor Green
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 Write-Host "  Commit : $msg" -ForegroundColor White
 Write-Host "  VPS    : $VPS" -ForegroundColor White
-Write-Host "  pm2    : signal-engine + telegram-bot online`n" -ForegroundColor White
+Write-Host "  pm2    : signal-engine online`n" -ForegroundColor White
