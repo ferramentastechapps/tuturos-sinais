@@ -20,10 +20,13 @@ const RETRY_BASE_DELAY_MS = 1000;
 const formatPrice = (rawPrice: number | string): string => {
     const price = typeof rawPrice === 'string' ? parseFloat(rawPrice) : rawPrice;
     if (isNaN(price)) return '0.00';
-    if (price >= 100) return price.toFixed(2);
+    if (price >= 1000) return price.toFixed(2);
     if (price >= 1) return price.toFixed(3);
-    if (price >= 0.01) return price.toFixed(4);
-    return price.toFixed(5);
+    if (price >= 0.1) return price.toFixed(4);
+    if (price >= 0.01) return price.toFixed(5);
+    if (price >= 0.001) return price.toFixed(6);
+    if (price >= 0.0001) return price.toFixed(7);
+    return price.toFixed(8);
 };
 
 interface QueueItem {
