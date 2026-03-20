@@ -107,12 +107,13 @@ async function bootstrap(): Promise<void> {
             // Broadcast prices to dashboard clients
             const prices: Record<string, number> = {};
             for (const [symbol, ticker] of tickers) {
-                prices[symbol] = ticker.lastPrice;
+                const parsedPrice = typeof ticker.lastPrice === 'string' ? parseFloat(ticker.lastPrice) : ticker.lastPrice;
+                prices[symbol] = parsedPrice;
                 
                 // Bridge live prices to priceStream so tradeTracker can monitor SL/TP
                 priceStream.emit('priceUpdate', {
                     symbol,
-                    price: ticker.lastPrice,
+                    price: parsedPrice,
                     timestamp: Date.now(),
                 });
             }

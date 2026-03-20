@@ -17,7 +17,9 @@ const RATE_LIMIT_PER_MINUTE = 20;
 const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 
-const formatPrice = (price: number): string => {
+const formatPrice = (rawPrice: number | string): string => {
+    const price = typeof rawPrice === 'string' ? parseFloat(rawPrice) : rawPrice;
+    if (isNaN(price)) return '0.00';
     if (price >= 100) return price.toFixed(2);
     if (price >= 1) return price.toFixed(3);
     if (price >= 0.01) return price.toFixed(4);
