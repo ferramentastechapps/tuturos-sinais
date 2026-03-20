@@ -102,7 +102,7 @@ class BybitConnector extends EventEmitter {
             const tickerTopics = symbols.map(s => `tickers.${s}`);
             const tickerChunks = chunkArray(tickerTopics, 10);
             
-            const klineTopics = symbols.map(s => `kline.60.${s}`);
+            const klineTopics = symbols.map(s => `kline.15.${s}`);
             const klineChunks = chunkArray(klineTopics, 10);
 
             // --- TICKER CLIENT SETUPS ---

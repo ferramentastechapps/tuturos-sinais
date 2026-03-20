@@ -321,13 +321,13 @@ function getIndicatorSignal(name: string, value: number): 'bullish' | 'bearish' 
 
 function generateSignalFromData(
     symbol: string,
-    ohlc: OHLCPoint[], // 1h data
+    ohlc: OHLCPoint[], // 15m data
     currentPrice: number,
     high24h: number,
     low24h: number,
     volume24h: number,
     fundingRate: number,
-    ohlc15m?: OHLCPoint[],
+    ohlc60m?: OHLCPoint[],
     ohlc4h?: OHLCPoint[]
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
@@ -382,10 +382,10 @@ function generateSignalFromData(
         }
     }
     
-    let rsi15 = 50;
-    if (ohlc15m && ohlc15m.length >= 20) {
-        const closes15m = ohlc15m.map(c => c.close);
-        rsi15 = calculateRSI(closes15m);
+    let rsi60 = 50;
+    if (ohlc60m && ohlc60m.length >= 20) {
+        const closes60m = ohlc60m.map(c => c.close);
+        rsi60 = calculateRSI(closes60m);
     }
     // --- SMART MONEY CONCEPTS (ICT) ---
     const { isBullishFvg, isBearishFvg } = detectFVG(ohlc);
@@ -403,11 +403,11 @@ function generateSignalFromData(
         
         // Formata MTF para LONG
         mtfContext.macro.push(macroTrend === 'long' ? 'Preço acima da EMA 200 (4H) ✅' : 'Preço abaixo da EMA 200 (4H) ❌');
-        if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ✅');
-        else if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ❌');
+        if (rsi60 < 40) mtfContext.medium.push('RSI em região sobrevendida (1H) ✅');
+        else if (rsi60 > 60) mtfContext.medium.push('RSI em região sobrecomprada (1H) ❌');
 
-        if (rsi15 < 35) mtfContext.micro.push('Reversão de curto prazo (RSI 15m oversold) ✅');
-        else if (rsi15 > 65) mtfContext.micro.push('Recuo de curto prazo (RSI 15m overbought) ❌');
+        if (rsi < 35) mtfContext.micro.push('Reversão de curtíssimo prazo (RSI 15m oversold) ✅');
+        else if (rsi > 65) mtfContext.micro.push('Recuo de curtíssimo prazo (RSI 15m overbought) ❌');
 
         score = 60 + bullishCount * 5; // Start higher
         confluences.push(`${bullishCount} ind. bullish`);
@@ -420,11 +420,11 @@ function generateSignalFromData(
         
         // Formata MTF para SHORT
         mtfContext.macro.push(macroTrend === 'short' ? 'Preço abaixo da EMA 200 (4H) ✅' : 'Preço acima da EMA 200 (4H) ❌');
-        if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ✅');
-        else if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ❌');
+        if (rsi60 > 60) mtfContext.medium.push('RSI em região sobrecomprada (1H) ✅');
+        else if (rsi60 < 40) mtfContext.medium.push('RSI em região sobrevendida (1H) ❌');
 
-        if (rsi15 > 65) mtfContext.micro.push('Reversão de curto prazo (RSI 15m overbought) ✅');
-        else if (rsi15 < 35) mtfContext.micro.push('Recuo de curto prazo (RSI 15m oversold) ❌');
+        if (rsi > 65) mtfContext.micro.push('Reversão de curtíssimo prazo (RSI 15m overbought) ✅');
+        else if (rsi < 35) mtfContext.micro.push('Recuo de curtíssimo prazo (RSI 15m oversold) ❌');
 
         score = 60 + bearishCount * 5;
         confluences.push(`${bearishCount} ind. bearish`);
@@ -614,17 +614,17 @@ function generateSignalFromData(
     if (dynamicLeverage > 50) dynamicLeverage = 50; // Cap máximo institucional
 
     // Definir tipo de trade e narrativa baseada no MTF
-    let tradeType = 'Day Trade';
-    let expectedDuration = '12-24 horas';
+    let tradeType = 'Scalp/Day Trade';
+    let expectedDuration = '1-4 horas';
     let contextNarrative = `${symbol} demonstra presença ${type === 'long' ? 'compradora' : 'vendedora'}. `;
     
     if (type === macroTrend) {
-        tradeType = 'Swing Trade';
-        expectedDuration = '2-5 dias';
-        contextNarrative += `O sinal está alinhado com a tendência macro (4H), proporcionando um Swing Trade com R:R de 1:${riskReward.toFixed(1)}.`;
+        tradeType = 'Day Trade';
+        expectedDuration = '4-12 horas';
+        contextNarrative += `O sinal está alinhado com a tendência macro (4H), proporcionando um Day Trade com R:R de 1:${riskReward.toFixed(1)}.`;
     } else {
         tradeType = 'Day Trade (Contra-tendência)';
-        expectedDuration = '4-12 horas';
+        expectedDuration = '1-4 horas';
         contextNarrative += `Atenção: Operação contra a tendência macro (4H). Alvos reduzidos para um Day Trade rápido com R:R de 1:${riskReward.toFixed(1)}.`;
     }
 
@@ -642,7 +642,7 @@ function generateSignalFromData(
         dynamicLeverage,
         positionSizePercent: marginPercent,
         riskPercent: accountRiskLevel,
-        timeframe: '1h',
+        timeframe: '15m',
         status: 'active',
         confidence: score,
         createdAt: new Date(),
@@ -679,22 +679,22 @@ async function runSignalCycle(): Promise<void> {
             // Get OHLC data - prefer cached WebSocket data, fallback to REST
             let ohlc = bybitConnector.getKlineData(symbol);
             if (ohlc.length < 50) {
-                ohlc = await bybitConnector.fetchKlines(symbol, '60', 200);
+                ohlc = await bybitConnector.fetchKlines(symbol, '15', 200);
             }
             if (ohlc.length < 50) continue;
 
-            const ohlc15m = await bybitConnector.fetchKlines(symbol, '15', 50);
+            const ohlc60m = await bybitConnector.fetchKlines(symbol, '60', 50);
             const ohlc4h = await bybitConnector.fetchKlines(symbol, '240', 200);
 
             const ticker = bybitConnector.getTicker(symbol);
             const currentPrice = ticker?.lastPrice || ohlc[ohlc.length - 1].close;
-            const high24h = ticker?.highPrice24h || Math.max(...ohlc.slice(-24).map(c => c.high));
-            const low24h = ticker?.lowPrice24h || Math.min(...ohlc.slice(-24).map(c => c.low));
+            const high24h = ticker?.highPrice24h || Math.max(...ohlc.slice(-96).map(c => c.high));
+            const low24h = ticker?.lowPrice24h || Math.min(...ohlc.slice(-96).map(c => c.low));
             const volume24h = ticker?.turnover24h || 0;
             const fundingRate = parseFloat(ticker?.fundingRate || '0');
 
             const signal = generateSignalFromData(
-                symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h
+                symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc60m, ohlc4h
             );
 
             if (signal && signal.quality && signal.quality.score >= 65) {
