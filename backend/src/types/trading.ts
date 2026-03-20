@@ -66,10 +66,11 @@ export interface TradeSignal {
     };
     patterns?: string[];
     mlData?: {
-        probability: number;
-        predictedClass: 0 | 1;
-        confidence: number;
-        isFiltered: boolean;
+        probability?: number;
+        predictedClass?: 0 | 1;
+        confidence?: number;
+        isFiltered?: boolean;
+        [key: string]: any;
     };
 }
 

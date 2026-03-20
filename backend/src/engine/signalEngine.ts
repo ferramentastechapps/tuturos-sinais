@@ -710,40 +710,45 @@ async function runSignalCycle(): Promise<void> {
                     continue;
                 }
 
+                // Data Collection para o Machine Learning (Retreinamento)
+                const features = {
+                    symbol_id: getSymbolId(symbol),
+                    rsi: calculateRSI(ohlc.map(c => c.close)),
+                    adx: calculateADX(ohlc),
+                    atr_rel: calculateATR(ohlc) / currentPrice,
+                    dist_ema20: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 20).pop() || currentPrice)) / currentPrice,
+                    dist_ema50: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 50).pop() || currentPrice)) / currentPrice,
+                    dist_ema200: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 200).pop() || currentPrice)) / currentPrice,
+                    dist_vwap: (currentPrice - calculateVWAP(ohlc)) / currentPrice, // Dynamic actual VWAP distance
+                    volatility_24h: high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0,
+                    volume_rel: calculateRVOL(ohlc), // Dynamic RVOL
+                    funding_rate: fundingRate,
+                    open_interest_var: 0,
+                    long_short_ratio: 1,
+                    is_long: signal.type === 'long' ? 1 : 0,
+                    confidence: signal.confidence / 100,
+                    quality_score: signal.quality.score / 100,
+                    confluence_count: signal.indicators.length,
+                    stop_loss_pct: Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100,
+                    take_profit_pct: Math.abs(signal.takeProfit - signal.entry) / signal.entry * 100,
+                    risk_reward: signal.riskReward,
+                    hour_of_day: new Date().getHours(),
+                    day_of_week: new Date().getDay(),
+                    btc_trend: 0,
+                    dominance_btc: 50,
+                    fear_greed: 50,
+                };
+                
+                // Sempre salvar o contexto completo para que o TradeTracker recolha no Stop/TP
+                signal.mlData = { ...features };
+
                 // ML enrichment
                 if (isModelLoaded()) {
                     try {
-                        const features = {
-                            symbol_id: getSymbolId(symbol),
-                            rsi: calculateRSI(ohlc.map(c => c.close)),
-                            adx: calculateADX(ohlc),
-                            atr_rel: calculateATR(ohlc) / currentPrice,
-                            dist_ema20: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 20).pop() || currentPrice)) / currentPrice,
-                            dist_ema50: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 50).pop() || currentPrice)) / currentPrice,
-                            dist_ema200: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 200).pop() || currentPrice)) / currentPrice,
-                            dist_vwap: (currentPrice - calculateVWAP(ohlc)) / currentPrice, // Dynamic actual VWAP distance
-                            volatility_24h: high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0,
-                            volume_rel: calculateRVOL(ohlc), // Dynamic RVOL
-                            funding_rate: fundingRate,
-                            open_interest_var: 0,
-                            long_short_ratio: 1,
-                            is_long: signal.type === 'long' ? 1 : 0,
-                            confidence: signal.confidence / 100,
-                            quality_score: signal.quality.score / 100,
-                            confluence_count: signal.indicators.length,
-                            stop_loss_pct: Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100,
-                            take_profit_pct: Math.abs(signal.takeProfit - signal.entry) / signal.entry * 100,
-                            risk_reward: signal.riskReward,
-                            hour_of_day: new Date().getHours(),
-                            day_of_week: new Date().getDay(),
-                            btc_trend: 0,
-                            dominance_btc: 50,
-                            fear_greed: 50,
-                        };
-
                         const prediction = await predictSignal(features);
                         if (prediction) {
                             signal.mlData = {
+                                ...signal.mlData,
                                 probability: prediction.probability,
                                 predictedClass: prediction.predictedClass,
                                 confidence: prediction.confidence,
@@ -761,6 +766,7 @@ async function runSignalCycle(): Promise<void> {
                         logger.warn(`ML enrichment failed for ${symbol}`, { error: mlError });
                     }
                 }
+
 
                 newSignals.push(signal);
                 signalsToday++;
