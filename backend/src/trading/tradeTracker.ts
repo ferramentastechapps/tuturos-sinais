@@ -95,8 +95,9 @@ export class TradeTracker {
       if (signal.status === 'PENDING') {
          // Check if price reached the entry zone or crossed it
          const isEntered = update.price >= signal.entry_range_low && update.price <= signal.entry_range_high;
-         const isCrossedLong = signal.type === 'LONG' && update.price < signal.entry_range_low;
-         const isCrossedShort = signal.type === 'SHORT' && update.price > signal.entry_range_high;
+         const tradeDir = signal.type.toUpperCase();
+         const isCrossedLong = tradeDir === 'LONG' && update.price < signal.entry_range_low;
+         const isCrossedShort = tradeDir === 'SHORT' && update.price > signal.entry_range_high;
 
          if (isEntered || isCrossedLong || isCrossedShort) {
              console.log(`[TradeTracker] Signal ${signal.pair} ACTIVATED at ${update.price}`);
@@ -118,7 +119,8 @@ export class TradeTracker {
       if (signal.status !== 'ACTIVE') continue;
 
       // Check Stop Loss
-      const isSLHit = signal.type === 'LONG' 
+      const tradeDir = signal.type.toUpperCase();
+      const isSLHit = tradeDir === 'LONG' 
         ? update.price <= signal.stop_loss 
         : update.price >= signal.stop_loss;
 
@@ -133,7 +135,7 @@ export class TradeTracker {
         const tp = signal.take_profits[i];
         if (tp.hit) continue;
 
-        const isTPHit = signal.type === 'LONG'
+        const isTPHit = tradeDir === 'LONG'
           ? update.price >= tp.price
           : update.price <= tp.price;
 
@@ -155,8 +157,8 @@ export class TradeTracker {
     const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
     const trailDistance = Math.abs(signal.take_profits[0].price - entryAvg); // e.g. 1R step
     
-    let newSl = signal.stop_loss;
-    if (signal.type === 'LONG') {
+    const tradeDir = signal.type.toUpperCase();
+    if (tradeDir === 'LONG') {
       const pendingSl = currentPrice - trailDistance;
       if (pendingSl > signal.stop_loss && currentPrice > signal.take_profits[0].price) {
           // SL lags behind the current price by the trailDistance
@@ -194,7 +196,7 @@ export class TradeTracker {
     
     if (tp.level === 1) {
       // Move to breakeven
-      signal.stop_loss = signal.type === 'LONG' 
+      signal.stop_loss = signal.type.toUpperCase() === 'LONG' 
         ? Math.max(signal.stop_loss, entryAvg)
         : Math.min(signal.stop_loss, entryAvg);
     }
