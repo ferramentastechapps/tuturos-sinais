@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useCryptoPrices } from '@/hooks/useCryptoPrices';
 import { usePriceAlerts } from '@/hooks/usePriceAlerts';
@@ -29,7 +30,8 @@ import { RiskCalculator } from '@/components/trading/RiskCalculator';
 import { IndicatorAlertsPanel } from '@/components/trading/IndicatorAlertsPanel';
 import { PriceAlertsPanel } from '@/components/trading/PriceAlertsPanel';
 import { AlertDemoPanel } from '@/components/trading/AlertDemoPanel';
-import { Loader2 } from 'lucide-react';
+import { Loader2, History } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { RiskDisclaimer } from '@/components/trading/RiskDisclaimer';
 import BacktestWidget from '@/components/dashboard/BacktestWidget';
 
@@ -39,6 +41,7 @@ import { getCoinSignalScores } from '@/services/dashboardDataService';
 
 const Index = () => {
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const { data: cryptoPairs = [], isLoading } = useCryptoPrices();
   const [selectedPair, setSelectedPair] = useState<CryptoPair | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -256,13 +259,25 @@ const Index = () => {
                   activeSignal={selectedPairSignal}
                 />
 
-                <ActiveSignals
-                  signals={enrichedSignals}
-                  onSelectSignal={(signal) => {
-                    const pair = cryptoPairs.find(p => p.symbol === signal.pair);
-                    if (pair) setSelectedPair(pair);
-                  }}
-                />
+                <div className="space-y-4">
+                  <div className="flex w-full justify-between items-center bg-card p-4 rounded-xl border border-border/40 shadow-sm">
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground">Sinais Históricos</h3>
+                      <p className="text-xs text-muted-foreground">Acesse o banco de dados completo de operações passadas.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => navigate('/signals-history')}>
+                      <History className="w-4 h-4 mr-2" /> Ver Histórico Completo
+                    </Button>
+                  </div>
+                  
+                  <ActiveSignals
+                    signals={enrichedSignals}
+                    onSelectSignal={(signal) => {
+                      const pair = cryptoPairs.find(p => p.symbol === signal.pair);
+                      if (pair) setSelectedPair(pair);
+                    }}
+                  />
+                </div>
               </div>
             </div>
 

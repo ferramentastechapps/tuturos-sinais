@@ -26,6 +26,7 @@ const MLAnalytics = lazy(() => import("./pages/MLAnalytics"));
 const PaperTrading = lazy(() => import("./pages/PaperTrading"));
 const StrategyConfig = lazy(() => import("./pages/StrategyConfig")); // Heavy (31KB)
 const SymbolAnalysis = lazy(() => import("./pages/SymbolAnalysis"));
+const SignalHistory = lazy(() => import("./pages/SignalHistory"));
 
 import { BottomNav } from "@/components/layout/BottomNav";
 
@@ -66,6 +67,7 @@ const App = () => (
               <Route path="/paper-trading" element={<PrivateRoute><PaperTrading /></PrivateRoute>} />
               <Route path="/strategy-config" element={<PrivateRoute><StrategyConfig /></PrivateRoute>} />
               <Route path="/symbol-analysis" element={<PrivateRoute><SymbolAnalysis /></PrivateRoute>} />
+              <Route path="/signals-history" element={<PrivateRoute><SignalHistory /></PrivateRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

@@ -82,6 +82,48 @@ router.get('/signals', (req: Request, res: Response) => {
     res.json(signals.slice(0, limit));
 });
 
+import { supabase } from '../lib/supabaseClient.js';
+
+router.get('/signals/history', async (req: Request, res: Response) => {
+    try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const symbol = req.query.symbol as string;
+        const type = req.query.type as string;
+        const status = req.query.status as string;
+
+        let query = supabase
+            .from('trade_signals')
+            .select('*', { count: 'exact' });
+
+        if (symbol) query = query.eq('pair', symbol);
+        if (type) query = query.eq('type', type);
+        if (status) query = query.eq('status', status);
+
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+
+        const { data, error, count } = await query
+            .order('created_at', { ascending: false })
+            .range(from, to);
+
+        if (error) throw error;
+
+        res.json({
+            data,
+            pagination: {
+                page,
+                limit,
+                total: count || 0,
+                totalPages: Math.ceil((count || 0) / limit)
+            }
+        });
+    } catch (error: any) {
+        logger.error('Error fetching signals history', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
 router.get('/signals/:id', (req: Request, res: Response) => {
     const signal = getSignalById(req.params.id as string);
     if (!signal) {
