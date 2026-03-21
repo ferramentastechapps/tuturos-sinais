@@ -1,6 +1,7 @@
 // Signal Engine — Main Entry Point
 // Starts all services: Express API, WebSocket, Bybit connection, Signal engine
 import { tradeTracker } from './trading/tradeTracker.js';
+import { supabase } from './lib/supabaseClient.js';
 
 import { createServer } from 'http';
 import express from 'express';
@@ -80,6 +81,28 @@ async function bootstrap(): Promise<void> {
     logger.info(`📍 Environment: ${config.nodeEnv}`);
     logger.info(`🔌 Port: ${config.port}`);
     logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // 0. Ensure Admin User in Supabase Auth
+    try {
+        const ADMIN_USER_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        const { data: user, error: fetchError } = await supabase.auth.admin.getUserById(ADMIN_USER_ID);
+        if (fetchError || !user?.user) {
+            const { error: createError } = await supabase.auth.admin.createUser({
+                id: ADMIN_USER_ID,
+                email: 'admin@tuturos.local',
+                password: 'StrongPassword123!',
+                email_confirm: true,
+                user_metadata: { role: 'admin' }
+            });
+            if (createError) {
+                logger.error('Failed to create Admin User in Supabase', { error: createError.message });
+            } else {
+                logger.info('✅ Admin user seeded in auth.users');
+            }
+        }
+    } catch (e: any) {
+        logger.error('Error ensuring Admin User', { error: e.message });
+    }
 
     // 1. Load ML model
     if (config.ml.enabled) {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { createChart, ColorType, IChartApi, ISeriesApi, SeriesMarker, Time, CrosshairMode } from 'lightweight-charts';
+import { createChart, ColorType, IChartApi, ISeriesApi, SeriesMarker, Time, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
 import { useOHLCData } from '@/hooks/useOHLCData';
 import { BybitInterval, BYBIT_TIMEFRAMES } from '@/services/bybitOHLC';
 import { detectPatterns, CandlestickPattern, getPatternEmoji } from '@/utils/candlestickPatterns';
@@ -80,7 +80,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
     chartRef.current = chart;
 
     // Series Setup
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#26a69a',
       downColor: '#ef5350',
       borderVisible: false,
@@ -88,18 +88,18 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
       wickDownColor: '#ef5350',
     });
 
-    const volumeSeries = chart.addHistogramSeries({
+    const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
       priceScaleId: '', // set as an overlay by setting a blank priceScaleId
       scaleMargins: { top: 0.8, bottom: 0 },
     });
 
-    const ema9Series = chart.addLineSeries({ color: '#f59e0b', lineWidth: 1, crosshairMarkerVisible: false });
-    const ema21Series = chart.addLineSeries({ color: '#3b82f6', lineWidth: 1, crosshairMarkerVisible: false });
-    const sma50Series = chart.addLineSeries({ color: '#a855f7', lineWidth: 1, crosshairMarkerVisible: false });
-    const bbUpperSeries = chart.addLineSeries({ color: 'rgba(5b, 130, 246, 0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
-    const bbMiddleSeries = chart.addLineSeries({ color: 'rgba(5b, 130, 246, 0.3)', lineWidth: 1, crosshairMarkerVisible: false });
-    const bbLowerSeries = chart.addLineSeries({ color: 'rgba(5b, 130, 246, 0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
+    const ema9Series = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, crosshairMarkerVisible: false });
+    const ema21Series = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, crosshairMarkerVisible: false });
+    const sma50Series = chart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, crosshairMarkerVisible: false });
+    const bbUpperSeries = chart.addSeries(LineSeries, { color: 'rgba(5b, 130, 246, 0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
+    const bbMiddleSeries = chart.addSeries(LineSeries, { color: 'rgba(5b, 130, 246, 0.3)', lineWidth: 1, crosshairMarkerVisible: false });
+    const bbLowerSeries = chart.addSeries(LineSeries, { color: 'rgba(5b, 130, 246, 0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
 
     seriesRefs.current = { candleSeries, volumeSeries, ema9Series, ema21Series, sma50Series, bbUpperSeries, bbMiddleSeries, bbLowerSeries };
 
