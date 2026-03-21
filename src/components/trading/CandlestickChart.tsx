@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { createChart, ColorType, IChartApi, ISeriesApi, SeriesMarker, Time, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
+import { createChart, ColorType, IChartApi, ISeriesApi, SeriesMarker, Time, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries, createSeriesMarkers } from 'lightweight-charts';
 import { useOHLCData } from '@/hooks/useOHLCData';
 import { BybitInterval, BYBIT_TIMEFRAMES } from '@/services/bybitOHLC';
 import { detectPatterns, CandlestickPattern, getPatternEmoji } from '@/utils/candlestickPatterns';
@@ -190,7 +190,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
     bbLowerSeries.setData(bbLowerData);
     
     if (markers.length > 0) {
-      candleSeries.setMarkers(markers);
+      createSeriesMarkers(candleSeries, markers);
     }
 
     chart.timeScale().fitContent();
