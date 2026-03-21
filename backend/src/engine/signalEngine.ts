@@ -88,25 +88,47 @@ export function calculateATR(ohlc: OHLCPoint[], period = 14): number {
 }
 
 export function calculateADX(ohlc: OHLCPoint[], period = 14): number {
-    if (ohlc.length < period * 2) return 25;
-    let plusDM = 0, minusDM = 0, tr = 0;
-    for (let i = ohlc.length - period; i < ohlc.length; i++) {
-        const upMove = ohlc[i].high - ohlc[i - 1].high;
+    const needed = period * 2 + 1;
+    if (ohlc.length < needed) return 25;
+
+    // Step 1: Seed — simple sum of first `period` TR/DM values
+    let smoothTR = 0, smoothPlusDM = 0, smoothMinusDM = 0;
+    for (let i = 1; i <= period; i++) {
+        const upMove   = ohlc[i].high - ohlc[i - 1].high;
         const downMove = ohlc[i - 1].low - ohlc[i].low;
-        plusDM += upMove > downMove && upMove > 0 ? upMove : 0;
-        minusDM += downMove > upMove && downMove > 0 ? downMove : 0;
-        tr += Math.max(
-            ohlc[i].high - ohlc[i].low,
-            Math.abs(ohlc[i].high - ohlc[i - 1].close),
-            Math.abs(ohlc[i].low - ohlc[i - 1].close)
-        );
+        smoothTR       += Math.max(ohlc[i].high - ohlc[i].low, Math.abs(ohlc[i].high - ohlc[i - 1].close), Math.abs(ohlc[i].low - ohlc[i - 1].close));
+        smoothPlusDM   += (upMove > downMove && upMove > 0) ? upMove : 0;
+        smoothMinusDM  += (downMove > upMove && downMove > 0) ? downMove : 0;
     }
-    if (tr === 0) return 25;
-    const plusDI = (plusDM / tr) * 100;
-    const minusDI = (minusDM / tr) * 100;
-    const diSum = plusDI + minusDI;
-    if (diSum === 0) return 0;
-    return Math.abs(plusDI - minusDI) / diSum * 100;
+
+    // Step 2: Wilder smoothing (RMA) for DI values
+    let adxSmooth = 0;
+    for (let i = period + 1; i < ohlc.length; i++) {
+        const upMove   = ohlc[i].high - ohlc[i - 1].high;
+        const downMove = ohlc[i - 1].low - ohlc[i].low;
+        const tr       = Math.max(ohlc[i].high - ohlc[i].low, Math.abs(ohlc[i].high - ohlc[i - 1].close), Math.abs(ohlc[i].low - ohlc[i - 1].close));
+        const plusDM   = (upMove > downMove && upMove > 0) ? upMove : 0;
+        const minusDM  = (downMove > upMove && downMove > 0) ? downMove : 0;
+
+        smoothTR      = smoothTR - (smoothTR / period) + tr;
+        smoothPlusDM  = smoothPlusDM - (smoothPlusDM / period) + plusDM;
+        smoothMinusDM = smoothMinusDM - (smoothMinusDM / period) + minusDM;
+
+        if (smoothTR === 0) continue;
+        const plusDI  = (smoothPlusDM / smoothTR) * 100;
+        const minusDI = (smoothMinusDM / smoothTR) * 100;
+        const diSum   = plusDI + minusDI;
+        const dx      = diSum === 0 ? 0 : (Math.abs(plusDI - minusDI) / diSum) * 100;
+
+        // Wilder smooth ADX from period+1 seeds onward
+        if (i === period + 1) {
+            adxSmooth = dx;
+        } else {
+            adxSmooth = (adxSmooth * (period - 1) + dx) / period;
+        }
+    }
+
+    return adxSmooth;
 }
 
 export function calculateVWAP(ohlc: OHLCPoint[]): number {
@@ -186,15 +208,28 @@ export function calculateAnchoredVWAP(ohlc: OHLCPoint[], anchorType: 'day' | 'we
 
 export function detectFVG(ohlc: OHLCPoint[]): { isBullishFvg: boolean, isBearishFvg: boolean } {
     if (ohlc.length < 3) return { isBullishFvg: false, isBearishFvg: false };
-    const c1 = ohlc[ohlc.length - 3];
-    const c3 = ohlc[ohlc.length - 1];
-    
-    // Bullish FVG: Low da vela 3 é muito MAIOR que a High da vela 1 (GAP de Alta)
-    const isBullishFvg = c3.low > c1.high && c1.close > c1.open; 
-    
-    // Bearish FVG: High da vela 3 é muito MENOR que a Low da vela 1 (GAP de Baixa)
-    const isBearishFvg = c3.high < c1.low && c1.close < c1.open;
-    
+
+    // Scan the last 12 candles for the most recent valid FVG (instead of only the last 3)
+    const lookback = Math.min(ohlc.length - 2, 12);
+    let isBullishFvg = false;
+    let isBearishFvg = false;
+
+    for (let offset = 0; offset < lookback; offset++) {
+        const c1 = ohlc[ohlc.length - 3 - offset];
+        const c3 = ohlc[ohlc.length - 1 - offset];
+        if (!c1 || !c3) break;
+
+        // Bullish FVG: Low da vela 3 > High da vela 1 (gap de pressão compradora)
+        if (!isBullishFvg && c3.low > c1.high && c1.close > c1.open) {
+            isBullishFvg = true;
+        }
+        // Bearish FVG: High da vela 3 < Low da vela 1 (gap de pressão vendedora)
+        if (!isBearishFvg && c3.high < c1.low && c1.close < c1.open) {
+            isBearishFvg = true;
+        }
+        if (isBullishFvg && isBearishFvg) break;
+    }
+
     return { isBullishFvg, isBearishFvg };
 }
 
@@ -603,8 +638,8 @@ function generateSignalFromData(
     if (riskReward < 1.0) return null;
 
     // --- GERENCIAMENTO DE RISCO DINÂMICO (SMART SIZING) ---
-    const accountRiskLevel = 3.0; // Passando para 3% de risco da banca pra aproveitar a nova "Certeza Absoluta" dos trades
-    const marginPercent = 10.0;   // O usuário quer empenhar apenas 10% da banca de garantia (posição de entrada)
+    const accountRiskLevel = config.riskManagement.riskPercent;
+    const marginPercent = config.riskManagement.marginPercent;
     
     // Fórmula Mágica Corrigida:
     let dynamicLeverage = Math.round((accountRiskLevel / stopLossDistance) / (marginPercent / 100));
@@ -662,8 +697,20 @@ function generateSignalFromData(
             isLiquiditySweep: isSweepHigh || isSweepLow,
             fvgZone: isBullishFvg || isBearishFvg,
             isOrderBlock: usingStructuralStop,
-        }
-    } as any;
+        },
+        // Pre-computed indicator values — used by runSignalCycle to build ML features
+        // without recalculating the same indicators a second time.
+        mlData: {
+            _rsi: rsi,
+            _adx: adx,
+            _atr_rel: atr / currentPrice,
+            _dist_ema20: (currentPrice - lastEma20) / currentPrice,
+            _dist_ema50: (currentPrice - lastEma50) / currentPrice,
+            _dist_ema200: (currentPrice - lastEma200) / currentPrice,
+            _dist_vwap: (currentPrice - vwap) / currentPrice,
+            _volume_rel: rvol,
+        },
+    } satisfies TradeSignal;
 }
 
 // ──── Engine Loop ────
@@ -710,20 +757,21 @@ async function runSignalCycle(): Promise<void> {
                     continue;
                 }
 
-                // Data Collection para o Machine Learning — reutiliza valores já calculados internamente
-                // para evitar recalcular os mesmos indicadores uma segunda vez por símbolo.
-                const closes = ohlc.map(c => c.close);
+                // Data Collection para o Machine Learning — reusa os valores pré-calculados que
+                // foram armazenados no signal.mlData durante generateSignalFromData.
+                // Isso elimina o duplo recalculo de RSI, ADX, ATR, VWAP, RVOL, EMAs.
+                const precomputed = signal.mlData ?? {};
                 const features = {
                     symbol_id: getSymbolId(symbol),
-                    rsi: calculateRSI(closes),
-                    adx: calculateADX(ohlc),
-                    atr_rel: calculateATR(ohlc) / currentPrice,
-                    dist_ema20: (currentPrice - (calculateEMA(closes, 20).pop() || currentPrice)) / currentPrice,
-                    dist_ema50: (currentPrice - (calculateEMA(closes, 50).pop() || currentPrice)) / currentPrice,
-                    dist_ema200: (currentPrice - (calculateEMA(closes, 200).pop() || currentPrice)) / currentPrice,
-                    dist_vwap: (currentPrice - calculateVWAP(ohlc)) / currentPrice,
+                    rsi:        precomputed._rsi        ?? 50,
+                    adx:        precomputed._adx        ?? 25,
+                    atr_rel:    precomputed._atr_rel    ?? 0,
+                    dist_ema20: precomputed._dist_ema20 ?? 0,
+                    dist_ema50: precomputed._dist_ema50 ?? 0,
+                    dist_ema200:precomputed._dist_ema200 ?? 0,
+                    dist_vwap:  precomputed._dist_vwap  ?? 0,
                     volatility_24h: high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0,
-                    volume_rel: calculateRVOL(ohlc),
+                    volume_rel: precomputed._volume_rel ?? 1,
                     funding_rate: fundingRate,
                     open_interest_var: 0,
                     long_short_ratio: 1,
@@ -740,8 +788,8 @@ async function runSignalCycle(): Promise<void> {
                     dominance_btc: 50,
                     fear_greed: 50,
                 };
-                
-                // Sempre salvar o contexto completo para que o TradeTracker recolha no Stop/TP
+
+                // Salva o contexto completo substituindo os campos _underscored pelo features final
                 signal.mlData = { ...features };
 
                 // ML enrichment

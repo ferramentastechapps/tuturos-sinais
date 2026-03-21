@@ -331,6 +331,19 @@ class PaperTradingEngine {
             .filter(p => p.status === 'open')
             .reduce((sum, p) => sum + p.unrealizedPnl, 0);
         this.state.equity = this.state.balance + this.state.marginInUse + unrealized;
+
+        // Record equity snapshot every tick for MaxDrawdown tracking
+        this.state.equityCurve.push({
+            timestamp: Date.now(),
+            equity: this.state.equity,
+            balance: this.state.balance,
+            openPositions: this.state.positions.filter(p => p.status === 'open').length,
+        });
+
+        // Keep only the last 10000 points (~1 day at 1-tick-per-10s) to limit memory
+        if (this.state.equityCurve.length > 10000) {
+            this.state.equityCurve.shift();
+        }
     }
 
     // ──── Metrics ────
@@ -346,6 +359,47 @@ class PaperTradingEngine {
         const totalGross = wins.reduce((s, o) => s + o.netPnl, 0);
         const totalLoss = Math.abs(losses.reduce((s, o) => s + o.netPnl, 0));
 
+        // ── Sharpe Ratio (annualized, risk-free = 0) ──
+        const returns = h.map(o => o.pnlPercent);
+        let sharpeRatio = 0;
+        if (returns.length > 1) {
+            const avgReturn = returns.reduce((s, r) => s + r, 0) / returns.length;
+            const variance = returns.reduce((s, r) => s + Math.pow(r - avgReturn, 2), 0) / (returns.length - 1);
+            const stdDev = Math.sqrt(variance);
+            if (stdDev > 0) {
+                // Annualize assuming ~365 trades/year (roughly 1 per day)
+                sharpeRatio = (avgReturn / stdDev) * Math.sqrt(365);
+            }
+        }
+
+        // ── MaxDrawdown (over equity curve) ──
+        let maxDrawdown = 0;
+        let maxDrawdownPercent = 0;
+        const curve = this.state.equityCurve;
+        if (curve.length > 1) {
+            let peak = curve[0].equity;
+            for (const point of curve) {
+                if (point.equity > peak) peak = point.equity;
+                const dd = peak - point.equity;
+                if (dd > maxDrawdown) {
+                    maxDrawdown = dd;
+                    maxDrawdownPercent = peak > 0 ? (dd / peak) * 100 : 0;
+                }
+            }
+        }
+
+        // ── PnL by time window ──
+        const now = Date.now();
+        const startOfToday = new Date();
+        startOfToday.setUTCHours(0, 0, 0, 0);
+        const todayMs = startOfToday.getTime();
+        const weekMs = now - 7 * 24 * 60 * 60 * 1000;
+        const monthMs = now - 30 * 24 * 60 * 60 * 1000;
+
+        const pnlToday = h.filter(o => o.exitTime >= todayMs).reduce((s, o) => s + o.netPnl, 0);
+        const pnlWeek  = h.filter(o => o.exitTime >= weekMs).reduce((s, o) => s + o.netPnl, 0);
+        const pnlMonth = h.filter(o => o.exitTime >= monthMs).reduce((s, o) => s + o.netPnl, 0);
+
         return {
             totalTrades: h.length,
             winningTrades: wins.length,
@@ -356,9 +410,9 @@ class PaperTradingEngine {
             totalPnL,
             totalPnLPercent: this.state.config.initialBalance > 0 ? (totalPnL / this.state.config.initialBalance) * 100 : 0,
             profitFactor: totalLoss > 0 ? totalGross / totalLoss : totalGross > 0 ? Infinity : 0,
-            sharpeRatio: 0,
-            maxDrawdown: 0,
-            maxDrawdownPercent: 0,
+            sharpeRatio,
+            maxDrawdown,
+            maxDrawdownPercent,
             avgWin: wins.length > 0 ? totalGross / wins.length : 0,
             avgLoss: losses.length > 0 ? totalLoss / losses.length : 0,
             expectancy: h.length > 0 ? totalPnL / h.length : 0,
@@ -368,9 +422,9 @@ class PaperTradingEngine {
             maxConsecutiveLosses: 0,
             totalFees: h.reduce((s, o) => s + o.fees, 0),
             totalFunding: h.reduce((s, o) => s + o.fundingPaid, 0),
-            pnlToday: 0,
-            pnlWeek: 0,
-            pnlMonth: 0,
+            pnlToday,
+            pnlWeek,
+            pnlMonth,
         };
     }
 

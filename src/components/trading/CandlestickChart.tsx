@@ -6,7 +6,8 @@ import { detectPatterns, CandlestickPattern, getPatternEmoji } from '@/utils/can
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, CandlestickChart as CandlestickIcon, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
+import { Loader2, CandlestickChart as CandlestickIcon, TrendingUp, TrendingDown, Minus, Info, Maximize2, Minimize2, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   Tooltip as UITooltip,
@@ -22,6 +23,7 @@ interface CandlestickChartProps {
 
 export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
   const [interval, setInterval] = useState<BybitInterval>('60');
+  const [isExpanded, setIsExpanded] = useState(false);
   const { data: ohlcData, isLoading, error } = useOHLCData(symbol, interval);
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -201,6 +203,48 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
   }, [ohlcData, patterns]);
 
   return (
+    <>
+      {/* Fullscreen Overlay */}
+      {isExpanded && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-sm p-4"
+          style={{ backgroundColor: 'hsl(var(--background))' }}
+        >
+          {/* Expanded Header */}
+          <div className="flex items-center justify-between mb-3 shrink-0">
+            <div className="flex items-center gap-3">
+              <CandlestickIcon className="w-5 h-5 text-primary" />
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Gráfico de Velas</h3>
+                <p className="text-sm text-muted-foreground">{name}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Tabs value={interval} onValueChange={(v) => setInterval(v as BybitInterval)}>
+                <TabsList className="bg-muted/50 flex-wrap h-auto gap-0.5 p-1">
+                  {BYBIT_TIMEFRAMES.map((tf) => (
+                    <TabsTrigger key={tf.interval} value={tf.interval} className="text-xs px-2 py-1">
+                      {tf.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)} className="h-8 w-8">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          {/* Expanded Chart Area */}
+          <div className="flex-1 min-h-0" ref={chartContainerRef} />
+          {/* MA Legend strip */}
+          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground shrink-0">
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#f59e0b' }} /><span>EMA 9</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3b82f6' }} /><span>EMA 21</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#a855f7' }} /><span>SMA 50</span></div>
+          </div>
+        </div>
+      )}
+
     <div className="trading-card">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -219,6 +263,9 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             ))}
           </TabsList>
         </Tabs>
+        <Button variant="ghost" size="icon" onClick={() => setIsExpanded(true)} className="h-8 w-8 ml-1" title="Expandir gráfico">
+          <Maximize2 className="h-4 w-4" />
+        </Button>
       </div>
 
       {isLoading ? (
@@ -317,5 +364,6 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
         </>
       )}
     </div>
+    </>
   );
 };

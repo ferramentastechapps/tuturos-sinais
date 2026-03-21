@@ -49,7 +49,7 @@ export interface TradeSignal {
     stopLoss: number;
     riskReward: number;
     timeframe: string;
-    status: 'active' | 'hit_tp' | 'hit_sl' | 'cancelled';
+    status: 'pending' | 'active' | 'hit_tp' | 'hit_sl' | 'cancelled';
     confidence: number;
     createdAt: Date;
     indicators: string[];
@@ -63,7 +63,16 @@ export interface TradeSignal {
         liquidity: any[];
         isLiquiditySweep?: boolean;
         fvgZone?: boolean;
+        isOrderBlock?: boolean;
     };
+    dynamicLeverage?: number;
+    positionSizePercent?: number;
+    riskPercent?: number;
+    tradeType?: string;
+    expectedDuration?: string;
+    mtfContext?: { macro: string[]; medium: string[]; micro: string[] };
+    contextNarrative?: string;
+    obEntryZone?: { low: number; high: number } | null;
     patterns?: string[];
     mlData?: {
         probability?: number;

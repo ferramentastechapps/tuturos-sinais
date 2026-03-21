@@ -41,6 +41,12 @@ export const config = {
         maxPositions: parseInt(process.env.MAX_SIMULTANEOUS_POSITIONS || '5', 10),
     },
 
+    // Risk Management
+    riskManagement: {
+        riskPercent: parseFloat(process.env.RISK_PERCENT || '3.0'),   // % da banca por trade
+        marginPercent: parseFloat(process.env.MARGIN_PERCENT || '10.0'), // % da banca como margem
+    },
+
     // Signal engine intervals
     engine: {
         signalIntervalMs: parseInt(process.env.SIGNAL_INTERVAL_MS || '300000', 10), // 5 min

@@ -146,7 +146,7 @@ export class TradeTracker {
       // Trailing Stop Logic (Step-based after TP1)
       const tp1 = signal.take_profits.find(t => t.level === 1);
       if (tp1 && tp1.hit && !hitAnyTP && signal.status === 'ACTIVE') {
-         this.processTrailingStop(signal, update.price);
+         await this.processTrailingStop(signal, update.price);
       }
     }
   }

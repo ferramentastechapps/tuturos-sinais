@@ -107,6 +107,12 @@ class BybitConnector extends EventEmitter {
 
             // --- TICKER CLIENT SETUPS ---
             this.wsClient.on('open', async () => {
+                if (this.reconnectAttempts > 0) {
+                    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+                    logger.info(`Applying exponential backoff of ${delay}ms before resubscribing Tickers`, { attempts: this.reconnectAttempts });
+                    await new Promise(r => setTimeout(r, delay));
+                }
+                
                 this.connected = true;
                 this.reconnectAttempts = 0;
                 logger.info('Bybit WebSocket (Tickers) connected.');
@@ -147,6 +153,11 @@ class BybitConnector extends EventEmitter {
 
             // --- KLINE CLIENT SETUPS ---
             this.wsKlineClient.on('open', async () => {
+                if (this.reconnectAttempts > 0) {
+                    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+                    logger.info(`Applying exponential backoff of ${delay}ms before resubscribing Klines`);
+                    await new Promise(r => setTimeout(r, delay));
+                }
                 logger.info('Bybit WebSocket (Klines) connected.');
 
                 // Queue the rest of kline chunks
