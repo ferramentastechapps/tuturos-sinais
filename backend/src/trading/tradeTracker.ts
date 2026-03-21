@@ -1,6 +1,6 @@
 import { priceStream, PriceUpdate } from './priceStream.js';
 import { supabase } from '../lib/supabaseClient.js';
-import { sendTPNotification, sendSLNotification, sendTrailingStopUpdate } from '../notifications/telegramService.js';
+import { sendTPNotification, sendSLNotification, sendTrailingStopUpdate, sendActivationNotification } from '../notifications/telegramService.js';
 
 export interface TakeProfit {
   price: number;
@@ -37,7 +37,7 @@ export class TradeTracker {
     const { data, error } = await supabase
       .from('active_signals')
       .select('*')
-      .eq('status', 'ACTIVE');
+      .in('status', ['ACTIVE', 'PENDING']);
 
     if (error) {
       console.error('[TradeTracker] Failed to load signals', error);
@@ -92,6 +92,29 @@ export class TradeTracker {
     if (!signals || signals.length === 0) return;
 
     for (const signal of signals) {
+      if (signal.status === 'PENDING') {
+         // Check if price reached the entry zone or crossed it
+         const isEntered = update.price >= signal.entry_range_low && update.price <= signal.entry_range_high;
+         const isCrossedLong = signal.type === 'LONG' && update.price < signal.entry_range_low;
+         const isCrossedShort = signal.type === 'SHORT' && update.price > signal.entry_range_high;
+
+         if (isEntered || isCrossedLong || isCrossedShort) {
+             console.log(`[TradeTracker] Signal ${signal.pair} ACTIVATED at ${update.price}`);
+             signal.status = 'ACTIVE';
+             
+             try {
+                await supabase.from('active_signals').update({ status: 'ACTIVE' }).eq('id', signal.id);
+                this.logEvent(signal.id, 'ACTIVATED', `Order activated at ${update.price}`, update.price).catch(()=>{});
+             } catch (e) { /* ignore pg error */ }
+             
+             sendActivationNotification(signal, update.price).catch(e => console.error('TG error', e));
+             
+             // Fall through to allow immediate initial TP/SL check if necessary
+         } else {
+             continue; // Wait for activation
+         }
+      }
+
       if (signal.status !== 'ACTIVE') continue;
 
       // Check Stop Loss

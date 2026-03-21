@@ -176,7 +176,8 @@ class TelegramService {
         const hasAnchoredVWAP = indNames.some(n => n?.includes('Anchored VWAP'));
 
         const textLines = [
-            `${emoji} <b>SINAL ${dir} — ${data.symbol}</b>`,
+            `${emoji} <b>ORDEM PENDENTE ${dir} — ${data.symbol}</b>`,
+            `⚠️ <i>Aguardando entrada na zona...</i>`,
             data.tradeType ? `⏱️ Estilo: ${data.tradeType} (Aprox. ${data.expectedDuration})` : null,
             `🎯 Score: ${data.score}/100 (${data.scoreLabel})`,
             data.mtfContext ? `` : null,
@@ -213,7 +214,7 @@ class TelegramService {
 
         // Dispara o Push Notification paralelamente
         broadcastPushNotification({
-            title: `Sinal ${dir} — ${data.symbol}`,
+            title: `Pendente ${dir} — ${data.symbol}`,
             body: `Entrada: $${formatPrice(data.entryZone.min)} | Alvo: $${formatPrice(data.takeProfits[0]?.price)} | Risco: ${data.riskPercent.toFixed(1)}%`,
         }).catch(err => logger.error('Web Push failed to broadcast', { error: err.message }));
 
@@ -366,6 +367,27 @@ class TelegramService {
         ].join('\n');
         return this.send(text, 'take_profit', signal.pair);
     }
+
+    async sendActivationNotification(signal: any, currentPrice: number): Promise<TelegramSendResult> {
+        const dir = signal.type;
+        const emoji = dir === 'LONG' ? '🟢' : '🔴';
+        const text = [
+            `🚨 <b>ORDEM ATIVADA — ${signal.pair}</b>`,
+            `${emoji} O preço atingiu a zona de entrada!`,
+            ``,
+            `💰 Preço de Entrada: $${formatPrice(currentPrice)}`,
+            `🎯 Alvos e Stop Loss sendo rastreados.`,
+            ``,
+            `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+        ].join('\n');
+        
+        broadcastPushNotification({
+            title: `Ordem Ativada — ${signal.pair}`,
+            body: `Entrada acionada em $${formatPrice(currentPrice)}`,
+        }).catch(err => logger.error('Web Push failed to broadcast', { error: err.message }));
+
+        return this.send(text, 'new_signal', signal.pair);
+    }
 }
 
 export const telegramService = new TelegramService();
@@ -373,3 +395,4 @@ export const telegramService = new TelegramService();
 export const sendTPNotification = (signal: any, tp: any, currentPrice: number) => telegramService.sendTakeProfitNotification(signal, tp, currentPrice);
 export const sendSLNotification = (signal: any, currentPrice: number) => telegramService.sendStopLossNotification(signal, currentPrice);
 export const sendTrailingStopUpdate = (signal: any, currentPrice: number, oldSl: number, newSl: number) => telegramService.sendTrailingStopUpdate(signal, currentPrice, oldSl, newSl);
+export const sendActivationNotification = (signal: any, currentPrice: number) => telegramService.sendActivationNotification(signal, currentPrice);
