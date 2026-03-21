@@ -544,28 +544,28 @@ function generateSignalFromData(
     let usingStructuralStop = false;
 
     if (type === 'long' && priceInBullishOB && bullishOB) {
-        // ICT: stop below structural swing low with 0.1% buffer
-        const structuralStop = swingLow * 0.999;
-        stopLossDistance = ((currentPrice - structuralStop) / currentPrice) * 100;
+        // ICT: stop below structural swing low OR the order block low, whichever is safer (lower)
+        const structuralStop = Math.min(swingLow, bullishOB.low) * 0.999;
+        stopLossDistance = Math.max(((currentPrice - structuralStop) / currentPrice) * 100, 0.5);
         obEntryLow = bullishOB.low;
         obEntryHigh = bullishOB.high;
         usingStructuralStop = true;
     } else if (type === 'short' && priceInBearishOB && bearishOB) {
-        // ICT: stop above structural swing high with 0.1% buffer
-        const structuralStop = swingHigh * 1.001;
-        stopLossDistance = ((structuralStop - currentPrice) / currentPrice) * 100;
+        // ICT: stop above structural swing high OR the order block high, whichever is safer (higher)
+        const structuralStop = Math.max(swingHigh, bearishOB.high) * 1.001;
+        stopLossDistance = Math.max(((structuralStop - currentPrice) / currentPrice) * 100, 0.5);
         obEntryLow = bearishOB.low;
         obEntryHigh = bearishOB.high;
         usingStructuralStop = true;
     } else if (type === 'long' && isSweepLow) {
         const lowestWick = ohlc[ohlc.length - 1].low;
-        stopLossDistance = ((currentPrice - lowestWick) / currentPrice * 100) * 1.05;
+        stopLossDistance = Math.max(((currentPrice - lowestWick) / currentPrice * 100) * 1.05, 0.5);
     } else if (type === 'short' && isSweepHigh) {
         const highestWick = ohlc[ohlc.length - 1].high;
-        stopLossDistance = ((highestWick - currentPrice) / currentPrice * 100) * 1.05;
+        stopLossDistance = Math.max(((highestWick - currentPrice) / currentPrice * 100) * 1.05, 0.5);
     } else {
         const atrMultiplier = type === macroTrend ? 1.5 : 1.0;
-        stopLossDistance = Math.max(atrPercent * atrMultiplier, 1);
+        stopLossDistance = Math.max(atrPercent * atrMultiplier, 0.5);
     }
 
     // Fibonacci TP extensions when structural stop is used, standard ratio otherwise
