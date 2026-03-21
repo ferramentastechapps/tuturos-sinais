@@ -208,28 +208,15 @@ export function calculateAnchoredVWAP(ohlc: OHLCPoint[], anchorType: 'day' | 'we
 
 export function detectFVG(ohlc: OHLCPoint[]): { isBullishFvg: boolean, isBearishFvg: boolean } {
     if (ohlc.length < 3) return { isBullishFvg: false, isBearishFvg: false };
-
-    // Scan the last 12 candles for the most recent valid FVG (instead of only the last 3)
-    const lookback = Math.min(ohlc.length - 2, 12);
-    let isBullishFvg = false;
-    let isBearishFvg = false;
-
-    for (let offset = 0; offset < lookback; offset++) {
-        const c1 = ohlc[ohlc.length - 3 - offset];
-        const c3 = ohlc[ohlc.length - 1 - offset];
-        if (!c1 || !c3) break;
-
-        // Bullish FVG: Low da vela 3 > High da vela 1 (gap de pressão compradora)
-        if (!isBullishFvg && c3.low > c1.high && c1.close > c1.open) {
-            isBullishFvg = true;
-        }
-        // Bearish FVG: High da vela 3 < Low da vela 1 (gap de pressão vendedora)
-        if (!isBearishFvg && c3.high < c1.low && c1.close < c1.open) {
-            isBearishFvg = true;
-        }
-        if (isBullishFvg && isBearishFvg) break;
-    }
-
+    const c1 = ohlc[ohlc.length - 3];
+    const c3 = ohlc[ohlc.length - 1];
+    
+    // Bullish FVG: Low da vela 3 é muito MAIOR que a High da vela 1 (GAP de Alta)
+    const isBullishFvg = c3.low > c1.high && c1.close > c1.open; 
+    
+    // Bearish FVG: High da vela 3 é muito MENOR que a Low da vela 1 (GAP de Baixa)
+    const isBearishFvg = c3.high < c1.low && c1.close < c1.open;
+    
     return { isBullishFvg, isBearishFvg };
 }
 
