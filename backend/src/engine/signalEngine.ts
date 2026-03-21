@@ -697,7 +697,7 @@ async function runSignalCycle(): Promise<void> {
                 symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h
             );
 
-            if (signal && signal.quality && signal.quality.score >= 65) {
+            if (signal && signal.quality && signal.quality.score >= 75) {
                 // Prevent duplicate spam: check if we already have a recent signal for this same pair and direction
                 const existingRecent = activeSignals.find(s => 
                     s.pair === symbol && 
@@ -710,18 +710,20 @@ async function runSignalCycle(): Promise<void> {
                     continue;
                 }
 
-                // Data Collection para o Machine Learning (Retreinamento)
+                // Data Collection para o Machine Learning — reutiliza valores já calculados internamente
+                // para evitar recalcular os mesmos indicadores uma segunda vez por símbolo.
+                const closes = ohlc.map(c => c.close);
                 const features = {
                     symbol_id: getSymbolId(symbol),
-                    rsi: calculateRSI(ohlc.map(c => c.close)),
+                    rsi: calculateRSI(closes),
                     adx: calculateADX(ohlc),
                     atr_rel: calculateATR(ohlc) / currentPrice,
-                    dist_ema20: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 20).pop() || currentPrice)) / currentPrice,
-                    dist_ema50: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 50).pop() || currentPrice)) / currentPrice,
-                    dist_ema200: (currentPrice - (calculateEMA(ohlc.map(c => c.close), 200).pop() || currentPrice)) / currentPrice,
-                    dist_vwap: (currentPrice - calculateVWAP(ohlc)) / currentPrice, // Dynamic actual VWAP distance
+                    dist_ema20: (currentPrice - (calculateEMA(closes, 20).pop() || currentPrice)) / currentPrice,
+                    dist_ema50: (currentPrice - (calculateEMA(closes, 50).pop() || currentPrice)) / currentPrice,
+                    dist_ema200: (currentPrice - (calculateEMA(closes, 200).pop() || currentPrice)) / currentPrice,
+                    dist_vwap: (currentPrice - calculateVWAP(ohlc)) / currentPrice,
                     volatility_24h: high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0,
-                    volume_rel: calculateRVOL(ohlc), // Dynamic RVOL
+                    volume_rel: calculateRVOL(ohlc),
                     funding_rate: fundingRate,
                     open_interest_var: 0,
                     long_short_ratio: 1,
@@ -779,6 +781,13 @@ async function runSignalCycle(): Promise<void> {
                         const isOB = anySignal.smartMoney?.isOrderBlock;
                         const isSweep = anySignal.smartMoney?.isLiquiditySweep;
                         const obZone = anySignal.obEntryZone;
+
+                        // BUG FIX: Calcular entryZone aqui para reutilizar tanto no Telegram
+                        // quanto no TradeTracker — evita o TypeError de anySignal.entryZone undefined.
+                        const entryZone = obZone
+                            ? { min: obZone.low, max: obZone.high }
+                            : { min: signal.entry * 0.998, max: signal.entry * 1.002 };
+
                         const tgResult = await telegramService.sendNewSignal({
                             type: signal.type,
                             symbol: signal.pair,
@@ -786,9 +795,7 @@ async function runSignalCycle(): Promise<void> {
                             scoreLabel: signal.quality.score >= 80 ? 'Excelente' : signal.quality.score >= 70 ? 'Bom' : 'Moderado',
                             timeframe: signal.timeframe,
                             currentPrice: signal.entry,
-                            entryZone: obZone
-                                ? { min: obZone.low, max: obZone.high }
-                                : { min: signal.entry * 0.998, max: signal.entry * 1.002 },
+                            entryZone,
                             stopLoss: {
                                 price: signal.stopLoss,
                                 percent: Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100,
@@ -817,8 +824,8 @@ async function runSignalCycle(): Promise<void> {
                             pair: signal.pair,
                             type: signal.type.toUpperCase() as 'LONG' | 'SHORT',
                             trade_type: anySignal.tradeType,
-                            entry_range_low: anySignal.entryZone.min,
-                            entry_range_high: anySignal.entryZone.max,
+                            entry_range_low: entryZone.min,
+                            entry_range_high: entryZone.max,
                             stop_loss: signal.stopLoss,
                             initial_stop_loss: signal.stopLoss,
                             take_profits: [
