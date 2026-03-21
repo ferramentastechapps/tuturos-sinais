@@ -1,102 +1,105 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useCallback } from 'react';
 import { PortfolioAsset, PortfolioSummary, PortfolioAssetWithMetrics } from '@/types/portfolio';
-import { CryptoPair } from '@/types/trading';
 import { useCryptoPrices } from './useCryptoPrices';
-
-const STORAGE_KEY = 'crypto-portfolio';
-
-const loadFromStorage = (): PortfolioAsset[] => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map((asset: PortfolioAsset) => ({
-        ...asset,
-        createdAt: new Date(asset.createdAt),
-        updatedAt: new Date(asset.updatedAt),
-      }));
-    }
-  } catch (error) {
-    console.error('Error loading portfolio from storage:', error);
-  }
-  return [];
-};
-
-const saveToStorage = (assets: PortfolioAsset[]) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(assets));
-  } catch (error) {
-    console.error('Error saving portfolio to storage:', error);
-  }
-};
+import { apiClient } from '@/services/apiClient';
 
 export const usePortfolio = () => {
-  const [assets, setAssets] = useState<PortfolioAsset[]>(() => loadFromStorage());
+  const queryClient = useQueryClient();
   const { data: livePrices } = useCryptoPrices();
 
-  // Persist to localStorage whenever assets change
-  useEffect(() => {
-    saveToStorage(assets);
-  }, [assets]);
+  const { data: rawAssets = [] } = useQuery<any[]>({
+    queryKey: ['portfolio-assets'],
+    queryFn: async () => {
+      const { data } = await apiClient.get('/portfolio/assets');
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 5000,
+  });
+
+  // Map snake_case to camelCase
+  const assets: PortfolioAsset[] = useMemo(() => rawAssets.map(a => ({
+    id: a.id,
+    symbol: a.symbol,
+    name: a.name,
+    quantity: Number(a.quantity),
+    averageBuyPrice: Number(a.average_buy_price),
+    totalFees: Number(a.total_fees),
+    createdAt: new Date(a.created_at),
+    updatedAt: new Date(a.updated_at),
+  })), [rawAssets]);
+
+  const addAssetMutation = useMutation({
+    mutationFn: async (asset: Partial<PortfolioAsset> & { name?: string }) => {
+      const { data } = await apiClient.post('/portfolio/assets', {
+        symbol: asset.symbol,
+        name: asset.name,
+        quantity: asset.quantity,
+        average_buy_price: asset.averageBuyPrice,
+        total_fees: asset.totalFees
+      });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolio-assets'] });
+    }
+  });
+
+  const removeAssetMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/portfolio/assets/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolio-assets'] });
+    }
+  });
 
   const addAsset = useCallback((symbol: string, quantity: number, buyPrice: number, fee: number = 0) => {
     const pair = livePrices?.find(p => p.symbol === symbol);
     if (!pair) return;
 
-    setAssets(prev => {
-      const existing = prev.find(a => a.symbol === symbol);
-      const now = new Date();
+    // Check if it already exists to calculate new average price
+    const existing = assets.find(a => a.symbol === symbol);
+    if (existing) {
+      const totalQuantity = existing.quantity + quantity;
+      const existingTotalFees = existing.totalFees || 0;
+      const totalValue = (existing.quantity * existing.averageBuyPrice) + (quantity * buyPrice) + fee;
+      const newAvgPrice = totalValue / totalQuantity;
 
-      if (existing) {
-        // Update existing: calculate new average price including fees
-        const totalQuantity = existing.quantity + quantity;
-        const existingTotalFees = existing.totalFees || 0;
-        const totalValue = (existing.quantity * existing.averageBuyPrice) + (quantity * buyPrice) + fee;
-        const newAvgPrice = totalValue / totalQuantity;
-
-        return prev.map(a =>
-          a.symbol === symbol
-            ? { 
-                ...a, 
-                quantity: totalQuantity, 
-                averageBuyPrice: newAvgPrice, 
-                totalFees: existingTotalFees + fee,
-                updatedAt: now 
-              }
-            : a
-        );
-      }
-
-      // Add new asset
-      const newAsset: PortfolioAsset = {
-        id: crypto.randomUUID(),
+      addAssetMutation.mutate({
+        symbol,
+        name: pair.name,
+        quantity: totalQuantity,
+        averageBuyPrice: newAvgPrice,
+        totalFees: existingTotalFees + fee
+      });
+    } else {
+      addAssetMutation.mutate({
         symbol,
         name: pair.name,
         quantity,
-        averageBuyPrice: buyPrice + (fee / quantity), // Include fee in average price
-        createdAt: now,
-        updatedAt: now,
-        totalFees: fee,
-      };
-
-      return [...prev, newAsset];
-    });
-  }, [livePrices]);
+        averageBuyPrice: buyPrice + (fee / quantity),
+        totalFees: fee
+      });
+    }
+  }, [livePrices, assets, addAssetMutation]);
 
   const removeAsset = useCallback((id: string) => {
-    setAssets(prev => prev.filter(a => a.id !== id));
-  }, []);
+    removeAssetMutation.mutate(id);
+  }, [removeAssetMutation]);
 
   const updateAsset = useCallback((id: string, quantity: number, buyPrice: number) => {
-    setAssets(prev =>
-      prev.map(a =>
-        a.id === id
-          ? { ...a, quantity, averageBuyPrice: buyPrice, updatedAt: new Date() }
-          : a
-      )
-    );
-  }, []);
+    const assetToUpdate = assets.find(a => a.id === id);
+    if (assetToUpdate) {
+      addAssetMutation.mutate({
+        symbol: assetToUpdate.symbol,
+        name: assetToUpdate.name,
+        quantity,
+        averageBuyPrice: buyPrice,
+        totalFees: assetToUpdate.totalFees
+      });
+    }
+  }, [assets, addAssetMutation]);
 
   const getAssetWithMetrics = useCallback((asset: PortfolioAsset): PortfolioAssetWithMetrics => {
     const pair = livePrices?.find(p => p.symbol === asset.symbol);

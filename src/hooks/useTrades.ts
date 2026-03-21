@@ -1,45 +1,73 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trade, TradeWithMetrics, TradesSummary } from '@/types/trades';
 import { useCryptoPrices } from './useCryptoPrices';
 import { useIndicatorPerformance } from './useIndicatorPerformance';
 import { ActiveIndicatorState } from '@/types/indicatorPerformanceTypes';
-
-const STORAGE_KEY = 'crypto-trades';
-
-const loadFromStorage = (): Trade[] => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map((trade: Trade) => ({
-        ...trade,
-        createdAt: new Date(trade.createdAt),
-        closedAt: trade.closedAt ? new Date(trade.closedAt) : undefined,
-      }));
-    }
-  } catch (error) {
-    console.error('Error loading trades from storage:', error);
-  }
-  return [];
-};
-
-const saveToStorage = (trades: Trade[]) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
-  } catch (error) {
-    console.error('Error saving trades to storage:', error);
-  }
-};
+import { apiClient } from '@/services/apiClient';
 
 export const useTrades = () => {
-  const [trades, setTrades] = useState<Trade[]>(() => loadFromStorage());
+  const queryClient = useQueryClient();
   const { data: livePrices } = useCryptoPrices();
   const { recordClosedTrade } = useIndicatorPerformance();
 
-  useEffect(() => {
-    saveToStorage(trades);
-  }, [trades]);
+  const { data: rawTrades = [] } = useQuery<any[]>({
+    queryKey: ['user-trades'],
+    queryFn: async () => {
+      const { data } = await apiClient.get('/user-trades');
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 5000,
+  });
+
+  // Map snake_case to camelCase
+  const trades: Trade[] = useMemo(() => rawTrades.map(t => ({
+    id: t.id,
+    symbol: t.symbol,
+    name: t.name,
+    type: t.type,
+    entryPrice: Number(t.entry_price),
+    exitPrice: t.exit_price !== null ? Number(t.exit_price) : undefined,
+    quantity: Number(t.quantity),
+    entryFee: Number(t.entry_fee),
+    exitFee: t.exit_fee !== null ? Number(t.exit_fee) : undefined,
+    status: t.status,
+    notes: t.notes,
+    exchange: t.exchange,
+    signalIndicators: t.signal_indicators,
+    profileUsed: t.profile_used,
+    createdAt: new Date(t.created_at),
+    closedAt: t.closed_at ? new Date(t.closed_at) : undefined,
+  })), [rawTrades]);
+
+  const addTradeMutation = useMutation({
+    mutationFn: async (tradeBody: any) => {
+      const { data } = await apiClient.post('/user-trades', tradeBody);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-trades'] });
+    }
+  });
+
+  const closeTradeMutation = useMutation({
+    mutationFn: async ({ id, exit_price, exit_fee }: any) => {
+      const { data } = await apiClient.put(`/user-trades/${id}/close`, { exit_price, exit_fee });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-trades'] });
+    }
+  });
+
+  const deleteTradeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/user-trades/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-trades'] });
+    }
+  });
 
   const addTrade = useCallback((
     symbol: string,
@@ -55,70 +83,63 @@ export const useTrades = () => {
     const pair = livePrices?.find(p => p.symbol === symbol);
     if (!pair) return;
 
-    const newTrade: Trade = {
-      id: crypto.randomUUID(),
+    addTradeMutation.mutate({
       symbol,
       name: pair.name,
       type,
-      entryPrice,
+      entry_price: entryPrice,
       quantity,
-      status: 'open',
-      createdAt: new Date(),
-      entryFee,
+      entry_fee: entryFee,
       notes,
       exchange,
-      signalIndicators,
-      profileUsed
-    };
-
-    setTrades(prev => [newTrade, ...prev]);
-  }, [livePrices]);
+      signal_indicators: signalIndicators || [],
+      profile_used: profileUsed
+    });
+  }, [livePrices, addTradeMutation]);
 
   const closeTrade = useCallback((id: string, exitPrice: number, exitFee: number = 0) => {
-    setTrades(prev => {
-      const trade = prev.find(t => t.id === id);
-      if (!trade) return prev;
-      
-      const newTrade = { ...trade, exitPrice, exitFee, status: 'closed' as const, closedAt: new Date() };
-      
-      // Calculate PnL locally to send to performance recorder
-      if (trade.signalIndicators && trade.signalIndicators.length > 0) {
-        const investedValue = trade.quantity * trade.entryPrice;
-        const currentValue = trade.quantity * exitPrice;
-        
-        let pnl = trade.type === 'buy' 
-          ? currentValue - investedValue
-          : investedValue - currentValue;
-          
-        const pnlPercentage = investedValue > 0 ? (pnl / investedValue) * 100 : 0;
-        const isWin = pnlPercentage > 0;
-        
-        // Build active indicators array (all confirmed for now, ideally we'd pass their actual weight/confirmation status from the original signal, but we'll assume they were confirmed if they appeared in signalIndicators, and we'll leave weight default to 100 or fake it for analysis)
-        // In a real scenario we'd track the exact condition at generation time.
-        const activeIndicators: ActiveIndicatorState[] = trade.signalIndicators.map(key => ({
-          key: key as any,
-          weight: 100,
-          confirmed: true 
-        }));
-        
-        // This runs asynchronously in background
-        recordClosedTrade({
-          symbol: trade.symbol,
-          result: isWin ? 'win' : 'loss',
-          profitPercent: pnlPercentage,
-          direction: trade.type === 'buy' ? 'long' : 'short',
-          activeIndicators,
-          profileUsed: trade.profileUsed
-        }).catch(e => console.error("Failed to record trade performance:", e));
+    const trade = trades.find(t => t.id === id);
+    if (!trade) return;
+    
+    closeTradeMutation.mutate(
+      { id, exit_price: exitPrice, exit_fee: exitFee },
+      {
+        onSuccess: () => {
+          // Calculate PnL locally to send to performance recorder
+          if (trade.signalIndicators && trade.signalIndicators.length > 0) {
+            const investedValue = trade.quantity * trade.entryPrice;
+            const currentValue = trade.quantity * exitPrice;
+            
+            let pnl = trade.type === 'buy' 
+              ? currentValue - investedValue
+              : investedValue - currentValue;
+              
+            const pnlPercentage = investedValue > 0 ? (pnl / investedValue) * 100 : 0;
+            const isWin = pnlPercentage > 0;
+            
+            const activeIndicators: ActiveIndicatorState[] = trade.signalIndicators.map(key => ({
+              key: key as any,
+              weight: 100,
+              confirmed: true 
+            }));
+            
+            recordClosedTrade({
+              symbol: trade.symbol,
+              result: isWin ? 'win' : 'loss',
+              profitPercent: pnlPercentage,
+              direction: trade.type === 'buy' ? 'long' : 'short',
+              activeIndicators,
+              profileUsed: trade.profileUsed
+            }).catch(e => console.error("Failed to record trade performance:", e));
+          }
+        }
       }
-      
-      return prev.map(t => t.id === id ? newTrade : t);
-    });
-  }, [recordClosedTrade]);
+    );
+  }, [trades, closeTradeMutation, recordClosedTrade]);
 
   const deleteTrade = useCallback((id: string) => {
-    setTrades(prev => prev.filter(trade => trade.id !== id));
-  }, []);
+    deleteTradeMutation.mutate(id);
+  }, [deleteTradeMutation]);
 
   const getTradeWithMetrics = useCallback((trade: Trade): TradeWithMetrics => {
     const pair = livePrices?.find(p => p.symbol === trade.symbol);
@@ -132,13 +153,10 @@ export const useTrades = () => {
     // Calculate fees
     const totalFees = (trade.entryFee || 0) + (trade.exitFee || 0);
     
-    // For buy: profit when price goes up
-    // For sell (short): profit when price goes down
     let pnl = trade.type === 'buy' 
       ? currentValue - investedValue
       : investedValue - currentValue;
     
-    // Subtract fees from P&L
     pnl -= totalFees;
     
     const pnlPercentage = investedValue > 0 ? (pnl / investedValue) * 100 : 0;

@@ -12,6 +12,9 @@ import { getUptime, getUptimeMs } from '../notifications/systemAlerts.js';
 import { getConnectedClients } from './wsServer.js';
 import pushRoutes from './routes/pushRoutes.js';
 import tradeRoutes from './routes/tradeRoutes.js';
+import portfolioRoutes from './routes/portfolioRoutes.js';
+import tradeHistoryRoutes from './routes/tradeHistoryRoutes.js';
+import indicatorAlertsRoutes from './routes/indicatorAlertsRoutes.js';
 
 const router = Router();
 
@@ -297,5 +300,10 @@ router.use('/push', pushRoutes);
 
 // ──── Live Trading ────
 router.use('/trade', tradeRoutes);
+
+// ──── User Data ────
+router.use('/portfolio', portfolioRoutes);
+router.use('/user-trades', tradeHistoryRoutes);
+router.use('/alerts', indicatorAlertsRoutes);
 
 export { router as apiRouter };
