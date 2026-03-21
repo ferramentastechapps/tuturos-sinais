@@ -157,6 +157,7 @@ export class TradeTracker {
     const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
     const trailDistance = Math.abs(signal.take_profits[0].price - entryAvg); // e.g. 1R step
     
+    let newSl = signal.stop_loss;
     const tradeDir = signal.type.toUpperCase();
     if (tradeDir === 'LONG') {
       const pendingSl = currentPrice - trailDistance;
