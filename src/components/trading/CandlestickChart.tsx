@@ -1,26 +1,12 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { createChart, ColorType, IChartApi, ISeriesApi, SeriesMarker, Time, CrosshairMode } from 'lightweight-charts';
 import { useOHLCData } from '@/hooks/useOHLCData';
 import { BybitInterval, BYBIT_TIMEFRAMES } from '@/services/bybitOHLC';
 import { detectPatterns, CandlestickPattern, getPatternEmoji } from '@/utils/candlestickPatterns';
-import {
-  ComposedChart,
-  Bar,
-  Cell,
-  Line,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ResponsiveContainer,
-  Customized,
-  ReferenceLine,
-} from 'recharts';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, CandlestickChart as CandlestickIcon, TrendingUp, TrendingDown, Minus, Info, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Loader2, CandlestickChart as CandlestickIcon, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip as UITooltip,
@@ -34,159 +20,100 @@ interface CandlestickChartProps {
   name: string;
 }
 
-const formatDate = (timestamp: number, interval: BybitInterval) => {
-  const date = new Date(timestamp);
-  // Intraday intervals show time
-  if (['1', '3', '5', '15', '30', '60', '120', '240', '360', '720'].includes(interval)) {
-    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  }
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-};
-
-const formatPrice = (price: number) => {
-  if (price >= 1000) {
-    return `$${price.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  }
-  if (price >= 1) {
-    return `$${price.toFixed(2)}`;
-  }
-  return `$${price.toFixed(4)}`;
-};
-
-// Render all candlesticks via Customized for proper Y-axis mapping
-const CandlesticksLayer = (props: any) => {
-  const { xAxisMap, yAxisMap, formattedGraphicalItems } = props;
-  if (!xAxisMap || !yAxisMap) return null;
-
-  const xAxis = Object.values(xAxisMap)[0] as any;
-  const yAxis = (yAxisMap as any)['price'];
-  if (!xAxis?.scale || !yAxis?.scale) return null;
-
-  const items = formattedGraphicalItems?.[0]?.props?.data || [];
-  const bandWidth = xAxis.bandSize || (xAxis.width / Math.max(items.length, 1));
-  const candleWidth = Math.max(bandWidth * 0.8, 6);
-
-  return (
-    <g>
-      {items.map((entry: any, index: number) => {
-        const d = entry?.payload;
-        if (!d || d.open == null) return null;
-
-        const { open, close, high, low } = d;
-        const isBullish = close >= open;
-        const bullColor = '#22c55e';
-        const bearColor = '#ef4444';
-        const color = isBullish ? bullColor : bearColor;
-
-        const cx = xAxis.scale(d.timestamp) + bandWidth / 2;
-        const yHigh = yAxis.scale(high);
-        const yLow = yAxis.scale(low);
-        const yOpen = yAxis.scale(open);
-        const yClose = yAxis.scale(close);
-
-        const bodyTop = Math.min(yOpen, yClose);
-        const bodyHeight = Math.max(Math.abs(yOpen - yClose), 2.5);
-
-        return (
-          <g key={index}>
-            <line x1={cx} y1={yHigh} x2={cx} y2={yLow} stroke={color} strokeWidth={1.5} />
-            <rect
-              x={cx - candleWidth / 2}
-              y={bodyTop}
-              width={candleWidth}
-              height={bodyHeight}
-              fill={isBullish ? bullColor : bearColor}
-              stroke={color}
-              strokeWidth={0.5}
-              rx={0.5}
-            />
-          </g>
-        );
-      })}
-    </g>
-  );
-};
-
-// Custom tooltip
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload || !payload[0]) return null;
-  
-  const data = payload[0].payload;
-  const isBullish = data.close >= data.open;
-  
-  return (
-    <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
-      <p className="text-xs text-muted-foreground mb-2">
-        {new Date(data.timestamp).toLocaleString('pt-BR')}
-      </p>
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <span className="text-muted-foreground">Abertura:</span>
-          <span className="ml-1 font-mono">{formatPrice(data.open)}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Fechamento:</span>
-          <span className={cn("ml-1 font-mono", isBullish ? "text-success" : "text-destructive")}>
-            {formatPrice(data.close)}
-          </span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Máxima:</span>
-          <span className="ml-1 font-mono text-success">{formatPrice(data.high)}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Mínima:</span>
-          <span className="ml-1 font-mono text-destructive">{formatPrice(data.low)}</span>
-        </div>
-      </div>
-      {data.pattern && (
-        <div className="mt-2 pt-2 border-t border-border">
-          <Badge variant={data.pattern.signal === 'bullish' ? 'default' : data.pattern.signal === 'bearish' ? 'destructive' : 'secondary'}>
-            {getPatternEmoji(data.pattern.type)} {data.pattern.name}
-          </Badge>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
   const [interval, setInterval] = useState<BybitInterval>('60');
   const { data: ohlcData, isLoading, error } = useOHLCData(symbol, interval);
-  const [selectedPattern, setSelectedPattern] = useState<CandlestickPattern | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1); // 1 = show all data
+  
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRefs = useRef<{
+    candleSeries?: ISeriesApi<"Candlestick">;
+    volumeSeries?: ISeriesApi<"Histogram">;
+    ema9Series?: ISeriesApi<"Line">;
+    ema21Series?: ISeriesApi<"Line">;
+    sma50Series?: ISeriesApi<"Line">;
+    bbUpperSeries?: ISeriesApi<"Line">;
+    bbLowerSeries?: ISeriesApi<"Line">;
+    bbMiddleSeries?: ISeriesApi<"Line">;
+  }>({});
 
-  const handleZoomIn = useCallback(() => {
-    setZoomLevel(prev => Math.min(prev + 0.5, 5));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setZoomLevel(prev => Math.max(prev - 0.5, 1));
-  }, []);
-
-  const handleResetZoom = useCallback(() => {
-    setZoomLevel(1);
-  }, []);
-
-  // Detect patterns
   const patterns = useMemo(() => {
     if (!ohlcData || ohlcData.length < 3) return [];
     return detectPatterns(ohlcData);
   }, [ohlcData]);
 
-  // Prepare chart data with patterns, apply zoom (show last N candles)
-  const chartData = useMemo(() => {
-    if (!ohlcData) return [];
+  const patternSummary = useMemo(() => {
+    const bullish = patterns.filter(p => p.signal === 'bullish').length;
+    const bearish = patterns.filter(p => p.signal === 'bearish').length;
+    const neutral = patterns.filter(p => p.signal === 'neutral').length;
+    return { bullish, bearish, neutral };
+  }, [patterns]);
 
-    // Calculate MAs on full dataset before slicing
+  useEffect(() => {
+    if (!chartContainerRef.current || !ohlcData || ohlcData.length === 0) return;
+
+    // Create chart
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: '#9ca3af',
+      },
+      grid: {
+        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { width: 1, color: 'rgba(255, 255, 255, 0.2)', style: 3 },
+        horzLine: { width: 1, color: 'rgba(255, 255, 255, 0.2)', style: 3 },
+      },
+      rightPriceScale: {
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+      },
+      timeScale: {
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        timeVisible: true,
+        secondsVisible: false,
+      },
+      autoSize: true,
+    });
+    chartRef.current = chart;
+
+    // Series Setup
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderVisible: false,
+      wickUpColor: '#26a69a',
+      wickDownColor: '#ef5350',
+    });
+
+    const volumeSeries = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: '', // set as an overlay by setting a blank priceScaleId
+      scaleMargins: { top: 0.8, bottom: 0 },
+    });
+
+    const ema9Series = chart.addLineSeries({ color: '#f59e0b', lineWidth: 1, crosshairMarkerVisible: false });
+    const ema21Series = chart.addLineSeries({ color: '#3b82f6', lineWidth: 1, crosshairMarkerVisible: false });
+    const sma50Series = chart.addLineSeries({ color: '#a855f7', lineWidth: 1, crosshairMarkerVisible: false });
+    const bbUpperSeries = chart.addLineSeries({ color: 'rgba(5b, 130, 246, 0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
+    const bbMiddleSeries = chart.addLineSeries({ color: 'rgba(5b, 130, 246, 0.3)', lineWidth: 1, crosshairMarkerVisible: false });
+    const bbLowerSeries = chart.addLineSeries({ color: 'rgba(5b, 130, 246, 0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false });
+
+    seriesRefs.current = { candleSeries, volumeSeries, ema9Series, ema21Series, sma50Series, bbUpperSeries, bbMiddleSeries, bbLowerSeries };
+
+    // Calculate Indicators
     const closes = ohlcData.map(c => c.close);
+    
     const calcSMA = (data: number[], period: number, idx: number) => {
       if (idx < period - 1) return undefined;
       let sum = 0;
       for (let i = idx - period + 1; i <= idx; i++) sum += data[i];
       return sum / period;
     };
-    const calcEMA = (data: number[], period: number): (number | undefined)[] => {
+    
+    const calcEMA = (data: number[], period: number) => {
       const result: (number | undefined)[] = new Array(data.length).fill(undefined);
       if (data.length < period) return result;
       let sum = 0;
@@ -201,18 +128,33 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
 
     const ema9 = calcEMA(closes, 9);
     const ema21 = calcEMA(closes, 21);
-
-    // Bollinger Bands (20-period SMA, 2 std devs)
+    
     const bbPeriod = 20;
     const bbStdDev = 2;
 
-    const allData = ohlcData.map((candle, index) => {
-      const pattern = patterns.find(p => p.index === index);
+    const candleData: any[] = [];
+    const volumeData: any[] = [];
+    const ema9Data: any[] = [];
+    const ema21Data: any[] = [];
+    const sma50Data: any[] = [];
+    const bbUpperData: any[] = [];
+    const bbMiddleData: any[] = [];
+    const bbLowerData: any[] = [];
+    const markers: SeriesMarker<Time>[] = [];
 
-      let bbUpper: number | undefined;
-      let bbMiddle: number | undefined;
-      let bbLower: number | undefined;
+    ohlcData.forEach((candle, index) => {
+      const time = (Math.floor(candle.timestamp / 1000)) as Time;
+      
+      candleData.push({ time, open: candle.open, high: candle.high, low: candle.low, close: candle.close });
+      volumeData.push({ time, value: candle.volume, color: candle.close >= candle.open ? 'rgba(38, 166, 154, 0.3)' : 'rgba(239, 83, 80, 0.3)' });
+      
+      if (ema9[index] !== undefined) ema9Data.push({ time, value: ema9[index] });
+      if (ema21[index] !== undefined) ema21Data.push({ time, value: ema21[index] });
+      
+      const sma50val = calcSMA(closes, 50, index);
+      if (sma50val !== undefined) sma50Data.push({ time, value: sma50val });
 
+      // Calculate BB
       if (index >= bbPeriod - 1) {
         let sum = 0;
         for (let i = index - bbPeriod + 1; i <= index; i++) sum += closes[i];
@@ -220,53 +162,46 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
         let sqSum = 0;
         for (let i = index - bbPeriod + 1; i <= index; i++) sqSum += (closes[i] - mean) ** 2;
         const std = Math.sqrt(sqSum / bbPeriod);
-        bbMiddle = mean;
-        bbUpper = mean + bbStdDev * std;
-        bbLower = mean - bbStdDev * std;
+        bbMiddleData.push({ time, value: mean });
+        bbUpperData.push({ time, value: mean + bbStdDev * std });
+        bbLowerData.push({ time, value: mean - bbStdDev * std });
       }
 
-      return {
-        ...candle,
-        range: candle.high - candle.low,
-        pattern,
-        volColor: candle.close >= candle.open ? '#22c55e' : '#ef4444',
-        ema9: ema9[index],
-        ema21: ema21[index],
-        sma50: calcSMA(closes, 50, index),
-        bbUpper,
-        bbMiddle,
-        bbLower,
-      };
+      // Add Markers for patterns
+      const pattern = patterns.find(p => p.index === index);
+      if (pattern) {
+        markers.push({
+          time,
+          position: pattern.signal === 'bullish' ? 'belowBar' : pattern.signal === 'bearish' ? 'aboveBar' : 'inBar',
+          color: pattern.signal === 'bullish' ? '#26a69a' : pattern.signal === 'bearish' ? '#ef5350' : '#888',
+          shape: pattern.signal === 'bullish' ? 'arrowUp' : pattern.signal === 'bearish' ? 'arrowDown' : 'circle',
+          text: getPatternEmoji(pattern.type),
+        });
+      }
     });
 
-    if (zoomLevel <= 1) return allData;
+    candleSeries.setData(candleData);
+    volumeSeries.setData(volumeData);
+    ema9Series.setData(ema9Data);
+    ema21Series.setData(ema21Data);
+    sma50Series.setData(sma50Data);
+    bbUpperSeries.setData(bbUpperData);
+    bbMiddleSeries.setData(bbMiddleData);
+    bbLowerSeries.setData(bbLowerData);
+    
+    if (markers.length > 0) {
+      candleSeries.setMarkers(markers);
+    }
 
-    const visibleCount = Math.max(Math.floor(allData.length / zoomLevel), 10);
-    return allData.slice(-visibleCount);
-  }, [ohlcData, patterns, zoomLevel]);
+    chart.timeScale().fitContent();
 
-  // Calculate price domain from visible data
-  const priceDomain = useMemo(() => {
-    if (!chartData || chartData.length === 0) return [0, 100];
-    const highs = chartData.map(d => d.high);
-    const lows = chartData.map(d => d.low);
-    const min = Math.min(...lows);
-    const max = Math.max(...highs);
-    const padding = (max - min) * 0.05;
-    return [min - padding, max + padding];
-  }, [chartData]);
-
-  // Pattern summary
-  const patternSummary = useMemo(() => {
-    const bullish = patterns.filter(p => p.signal === 'bullish').length;
-    const bearish = patterns.filter(p => p.signal === 'bearish').length;
-    const neutral = patterns.filter(p => p.signal === 'neutral').length;
-    return { bullish, bearish, neutral };
-  }, [patterns]);
+    return () => {
+      chart.remove();
+    };
+  }, [ohlcData, patterns]);
 
   return (
     <div className="trading-card">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <CandlestickIcon className="w-5 h-5 text-primary" />
@@ -275,7 +210,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             <p className="text-sm text-muted-foreground">{name}</p>
           </div>
         </div>
-        <Tabs value={interval} onValueChange={(v) => { setInterval(v as BybitInterval); setZoomLevel(1); }}>
+        <Tabs value={interval} onValueChange={(v) => setInterval(v as BybitInterval)}>
           <TabsList className="bg-muted/50 flex-wrap h-auto gap-0.5 p-1">
             {BYBIT_TIMEFRAMES.map((tf) => (
               <TabsTrigger key={tf.interval} value={tf.interval} className="text-xs px-2 py-1">
@@ -287,20 +222,19 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
       </div>
 
       {isLoading ? (
-        <div className="h-[350px] flex items-center justify-center">
+        <div className="h-[430px] flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
       ) : error ? (
-        <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+        <div className="h-[430px] flex items-center justify-center text-muted-foreground">
           Falha ao carregar dados OHLC
         </div>
-      ) : chartData.length === 0 ? (
-        <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+      ) : ohlcData && ohlcData.length === 0 ? (
+        <div className="h-[430px] flex items-center justify-center text-muted-foreground">
           Dados indisponíveis
         </div>
       ) : (
         <>
-          {/* Pattern Summary */}
           <div className="grid grid-cols-3 gap-2 mb-4">
             <div className="flex items-center gap-2 p-2 rounded-lg bg-success/10">
               <TrendingUp className="w-4 h-4 text-success" />
@@ -325,148 +259,13 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             </div>
           </div>
 
-          {/* Zoom Controls */}
-          <div className="flex items-center justify-end gap-1 mb-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={handleZoomIn}
-              disabled={zoomLevel >= 5}
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={handleZoomOut}
-              disabled={zoomLevel <= 1}
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={handleResetZoom}
-              disabled={zoomLevel === 1}
-            >
-              <Maximize2 className="h-4 w-4" />
-            </Button>
-            {zoomLevel > 1 && (
-              <span className="text-xs text-muted-foreground ml-1">{zoomLevel.toFixed(1)}x</span>
-            )}
-          </div>
+          <div className="h-[400px] mb-4 relative" ref={chartContainerRef} />
 
-          {/* Candlestick + Volume Chart */}
-          <div className="h-[400px] mb-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="hsl(var(--muted-foreground))"
-                  strokeOpacity={0.12}
-                  horizontal={true}
-                  vertical={true}
-                />
-                <XAxis
-                  dataKey="timestamp"
-                  tickFormatter={(val) => formatDate(val, interval)}
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
-                  minTickGap={30}
-                />
-                {/* Price axis */}
-                <YAxis
-                  yAxisId="price"
-                  domain={priceDomain}
-                  tickFormatter={formatPrice}
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
-                  width={65}
-                />
-                {/* Volume axis (hidden, occupies bottom 20%) */}
-                <YAxis
-                  yAxisId="volume"
-                  orientation="right"
-                  domain={[0, (dataMax: number) => dataMax * 5]}
-                  hide
-                />
-                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                
-                {/* Pattern markers */}
-                {patterns.map((pattern, idx) => (
-                  <ReferenceLine
-                    key={`pattern-${idx}`}
-                    yAxisId="price"
-                    x={pattern.timestamp}
-                    stroke={
-                      pattern.signal === 'bullish'
-                        ? 'hsl(var(--success))'
-                        : pattern.signal === 'bearish'
-                        ? 'hsl(var(--destructive))'
-                        : 'hsl(var(--muted-foreground))'
-                    }
-                    strokeDasharray="3 3"
-                    strokeOpacity={0.5}
-                  />
-                ))}
-
-                {/* Bollinger Bands - shaded area */}
-                <Area yAxisId="price" type="monotone" dataKey="bbUpper" stroke="none" fill="hsl(var(--primary))" fillOpacity={0.06} connectNulls isAnimationActive={false} />
-                <Area yAxisId="price" type="monotone" dataKey="bbLower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} connectNulls isAnimationActive={false} />
-                <Line yAxisId="price" type="monotone" dataKey="bbUpper" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="4 2" dot={false} connectNulls isAnimationActive={false} name="BB Upper" />
-                <Line yAxisId="price" type="monotone" dataKey="bbMiddle" stroke="hsl(var(--primary))" strokeWidth={1} strokeOpacity={0.5} dot={false} connectNulls isAnimationActive={false} name="BB Middle" />
-                <Line yAxisId="price" type="monotone" dataKey="bbLower" stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="4 2" dot={false} connectNulls isAnimationActive={false} name="BB Lower" />
-
-                {/* Volume bars */}
-                <Bar
-                  yAxisId="volume"
-                  dataKey="volume"
-                  isAnimationActive={false}
-                  radius={[1, 1, 0, 0]}
-                  opacity={0.35}
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`vol-${index}`} fill={entry.volColor} />
-                  ))}
-                </Bar>
-                
-                {/* Moving Averages */}
-                <Line yAxisId="price" type="monotone" dataKey="ema9" stroke="#f59e0b" strokeWidth={1.2} dot={false} name="EMA 9" connectNulls />
-                <Line yAxisId="price" type="monotone" dataKey="ema21" stroke="#3b82f6" strokeWidth={1.2} dot={false} name="EMA 21" connectNulls />
-                <Line yAxisId="price" type="monotone" dataKey="sma50" stroke="#a855f7" strokeWidth={1.2} dot={false} name="SMA 50" connectNulls />
-
-                {/* Hidden bar to feed data for candles */}
-                <Bar yAxisId="price" dataKey="range" fill="transparent" isAnimationActive={false} />
-                <Customized component={CandlesticksLayer} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* MA Legend */}
           <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#f59e0b' }} />
-              <span>EMA 9</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#3b82f6' }} />
-              <span>EMA 21</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 rounded-full inline-block" style={{ backgroundColor: '#a855f7' }} />
-              <span>SMA 50</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 rounded-full inline-block border-t border-dashed border-primary opacity-70" />
-              <span>Bollinger Bands</span>
-            </div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#f59e0b' }} /><span>EMA 9</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3b82f6' }} /><span>EMA 21</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#a855f7' }} /><span>SMA 50</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: 'rgba(5b,130,246,0.5)' }} /><span>Bollinger</span></div>
           </div>
 
           {patterns.length > 0 && (
@@ -492,26 +291,13 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                           >
                             <span className="text-lg">{getPatternEmoji(pattern.type)}</span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-foreground truncate">
-                                {pattern.name}
-                              </p>
+                              <p className="text-sm font-medium text-foreground truncate">{pattern.name}</p>
                               <p className="text-xs text-muted-foreground">
-                                {new Date(pattern.timestamp).toLocaleString('pt-BR', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
+                                {new Date(pattern.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
                             <Badge
-                              variant={
-                                pattern.signal === 'bullish'
-                                  ? 'default'
-                                  : pattern.signal === 'bearish'
-                                  ? 'destructive'
-                                  : 'secondary'
-                              }
+                              variant={pattern.signal === 'bullish' ? 'default' : pattern.signal === 'bearish' ? 'destructive' : 'secondary'}
                               className="text-xs"
                             >
                               {pattern.signal === 'bullish' ? 'ALTA' : pattern.signal === 'bearish' ? 'BAIXA' : 'NEUTRO'}
@@ -526,14 +312,6 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
                   ))}
                 </div>
               </ScrollArea>
-            </div>
-          )}
-
-          {patterns.length === 0 && (
-            <div className="border-t border-border pt-4">
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Nenhum padrão significativo detectado no período selecionado
-              </p>
             </div>
           )}
         </>
