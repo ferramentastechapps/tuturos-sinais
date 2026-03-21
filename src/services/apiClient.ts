@@ -13,7 +13,7 @@ export const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 3000,
+    timeout: 10000,
 });
 
 // Request interceptor — block requests when no backend is configured

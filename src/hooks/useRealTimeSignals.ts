@@ -34,7 +34,7 @@ export const useRealTimeSignals = (options: UseRealTimeSignalsOptions = {}) => {
   const { symbol, limit = 50 } = options;
 
   const { data: signals = [], isLoading, error } = useQuery<TradeSignal[]>({
-    queryKey: ['real-time-signals', limit],
+    queryKey: ['real-time-signals', symbol ?? 'all', limit],
     queryFn: async ({ signal: abortSignal }) => {
       if (!API_BASE) {
         console.warn('[useRealTimeSignals] VITE_API_URL not configured');

@@ -5,25 +5,39 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { PrivateRoute } from "@/components/auth/PrivateRoute";
+import { Suspense, lazy } from "react";
+import { Loader2 } from "lucide-react";
+
+// Core routes loaded immediately
 import Login from "./pages/Login";
 import Index from "./pages/Index";
 import Portfolio from "./pages/Portfolio";
 import Trades from "./pages/Trades";
-import Analytics from "./pages/Analytics";
-import Transactions from "./pages/Transactions";
-import TaxReport from "./pages/TaxReport";
-import Settings from "./pages/Settings";
-import Profile from "./pages/Profile";
-import NotFound from "./pages/NotFound";
-import RiskManagement from "./pages/RiskManagement";
-import Backtesting from "./pages/Backtesting";
-import MLAnalytics from "./pages/MLAnalytics";
-import PaperTrading from "./pages/PaperTrading";
-import StrategyConfig from "./pages/StrategyConfig";
-import SymbolAnalysis from "./pages/SymbolAnalysis";
+// Lazy load heavier / less frequently accessed routes
+const Analytics = lazy(() => import("./pages/Analytics"));
+const Transactions = lazy(() => import("./pages/Transactions"));
+const TaxReport = lazy(() => import("./pages/TaxReport"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Profile = lazy(() => import("./pages/Profile"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const RiskManagement = lazy(() => import("./pages/RiskManagement"));
+const Backtesting = lazy(() => import("./pages/Backtesting")); // Very heavy (53KB)
+const MLAnalytics = lazy(() => import("./pages/MLAnalytics"));
+const PaperTrading = lazy(() => import("./pages/PaperTrading"));
+const StrategyConfig = lazy(() => import("./pages/StrategyConfig")); // Heavy (31KB)
+const SymbolAnalysis = lazy(() => import("./pages/SymbolAnalysis"));
+
 import { BottomNav } from "@/components/layout/BottomNav";
 
 const queryClient = new QueryClient();
+
+const PageLoader = () => (
+  <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="flex flex-col items-center gap-4">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  </div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -32,29 +46,31 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            {/* Public route — only accessible without auth */}
-            <Route path="/login" element={<Login />} />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* Public route — only accessible without auth */}
+              <Route path="/login" element={<Login />} />
 
-            {/* Protected routes — require valid admin session */}
-            <Route path="/" element={<PrivateRoute><Index /></PrivateRoute>} />
-            <Route path="/portfolio" element={<PrivateRoute><Portfolio /></PrivateRoute>} />
-            <Route path="/trades" element={<PrivateRoute><Trades /></PrivateRoute>} />
-            <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
-            <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />
-            <Route path="/tax-report" element={<PrivateRoute><TaxReport /></PrivateRoute>} />
-            <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
-            <Route path="/risk-management" element={<PrivateRoute><RiskManagement /></PrivateRoute>} />
-            <Route path="/backtesting" element={<PrivateRoute><Backtesting /></PrivateRoute>} />
-            <Route path="/ml-analytics" element={<PrivateRoute><MLAnalytics /></PrivateRoute>} />
-            <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-            <Route path="/paper-trading" element={<PrivateRoute><PaperTrading /></PrivateRoute>} />
-            <Route path="/strategy-config" element={<PrivateRoute><StrategyConfig /></PrivateRoute>} />
-            <Route path="/symbol-analysis" element={<PrivateRoute><SymbolAnalysis /></PrivateRoute>} />
+              {/* Protected routes — require valid admin session */}
+              <Route path="/" element={<PrivateRoute><Index /></PrivateRoute>} />
+              <Route path="/portfolio" element={<PrivateRoute><Portfolio /></PrivateRoute>} />
+              <Route path="/trades" element={<PrivateRoute><Trades /></PrivateRoute>} />
+              <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
+              <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />
+              <Route path="/tax-report" element={<PrivateRoute><TaxReport /></PrivateRoute>} />
+              <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+              <Route path="/risk-management" element={<PrivateRoute><RiskManagement /></PrivateRoute>} />
+              <Route path="/backtesting" element={<PrivateRoute><Backtesting /></PrivateRoute>} />
+              <Route path="/ml-analytics" element={<PrivateRoute><MLAnalytics /></PrivateRoute>} />
+              <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+              <Route path="/paper-trading" element={<PrivateRoute><PaperTrading /></PrivateRoute>} />
+              <Route path="/strategy-config" element={<PrivateRoute><StrategyConfig /></PrivateRoute>} />
+              <Route path="/symbol-analysis" element={<PrivateRoute><SymbolAnalysis /></PrivateRoute>} />
 
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
           <BottomNav />
         </BrowserRouter>
       </TooltipProvider>

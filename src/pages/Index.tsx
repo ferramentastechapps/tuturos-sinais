@@ -269,16 +269,18 @@ const Index = () => {
             {/* Technical Analysis */}
             <TechnicalPanel symbol={selectedPair.symbol} />
 
-            {/* Dev Tools */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <AlertDemoPanel
-                onTriggerTP={() => triggerTPAlert('BTCUSDT', 69500, 3.42)}
-                onTriggerSL={() => triggerSLAlert('ETHUSDT', 3200, -4.2)}
-                onTriggerVolatility={() => triggerVolatilityAlert('SOLUSDT', 5.8)}
-                onTriggerTrend={() => triggerTrendChangeAlert('BTCUSDT', 'bullish', '4H')}
-                onTriggerEntry={() => triggerEntrySignal('BTCUSDT', 'LONG', 67500, 82)}
-              />
-            </div>
+            {/* Dev Tools — hidden in production */}
+            {import.meta.env.DEV && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <AlertDemoPanel
+                  onTriggerTP={() => triggerTPAlert('BTCUSDT', 69500, 3.42)}
+                  onTriggerSL={() => triggerSLAlert('ETHUSDT', 3200, -4.2)}
+                  onTriggerVolatility={() => triggerVolatilityAlert('SOLUSDT', 5.8)}
+                  onTriggerTrend={() => triggerTrendChangeAlert('BTCUSDT', 'bullish', '4H')}
+                  onTriggerEntry={() => triggerEntrySignal('BTCUSDT', 'LONG', 67500, 82)}
+                />
+              </div>
+            )}
           </div>
         }
 

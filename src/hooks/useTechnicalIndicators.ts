@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchHistoricalPrices } from '@/services/coingeckoChart';
+import { fetchBybitOHLC } from '@/services/bybitOHLC';
 import { 
   calculateRSI, 
   calculateMACD, 
@@ -21,13 +21,22 @@ export const useTechnicalIndicators = (symbol: string) => {
   return useQuery<TechnicalIndicator[], Error>({
     queryKey: ['technical-indicators', symbol],
     queryFn: async () => {
-      // Fetch 90 days of historical data for Ichimoku (needs 52 periods)
-      const historicalData = await fetchHistoricalPrices(symbol, '90d');
-      const prices = historicalData.prices;
+      // Fetch 1h OHLC data from Bybit to match the robot's logic (max 200 candles)
+      const ohlc = await fetchBybitOHLC(symbol, '60', 200);
 
-      if (prices.length < 52) {
+      if (ohlc.length < 52) {
         throw new Error('Insufficient data for technical analysis');
       }
+
+      // Map Bybit OHLC back to the PricePoint structure the indicators expect
+      const prices = ohlc.map(candle => ({
+        timestamp: candle.timestamp,
+        price: candle.close,
+        volume: candle.volume, 
+        high: candle.high,
+        low: candle.low,
+        open: candle.open
+      }));
 
       const indicators: TechnicalIndicator[] = [];
       const currentPrice = prices[prices.length - 1].price;
