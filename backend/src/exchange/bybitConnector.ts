@@ -193,19 +193,20 @@ class BybitConnector extends EventEmitter {
                 const tickerData = data.data;
                 const symbol = tickerData.symbol;
                 if (symbol) {
+                    const prev = this.tickers.get(symbol);
                     this.tickers.set(symbol, {
                         symbol,
-                        lastPrice: parseFloat(tickerData.lastPrice || '0'),
-                        prevPrice24h: parseFloat(tickerData.prevPrice24h || '0'),
-                        price24hPcnt: parseFloat(tickerData.price24hPcnt || '0'),
-                        highPrice24h: parseFloat(tickerData.highPrice24h || '0'),
-                        lowPrice24h: parseFloat(tickerData.lowPrice24h || '0'),
-                        volume24h: parseFloat(tickerData.volume24h || '0'),
-                        turnover24h: parseFloat(tickerData.turnover24h || '0'),
-                        fundingRate: tickerData.fundingRate || '0',
-                        nextFundingTime: tickerData.nextFundingTime || '0',
-                        openInterest: tickerData.openInterest || '0',
-                        openInterestValue: tickerData.openInterestValue || '0',
+                        lastPrice: tickerData.lastPrice !== undefined ? parseFloat(tickerData.lastPrice) : (prev?.lastPrice || 0),
+                        prevPrice24h: tickerData.prevPrice24h !== undefined ? parseFloat(tickerData.prevPrice24h) : (prev?.prevPrice24h || 0),
+                        price24hPcnt: tickerData.price24hPcnt !== undefined ? parseFloat(tickerData.price24hPcnt) : (prev?.price24hPcnt || 0),
+                        highPrice24h: tickerData.highPrice24h !== undefined ? parseFloat(tickerData.highPrice24h) : (prev?.highPrice24h || 0),
+                        lowPrice24h: tickerData.lowPrice24h !== undefined ? parseFloat(tickerData.lowPrice24h) : (prev?.lowPrice24h || 0),
+                        volume24h: tickerData.volume24h !== undefined ? parseFloat(tickerData.volume24h) : (prev?.volume24h || 0),
+                        turnover24h: tickerData.turnover24h !== undefined ? parseFloat(tickerData.turnover24h) : (prev?.turnover24h || 0),
+                        fundingRate: tickerData.fundingRate !== undefined ? tickerData.fundingRate : (prev?.fundingRate || '0'),
+                        nextFundingTime: tickerData.nextFundingTime !== undefined ? tickerData.nextFundingTime : (prev?.nextFundingTime || '0'),
+                        openInterest: tickerData.openInterest !== undefined ? tickerData.openInterest : (prev?.openInterest || '0'),
+                        openInterestValue: tickerData.openInterestValue !== undefined ? tickerData.openInterestValue : (prev?.openInterestValue || '0'),
                     });
                     this.emit('price:update', this.tickers);
                 }
