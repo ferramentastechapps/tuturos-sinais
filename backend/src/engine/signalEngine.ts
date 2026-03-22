@@ -341,7 +341,7 @@ function getIndicatorSignal(name: string, value: number): 'bullish' | 'bearish' 
     return 'neutral';
 }
 
-function generateSignalFromData(
+export function generateSignalFromData(
     symbol: string,
     ohlc: OHLCPoint[], // 1h data
     currentPrice: number,

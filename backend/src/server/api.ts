@@ -15,6 +15,7 @@ import tradeRoutes from './routes/tradeRoutes.js';
 import portfolioRoutes from './routes/portfolioRoutes.js';
 import tradeHistoryRoutes from './routes/tradeHistoryRoutes.js';
 import indicatorAlertsRoutes from './routes/indicatorAlertsRoutes.js';
+import backtestRoutes from './routes/backtestRoutes.js';
 
 const router = Router();
 
@@ -305,5 +306,8 @@ router.use('/trade', tradeRoutes);
 router.use('/portfolio', portfolioRoutes);
 router.use('/user-trades', tradeHistoryRoutes);
 router.use('/alerts', indicatorAlertsRoutes);
+
+// ──── Backtesting ────
+router.use('/backtest', backtestRoutes);
 
 export { router as apiRouter };

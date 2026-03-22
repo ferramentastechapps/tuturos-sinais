@@ -42,15 +42,21 @@ export interface TradeSignal {
     pair: string;
     type: 'long' | 'short';
     entry: number;
+    entry_range_low?: number;
+    entry_range_high?: number;
     takeProfit: number;
+    take_profits?: { level: number; price: number; percentage: number; hit: boolean }[];
     takeProfit1?: number;
     takeProfit2?: number;
     takeProfit3?: number;
     stopLoss: number;
+    stop_loss?: number;
     riskReward: number;
     timeframe: string;
     status: 'pending' | 'active' | 'hit_tp' | 'hit_sl' | 'cancelled';
     confidence: number;
+    score?: number;
+    metricsValues?: Record<string, number>;
     createdAt: Date;
     indicators: string[];
     quality?: {

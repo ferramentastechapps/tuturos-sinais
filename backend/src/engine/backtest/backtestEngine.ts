@@ -4,17 +4,11 @@
 // Integrates advancedSignalGenerator + dynamicRiskAdjuster
 // ═══════════════════════════════════════════════════════════
 
-import { OHLCPoint } from '@/services/coingeckoOHLC';
-import { generateAdvancedSignal, AdvancedSignal, AdvancedSignalInput, enrichSignalWithML } from '@/services/advancedSignalGenerator';
-import { extractFeatures } from '@/services/ml/featureExtractor';
-import {
-    calculateRSI, calculateMACD, calculateEMA, calculateVWAPFromOHLC,
-    calculateATRFromOHLC, calculateADXFromOHLC,
-} from '@/utils/technicalIndicators';
-import { TechnicalIndicator } from '@/types/trading';
+import { OHLCPoint, TradeSignal, CryptoPair } from '../../types/trading.js';
+import { generateSignalFromData } from '../signalEngine.js';
 import {
     BacktestConfig, BacktestTrade, EquityPoint, BacktestProgress,
-} from '@/types/backtestTypes';
+} from '../../types/backtestTypes.js';
 
 // ──────────── Active Position State ────────────
 
@@ -43,19 +37,37 @@ interface ActivePosition {
     mlFeatures?: Record<string, number>;
 }
 
-// ──────────── Pre-calculated Indicators ────────────
+// ──────────── Timeframe Aggregator ────────────
 
-interface IndicatorSnapshot {
-    ema20: number;
-    ema50: number;
-    ema200: number;
-    rsi: number;
-    macdValue: number;
-    macdSignal: number;
-    macdHistogram: number;
-    vwap: number;
-    atr?: number;
-    adx?: number;
+function aggregateOHLC(candles: OHLCPoint[], targetDurationMs: number): OHLCPoint[] {
+    const result: OHLCPoint[] = [];
+    if (candles.length === 0) return result;
+    
+    let currentCandle: OHLCPoint | null = null;
+    let currentBucketStart = 0;
+    
+    for (const c of candles) {
+        const bucketStart = Math.floor(c.timestamp / targetDurationMs) * targetDurationMs;
+        if (!currentCandle || bucketStart > currentBucketStart) {
+            if (currentCandle) result.push(currentCandle);
+            currentBucketStart = bucketStart;
+            currentCandle = {
+                timestamp: bucketStart,
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close,
+                volume: c.volume || 0
+            };
+        } else {
+            currentCandle.high = Math.max(currentCandle.high, c.high);
+            currentCandle.low = Math.min(currentCandle.low, c.low);
+            currentCandle.close = c.close;
+            currentCandle.volume = (currentCandle.volume || 0) + (c.volume || 0);
+        }
+    }
+    if (currentCandle) result.push(currentCandle);
+    return result;
 }
 
 // ──────────── Engine ────────────
@@ -91,12 +103,6 @@ export class BacktestEngine {
             console.warn(`[BacktestEngine] Insufficient data for ${symbol}: ${history.length} candles`);
             return { trades: [], equityCurve: [] };
         }
-
-        // Pre-calculate all indicators
-        const indicatorMap = this.preCalculateIndicators(history);
-
-        // Determine lookback for 24h approximation
-        const lookback24h = this.getLookback24h();
 
         const startIndex = 200; // Indicator warmup
         const totalBars = history.length - startIndex;
@@ -135,12 +141,25 @@ export class BacktestEngine {
             if (this.tradingStopped) continue;
             if (this.positions.length >= this.config.signal.maxSimultaneousPositions) continue;
 
-            // 5. Generate signal
-            const indicators = indicatorMap.get(candle.timestamp);
-            if (!indicators) continue;
+            // 5. Generate signal via Original Backend Logic
+            const window = history.slice(Math.max(0, i - 1000), i + 1);
+            
+            // Build MTF aggregates mock
+            const ohlc4h = aggregateOHLC(window, 4 * 60 * 60 * 1000);
+            const ohlc15m = aggregateOHLC(window, 15 * 60 * 1000);
 
-            const window = history.slice(Math.max(0, i - 300), i + 1);
-            const { signal, input } = await this.generateSignalForBar(symbol, candle, indicators, window, lookback24h);
+            // Construct additional environment required
+            const currentPrice = candle.close;
+            const recentSlice = window.slice(-24); // Assuming 1h window
+            const high24h = Math.max(...recentSlice.map(c => c.high));
+            const low24h = Math.min(...recentSlice.map(c => c.low));
+            const volume24h = recentSlice.reduce((sum, c) => sum + (c.volume || 0), 0);
+            const fundingRate = 0; // Mock 0% funding for backtesting
+
+            // Force dynamic wait for signal Engine
+            const signal = generateSignalFromData(
+                symbol, window, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h
+            );
 
             // 6. Process signal (if any)
             if (signal && this.shouldEnterTrade(signal)) {
@@ -149,7 +168,7 @@ export class BacktestEngine {
 
                 // Enter new position if allowed
                 if (this.canOpenNewPosition(symbol)) {
-                    this.executeEntry(signal, symbol, candle.timestamp, input);
+                    this.executeEntry(signal, symbol, candle.timestamp);
                 }
             }
         }
@@ -181,138 +200,14 @@ export class BacktestEngine {
         this.tradeIdCounter = 0;
     }
 
-    // ──────────── Pre-calc Indicators ────────────
-
-    private preCalculateIndicators(ohlcData: OHLCPoint[]): Map<number, IndicatorSnapshot> {
-        const prices = ohlcData.map(d => ({ timestamp: d.timestamp, price: d.close }));
-
-        const ema20 = calculateEMA(prices, 20);
-        const ema50 = calculateEMA(prices, 50);
-        const ema200 = calculateEMA(prices, 200);
-        const rsi = calculateRSI(prices, 14);
-        const macd = calculateMACD(prices);
-        const vwap = calculateVWAPFromOHLC(ohlcData);
-
-        // ATR and ADX (from OHLC)
-        let atrResults: Array<{ timestamp: number; atr: number }> = [];
-        let adxResults: Array<{ timestamp: number; adx: number }> = [];
-        try {
-            atrResults = calculateATRFromOHLC(ohlcData, 14);
-            adxResults = calculateADXFromOHLC(ohlcData, 14);
-        } catch {
-            // Functions may not exist in all versions
-        }
-
-        // Build indexed maps for O(1) access
-        const ema20Map = new Map(ema20.map(e => [e.timestamp, e.value]));
-        const ema50Map = new Map(ema50.map(e => [e.timestamp, e.value]));
-        const ema200Map = new Map(ema200.map(e => [e.timestamp, e.value]));
-        const rsiMap = new Map(rsi.map(e => [e.timestamp, e.value]));
-        const macdMap = new Map(macd.map(e => [e.timestamp, e] as [number, typeof e]));
-        const vwapMap = new Map(vwap.map(e => [e.timestamp, e.vwap] as [number, number]));
-        const atrMap = new Map(atrResults.map(e => [e.timestamp, e.atr] as [number, number]));
-        const adxMap = new Map(adxResults.map(e => [e.timestamp, e.adx] as [number, number]));
-
-        const result = new Map<number, IndicatorSnapshot>();
-
-        for (const candle of ohlcData) {
-            const t = candle.timestamp;
-            const macdEntry = macdMap.get(t);
-
-            result.set(t, {
-                ema20: ema20Map.get(t) || 0,
-                ema50: ema50Map.get(t) || 0,
-                ema200: ema200Map.get(t) || 0,
-                rsi: rsiMap.get(t) || 50,
-                macdValue: macdEntry?.macd || 0,
-                macdSignal: macdEntry?.signal || 0,
-                macdHistogram: macdEntry?.histogram || 0,
-                vwap: vwapMap.get(t) || 0,
-                atr: atrMap.get(t),
-                adx: adxMap.get(t),
-            });
-        }
-
-        return result;
-    }
-
-    // ──────────── Signal Generation ────────────
-
-    private async generateSignalForBar(
-        symbol: string,
-        candle: OHLCPoint,
-        indicators: IndicatorSnapshot,
-        window: OHLCPoint[],
-        lookback24h: number
-    ): Promise<{ signal: AdvancedSignal | null; input: AdvancedSignalInput }> {
-        const rsiValue = indicators.rsi;
-        const rsiSignal: TechnicalIndicator['signal'] =
-            rsiValue < 30 ? 'bullish' : rsiValue > 70 ? 'bearish' : 'neutral';
-
-        const macdSignal: TechnicalIndicator['signal'] =
-            indicators.macdHistogram > 0 ? 'bullish' : indicators.macdHistogram < 0 ? 'bearish' : 'neutral';
-
-        const ema20Signal: TechnicalIndicator['signal'] =
-            candle.close > indicators.ema20 ? 'bullish' : 'bearish';
-        const ema50Signal: TechnicalIndicator['signal'] =
-            candle.close > indicators.ema50 ? 'bullish' : 'bearish';
-        const ema200Signal: TechnicalIndicator['signal'] =
-            candle.close > indicators.ema200 ? 'bullish' : 'bearish';
-        const vwapSignal: TechnicalIndicator['signal'] =
-            candle.close > indicators.vwap ? 'bullish' : 'bearish';
-
-        const technicalIndicators: TechnicalIndicator[] = [
-            { name: 'RSI', value: rsiValue, signal: rsiSignal },
-            { name: 'MACD', value: indicators.macdValue, signal: macdSignal },
-            { name: 'EMA 20', value: indicators.ema20, signal: ema20Signal },
-            { name: 'EMA 50', value: indicators.ema50, signal: ema50Signal },
-            { name: 'EMA 200', value: indicators.ema200, signal: ema200Signal },
-            { name: 'VWAP', value: indicators.vwap, signal: vwapSignal },
-        ];
-
-        // Add ATR/ADX if available
-        if (indicators.atr !== undefined) {
-            technicalIndicators.push({ name: 'ATR', value: indicators.atr, signal: 'neutral' });
-        }
-        if (indicators.adx !== undefined) {
-            const adxSignal: TechnicalIndicator['signal'] = indicators.adx > 25 ? 'bullish' : 'neutral';
-            technicalIndicators.push({ name: 'ADX', value: indicators.adx, signal: adxSignal });
-        }
-
-        const recentSlice = window.slice(-lookback24h);
-        const high24h = Math.max(...recentSlice.map(c => c.high));
-        const low24h = Math.min(...recentSlice.map(c => c.low));
-        const volume24h = recentSlice.reduce((sum, c) => sum + (c.volume || 0), 0);
-
-        const signalInput: AdvancedSignalInput = {
-            symbol,
-            currentPrice: candle.close,
-            indicators: technicalIndicators,
-            high24h,
-            low24h,
-            ohlcData: window,
-            volume24h,
-        };
-
-        try {
-            let signal = generateAdvancedSignal(signalInput);
-            if (signal) {
-                signal = await enrichSignalWithML(signal, signalInput);
-            }
-            return { signal, input: signalInput };
-        } catch (e) {
-            // Swallow errors from signal generator
-            return { signal: null, input: signalInput };
-        }
-    }
-
     // ──────────── Helper Methods ────────────
 
-    private handleSignalFlip(symbol: string, signal: AdvancedSignal, timestamp: number): void {
+    private handleSignalFlip(symbol: string, signal: TradeSignal, timestamp: number): void {
         const existingPositionIndex = this.positions.findIndex(p => p.symbol === symbol);
         if (existingPositionIndex !== -1) {
             const existingPosition = this.positions[existingPositionIndex];
-            if (existingPosition.type !== signal.type) {
+            const sigType = signal.type.toLowerCase() as 'long'|'short';
+            if (existingPosition.type !== sigType) {
                 // Close the existing position at current candle's close price (signal generation price)
                 this.closePosition(existingPositionIndex, signal.entry, 'signal_flip', timestamp);
             }
@@ -332,36 +227,30 @@ export class BacktestEngine {
 
     // ──────────── Trade Filtering ────────────
 
-    private shouldEnterTrade(signal: AdvancedSignal): boolean {
+    private shouldEnterTrade(signal: TradeSignal): boolean {
         const { minScore, allowLong, allowShort } = this.config.signal;
 
+        const typeLower = signal.type.toLowerCase();
         // Direction filter
-        if (signal.type === 'long' && !allowLong) return false;
-        if (signal.type === 'short' && !allowShort) return false;
+        if (typeLower === 'long' && !allowLong) return false;
+        if (typeLower === 'short' && !allowShort) return false;
 
         // Score filter
-        if (signal.quality.score < minScore) return false;
-
-        // Confidence filter (min 60)
-        if (signal.confidence < 60) return false;
+        if ((signal.score || 0) < minScore) return false;
 
         // Capital per position
         const maxCapitalForPosition = this.equity * (this.config.signal.maxCapitalPerPosition / 100);
         if (maxCapitalForPosition < 10) return false; // Min $10
-
-        // Risk blocked
-        if (signal.riskData?.isBlocked) return false;
-
+        
         return true;
     }
 
     // ──────────── Trade Execution ────────────
 
     private executeEntry(
-        signal: AdvancedSignal,
+        signal: TradeSignal,
         symbol: string,
-        timestamp: number,
-        signalInput: AdvancedSignalInput
+        timestamp: number
     ): void {
         const maxCapital = this.equity * (this.config.signal.maxCapitalPerPosition / 100);
 
@@ -373,19 +262,22 @@ export class BacktestEngine {
         const slippageImpact = this.config.execution.slippage / 100;
         const totalEntryImpact = spreadImpact + slippageImpact;
 
-        const entryPrice = signal.type === 'long'
-            ? signal.entry * (1 + totalEntryImpact)
-            : signal.entry * (1 - totalEntryImpact);
+        const entry = signal.entry;
+        const typeLower = signal.type.toLowerCase() as 'long'|'short';
+
+        const entryPrice = typeLower === 'long'
+            ? entry * (1 + totalEntryImpact)
+            : entry * (1 - totalEntryImpact);
 
         // Position sizing
-        const riskPerTrade = signal.riskData?.riskPerTradePercent || 1;
+        const riskPerTrade = signal.riskPercent || 1;
         const riskAmount = this.equity * (riskPerTrade / 100);
         const priceDiff = Math.abs(entryPrice - signal.stopLoss);
 
         if (priceDiff === 0) return;
 
         let quantity = riskAmount / priceDiff;
-        const leverage = signal.riskData?.leverage || 1;
+        const leverage = signal.dynamicLeverage || 1;
         const maxQty = (maxCapital * leverage) / entryPrice;
         quantity = Math.min(quantity, maxQty);
 
@@ -394,7 +286,7 @@ export class BacktestEngine {
         const position: ActivePosition = {
             id: `bt_${this.tradeIdCounter++}`,
             symbol,
-            type: signal.type,
+            type: typeLower,
             entryPrice,
             quantity,
             leverage,
@@ -403,17 +295,17 @@ export class BacktestEngine {
             takeProfit2: signal.takeProfit2 || signal.takeProfit,
             takeProfit3: signal.takeProfit3 || signal.takeProfit * 1.5,
             entryTime: timestamp,
-            signalScore: signal.quality.score,
-            signalConfidence: signal.confidence,
-            signalIndicators: signal.indicators || [],
-            riskScore: signal.riskData?.score || 50,
+            signalScore: signal.score || 0,
+            signalConfidence: signal.score || 0,
+            signalIndicators: [],
+            riskScore: 50,
             maxPrice: entryPrice,
             minPrice: entryPrice,
             fundingAccumulated: 0,
             tp1Hit: false,
             tp2Hit: false,
             capitalAtEntry: this.equity,
-            mlFeatures: extractFeatures(signal, signalInput) as unknown as Record<string, number>,
+            mlFeatures: signal.metricsValues,
         };
 
         this.positions.push(position);

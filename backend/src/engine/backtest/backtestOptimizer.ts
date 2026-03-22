@@ -3,13 +3,13 @@
 // Tests multiple parameter combinations and ranks results
 // ═══════════════════════════════════════════════════════════
 
-import { OHLCPoint } from '@/services/coingeckoOHLC';
-import { BacktestEngine } from '@/utils/backtestEngine';
-import { analyzeBacktestResults } from '@/utils/backtestAnalyzer';
+import { OHLCPoint } from '../../types/trading.js';
+import { BacktestEngine } from './backtestEngine.js';
+import { analyzeBacktestResults } from './backtestAnalyzer.js';
 import {
     BacktestConfig, OptimizationConfig, OptimizationResult,
     OptimizationEntry, BacktestProgress,
-} from '@/types/backtestTypes';
+} from '../../types/backtestTypes.js';
 
 // ──────────── Grid Search ────────────
 

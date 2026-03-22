@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useBacktest } from '@/hooks/useBacktest';
 import { BacktestConfig, DEFAULT_BACKTEST_CONFIG, BacktestTrade } from '@/types/backtestTypes';
-import { DEFAULT_OPTIMIZATION_PARAMS } from '@/utils/backtestOptimizer';
+import { DEFAULT_OPTIMIZATION_PARAMS } from '@/utils/backtestHelpers';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     BarChart, Bar, ScatterChart, Scatter, Cell, Area, AreaChart, ComposedChart,

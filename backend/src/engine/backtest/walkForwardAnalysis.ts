@@ -3,14 +3,14 @@
 // Validates that backtest results are not overfitting
 // ═══════════════════════════════════════════════════════════
 
-import { OHLCPoint } from '@/services/coingeckoOHLC';
-import { BacktestEngine } from '@/utils/backtestEngine';
-import { analyzeBacktestResults } from '@/utils/backtestAnalyzer';
-import { runGridSearchOptimization } from '@/utils/backtestOptimizer';
+import { OHLCPoint } from '../../types/trading.js';
+import { BacktestEngine } from './backtestEngine.js';
+import { analyzeBacktestResults } from './backtestAnalyzer.js';
+import { runGridSearchOptimization } from './backtestOptimizer.js';
 import {
     BacktestConfig, WalkForwardConfig, WalkForwardResult,
     WalkForwardWindow, BacktestProgress, OptimizationConfig,
-} from '@/types/backtestTypes';
+} from '../../types/backtestTypes.js';
 
 /**
  * Executa Walk Forward Analysis:

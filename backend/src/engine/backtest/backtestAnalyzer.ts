@@ -8,8 +8,8 @@ import {
     MainMetrics, RiskMetrics, TimeMetrics, SignalMetrics,
     MonthlyPerformance, DayPerformance, HourPerformance,
     SignalContribution, SignalCombination, BuyAndHoldComparison,
-} from '@/types/backtestTypes';
-import { OHLCPoint } from '@/services/coingeckoOHLC';
+} from '../../types/backtestTypes.js';
+import { OHLCPoint } from '../../types/trading.js';
 
 const DAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 

@@ -8,7 +8,7 @@ import {
     getSavedResults, getLatestResult, clearSavedResults,
 } from '@/services/backtestService';
 import { getActiveAlerts, dismissAlert as dismissAlertService } from '@/services/backtestAlerts';
-import { exportTradesToCSV } from '@/utils/backtestAnalyzer';
+import { exportTradesToCSV } from '@/utils/backtestHelpers';
 import {
     BacktestConfig, BacktestResult, BacktestProgress,
     OptimizationConfig, OptimizationResult,
