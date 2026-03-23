@@ -228,8 +228,44 @@ const ConfigPanel: React.FC<{ config: BacktestConfig; setConfig: (c: BacktestCon
     const sectionStyle: React.CSSProperties = { background: '#1f2937', borderRadius: '0.75rem', padding: '1.25rem', border: '1px solid #374151' };
     const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' };
 
+    const applyPreset = (preset: 'padrao' | 'agressivo' | 'sniper') => {
+        const newConfig = JSON.parse(JSON.stringify(config)) as BacktestConfig;
+        if (preset === 'padrao') {
+            newConfig.signal.minScore = 75;
+            newConfig.signal.maxSimultaneousPositions = 5;
+            newConfig.signal.maxCapitalPerPosition = 10;
+        } else if (preset === 'agressivo') {
+            newConfig.signal.minScore = 70;
+            newConfig.signal.maxSimultaneousPositions = 8;
+            newConfig.signal.maxCapitalPerPosition = 5;
+        } else if (preset === 'sniper') {
+            newConfig.signal.minScore = 85;
+            newConfig.signal.maxSimultaneousPositions = 2;
+            newConfig.signal.maxCapitalPerPosition = 20;
+        }
+        setConfig(newConfig);
+    };
+
     return (
         <div style={{ display: 'grid', gap: '1.25rem' }}>
+            {/* Presets */}
+            <div style={sectionStyle}>
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#d1d5db', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Zap size={16} /> Presets de Estratégia
+                </h3>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <button onClick={() => applyPreset('padrao')} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', background: '#3b82f633', border: '1px solid #3b82f6', color: '#60a5fa', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                        🤖 Padrão (Score 75)
+                    </button>
+                    <button onClick={() => applyPreset('agressivo')} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', background: '#f59e0b33', border: '1px solid #f59e0b', color: '#fbbf24', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                        🔥 Agressivo (Score 70)
+                    </button>
+                    <button onClick={() => applyPreset('sniper')} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', background: '#8b5cf633', border: '1px solid #8b5cf6', color: '#c084fc', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                        🎯 Sniper (Score 85)
+                    </button>
+                </div>
+            </div>
+
             {/* Período */}
             <div style={sectionStyle}>
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#d1d5db', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

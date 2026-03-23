@@ -350,7 +350,8 @@ export function generateSignalFromData(
     volume24h: number,
     fundingRate: number,
     ohlc15m?: OHLCPoint[],
-    ohlc4h?: OHLCPoint[]
+    ohlc4h?: OHLCPoint[],
+    customMinScore?: number
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
@@ -556,7 +557,8 @@ export function generateSignalFromData(
     score = Math.min(score, 100);
 
     // Minimum score filter (Raised significantly to 75 to ensure only high probability setups pass)
-    if (score < 75) return null;
+    const finalMinScore = customMinScore !== undefined ? customMinScore : 75;
+    if (score < finalMinScore) return null;
 
     // --- ICT Order Block + Structural Stop + Fibonacci TPs ---
     let stopLossDistance = 0;
@@ -722,8 +724,8 @@ async function runSignalCycle(): Promise<void> {
 
             const ticker = bybitConnector.getTicker(symbol);
             const currentPrice = ticker?.lastPrice || ohlc[ohlc.length - 1].close;
-            const high24h = ticker?.highPrice24h || Math.max(...ohlc.slice(-24).map(c => c.high));
-            const low24h = ticker?.lowPrice24h || Math.min(...ohlc.slice(-24).map(c => c.low));
+            const high24h = ticker?.highPrice24h || Math.max(...ohlc.slice(-25, -1).map(c => c.high));
+            const low24h = ticker?.lowPrice24h || Math.min(...ohlc.slice(-25, -1).map(c => c.low));
             const volume24h = ticker?.turnover24h || 0;
             const fundingRate = parseFloat(ticker?.fundingRate || '0');
 

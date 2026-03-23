@@ -6,6 +6,7 @@
 
 import { OHLCPoint, TradeSignal, CryptoPair } from '../../types/trading.js';
 import { generateSignalFromData } from '../signalEngine.js';
+import { predictSignal, isModelLoaded, getSymbolId } from '../../ml/mlPredictionService.js';
 import {
     BacktestConfig, BacktestTrade, EquityPoint, BacktestProgress,
 } from '../../types/backtestTypes.js';
@@ -150,7 +151,9 @@ export class BacktestEngine {
 
             // Construct additional environment required
             const currentPrice = candle.close;
-            const recentSlice = window.slice(-24); // Assuming 1h window
+            // The recent slice must NOT include the current candle for calculating liquidity sweeps
+            // otherwise last.low < low24h will be impossible if low24h includes last.low!
+            const recentSlice = window.slice(-25, -1); // Assuming 1h window
             const high24h = Math.max(...recentSlice.map(c => c.high));
             const low24h = Math.min(...recentSlice.map(c => c.low));
             const volume24h = recentSlice.reduce((sum, c) => sum + (c.volume || 0), 0);
@@ -158,17 +161,69 @@ export class BacktestEngine {
 
             // Force dynamic wait for signal Engine
             const signal = generateSignalFromData(
-                symbol, window, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h
+                symbol, window, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, this.config.signal.minScore
             );
 
             // 6. Process signal (if any)
             if (signal && this.shouldEnterTrade(signal)) {
-                // Close opposite positions first
-                this.handleSignalFlip(symbol, signal, candle.timestamp);
+                let passML = true;
 
-                // Enter new position if allowed
-                if (this.canOpenNewPosition(symbol)) {
-                    this.executeEntry(signal, symbol, candle.timestamp);
+                // Emular a Inteligência Artificial do Robô
+                if (isModelLoaded()) {
+                    const precomputed = signal.mlData ?? {};
+                    const features = {
+                        symbol_id: getSymbolId(symbol),
+                        rsi:        precomputed._rsi        ?? 50,
+                        adx:        precomputed._adx        ?? 25,
+                        atr_rel:    precomputed._atr_rel    ?? 0,
+                        dist_ema20: precomputed._dist_ema20 ?? 0,
+                        dist_ema50: precomputed._dist_ema50 ?? 0,
+                        dist_ema200:precomputed._dist_ema200 ?? 0,
+                        dist_vwap:  precomputed._dist_vwap  ?? 0,
+                        volatility_24h: high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0,
+                        volume_rel: precomputed._volume_rel ?? 1,
+                        funding_rate: fundingRate,
+                        open_interest_var: 0,
+                        long_short_ratio: 1,
+                        is_long: signal.type === 'long' ? 1 : 0,
+                        confidence: signal.confidence / 100,
+                        quality_score: signal.quality.score / 100,
+                        confluence_count: signal.indicators.length,
+                        stop_loss_pct: Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100,
+                        take_profit_pct: Math.abs(signal.takeProfit - signal.entry) / signal.entry * 100,
+                        risk_reward: signal.riskReward,
+                        hour_of_day: new Date(candle.timestamp).getUTCHours(),
+                        day_of_week: new Date(candle.timestamp).getUTCDay(),
+                        btc_trend: 0,
+                        dominance_btc: 50,
+                        fear_greed: 50,
+                    };
+
+                    const prediction = await predictSignal(features);
+                    if (prediction) {
+                        signal.mlData = {
+                            ...features,
+                            probability: prediction.probability,
+                            predictedClass: prediction.predictedClass,
+                            confidence: prediction.confidence,
+                            isFiltered: prediction.probability < 0.5,
+                        };
+
+                        // Filtro que o Robô Real usa
+                        if (prediction.probability < 0.65) {
+                            passML = false;
+                        }
+                    }
+                }
+
+                if (passML) {
+                    // Close opposite positions first
+                    this.handleSignalFlip(symbol, signal, candle.timestamp);
+
+                    // Enter new position if allowed
+                    if (this.canOpenNewPosition(symbol)) {
+                        this.executeEntry(signal, symbol, candle.timestamp);
+                    }
                 }
             }
         }

@@ -1,6 +1,12 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { priceStream, PriceUpdate } from './priceStream.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { sendTPNotification, sendSLNotification, sendTrailingStopUpdate, sendActivationNotification } from '../notifications/telegramService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface TakeProfit {
   price: number;
@@ -210,6 +216,9 @@ export class TradeTracker {
       
       // ML Feedback Loop - Win
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
+
+      // Atualiza o histórico para o robô treinar
+      supabase.from('trade_signals').update({ status: 'hit_tp' }).eq('id', signal.id).catch();
     }
 
     // Save to DB Safely
@@ -234,6 +243,9 @@ export class TradeTracker {
 
     // ML Feedback Loop - Loss
     this.submitFeedbackToML(signal, 0, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
+
+    // Atualiza o histórico para o robô treinar
+    supabase.from('trade_signals').update({ status: 'hit_sl' }).eq('id', signal.id).catch();
 
     try {
         await supabase.from('active_signals').update({
@@ -309,20 +321,30 @@ export class TradeTracker {
         ? ((finalPrice - entryPrice) / entryPrice) * 100 
         : ((entryPrice - finalPrice) / entryPrice) * 100;
 
-      // 2. Insert into training table
-      const { error: insertErr } = await supabase.from('ml_training_data').insert({
+      const rowToSave = {
         signal_id: activeSignal.id,
         symbol: activeSignal.pair,
         outcome_label: outcomeLabel,
         outcome_pnl: pnl,
         entry_time: originalSignal.created_at || new Date().toISOString(),
         features: features
-      });
+      };
+
+      // 2. Insert into training table
+      const { error: insertErr } = await supabase.from('ml_training_data').insert(rowToSave);
+
+      // 3. Keep local JSONL updated for VPS local training
+      try {
+        const dataPath = path.join(__dirname, '../../../../ml_engine/data/historical_ml_data.jsonl');
+        fs.appendFileSync(dataPath, JSON.stringify(rowToSave) + '\n', 'utf-8');
+      } catch (err) {
+        console.error(`[TradeTracker] Failed to append ML data locally:`, err);
+      }
 
       if (insertErr) {
         console.error(`[TradeTracker] Failed to insert ML Feedback:`, insertErr);
       } else {
-        console.log(`[TradeTracker] ML Feedback Saved Successfully!`);
+        console.log(`[TradeTracker] ML Feedback Saved Successfully (Supabase + Local JSONL)!`);
       }
     } catch (err) {
       console.error(`[TradeTracker] Unhandled error submitting ML feedback:`, err);

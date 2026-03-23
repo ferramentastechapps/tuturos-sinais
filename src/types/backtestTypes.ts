@@ -357,9 +357,9 @@ export const DEFAULT_BACKTEST_CONFIG: BacktestConfig = {
         useMarketOrders: true,
     },
     signal: {
-        minScore: 70,
+        minScore: 75,
         maxSimultaneousPositions: 5,
-        maxCapitalPerPosition: 20,
+        maxCapitalPerPosition: 10,
         allowLong: true,
         allowShort: true,
     },

@@ -21,46 +21,74 @@ if not url or not key or "YOUR_SERVICE" in key:
 supabase: Client = create_client(url, key)
 
 def fetch_training_data():
-    print("Fetching training data from Supabase...")
+    print("Buscando dados no arquivo local (historical_ml_data.jsonl)...")
     
-    # Fetch all data (handling pagination if needed, but for now 1000 is limit)
-    # Supabase-py default limit is often 1000.
-    response = supabase.table("ml_training_data").select("*").limit(10000).execute()
+    data_file = os.path.join(os.path.dirname(__file__), 'data', 'historical_ml_data.jsonl')
     
-    data = response.data
+    if not os.path.exists(data_file):
+        print("❌ Erro no Treinamento Semanal")
+        print(f"Arquivo não encontrado: {data_file}")
+        return pd.DataFrame()
+        
+    data = []
+    with open(data_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            if line.strip():
+                data.append(json.loads(line))
     
     if not data:
-        print("Warning: No data found in 'ml_training_data'.")
-        print("Possible reasons:")
-        print("1. Table is empty (Run 'Collect Dataset' in UI).")
-        print("2. RLS is blocking access (Check if using Service Role Key).")
+        print("❌ Erro no Treinamento Semanal")
+        print("Nenhum dado encontrado no arquivo local.")
         return pd.DataFrame()
         
     print(f"Retrieved {len(data)} samples.")
     
-    # Flatten JSON features
+    # Process features and labels
     structured_data = []
     
     for row in data:
-        features = row.get('features', {})
-        if isinstance(features, str):
-            features = json.loads(features)
+        if 'outcome_label' in row:
+            # Novo formato (tradeTracker append direto da VPS)
+            label = row['outcome_label']
+            features = row.get('features', {})
+            if isinstance(features, str):
+                features = json.loads(features)
             
-        # Create a flat dictionary
-        sample = {
-            'signal_id': row.get('signal_id'),
-            'symbol': row.get('symbol'),
-            'label': row.get('outcome_label'),
-            'pnl': row.get('outcome_pnl'),
-            'entry_time': row.get('entry_time'),
-            **features # Unpack features as columns
-        }
+            sample = {
+                'signal_id': row.get('signal_id'),
+                'symbol': row.get('symbol'),
+                'label': label,
+                'pnl': row.get('outcome_pnl'),
+                'entry_time': row.get('entry_time'),
+                **features
+            }
+        else:
+            # Formato antigo exportado da tabela trade_signals
+            if row.get('status') not in ['hit_tp', 'hit_sl']:
+                continue  # ignorar pendentes/cancelados no set histórico
+
+            ml_data = row.get('ml_data') or {}
+            if isinstance(ml_data, str):
+                ml_data = json.loads(ml_data)
+                
+            features = ml_data.get('features', {})
+            if not features and 'rsi' in ml_data:
+                features = ml_data
+                
+            label = 1 if row.get('status') == 'hit_tp' else 0
+                
+            sample = {
+                'signal_id': row.get('id'),
+                'symbol': row.get('pair'),
+                'label': label,
+                'pnl': row.get('take_profit') if label == 1 else row.get('stop_loss'),
+                'entry_time': row.get('created_at'),
+                **features
+            }
+            
         structured_data.append(sample)
         
     df = pd.DataFrame(structured_data)
-    
-    # Drop non-numeric columns that won't be used for training directly if needed
-    # But keeping them for reference is good.
     
     return df
 
