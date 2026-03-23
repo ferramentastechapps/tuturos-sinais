@@ -218,7 +218,9 @@ export class TradeTracker {
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
 
       // Atualiza o histórico para o robô treinar
-      supabase.from('trade_signals').update({ status: 'hit_tp' }).eq('id', signal.id).catch();
+      supabase.from('trade_signals').update({ status: 'hit_tp' }).eq('id', signal.id).then(({ error }) => {
+        if (error) console.error('[TradeTracker] Error hit_tp:', error.message);
+      });
     }
 
     // Save to DB Safely
@@ -245,7 +247,9 @@ export class TradeTracker {
     this.submitFeedbackToML(signal, 0, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
 
     // Atualiza o histórico para o robô treinar
-    supabase.from('trade_signals').update({ status: 'hit_sl' }).eq('id', signal.id).catch();
+    supabase.from('trade_signals').update({ status: 'hit_sl' }).eq('id', signal.id).then(({ error }) => {
+      if (error) console.error('[TradeTracker] Error hit_sl:', error.message);
+    });
 
     try {
         await supabase.from('active_signals').update({

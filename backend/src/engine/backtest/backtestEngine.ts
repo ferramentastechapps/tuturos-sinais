@@ -187,7 +187,7 @@ export class BacktestEngine {
                         long_short_ratio: 1,
                         is_long: signal.type === 'long' ? 1 : 0,
                         confidence: signal.confidence / 100,
-                        quality_score: signal.quality.score / 100,
+                        quality_score: (signal.quality?.score ?? signal.confidence) / 100,
                         confluence_count: signal.indicators.length,
                         stop_loss_pct: Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100,
                         take_profit_pct: Math.abs(signal.takeProfit - signal.entry) / signal.entry * 100,
