@@ -6,6 +6,7 @@ import { bybitConnector } from '../exchange/bybitConnector.js';
 import { predictSignal, isModelLoaded, getSymbolId } from '../ml/mlPredictionService.js';
 import { telegramService } from '../notifications/telegramService.js';
 import { supabase } from '../lib/supabaseClient.js';
+import { marketContextService } from '../lib/marketContextService.js';
 import type { TradeSignal, TechnicalIndicator, OHLCPoint, CryptoPair } from '../types/trading.js';
 import { tradeTracker } from '../trading/tradeTracker.js';
 
@@ -707,6 +708,10 @@ export function generateSignalFromData(
 async function runSignalCycle(): Promise<void> {
     logger.info('Running signal generation cycle...');
 
+    // Fetch global macro context once per cycle (results are cached internally)
+    const globalCtx = await marketContextService.getGlobalContext();
+    logger.debug('[Engine] Global context', globalCtx);
+
     const symbols = config.monitoredSymbols;
     const newSignals: TradeSignal[] = [];
 
@@ -762,7 +767,7 @@ async function runSignalCycle(): Promise<void> {
                     volatility_24h: high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0,
                     volume_rel: precomputed._volume_rel ?? 1,
                     funding_rate: fundingRate,
-                    open_interest_var: 0,
+                    open_interest_var: await marketContextService.getOpenInterestVar(symbol),
                     long_short_ratio: 1,
                     is_long: signal.type === 'long' ? 1 : 0,
                     confidence: signal.confidence / 100,
@@ -773,9 +778,9 @@ async function runSignalCycle(): Promise<void> {
                     risk_reward: signal.riskReward,
                     hour_of_day: new Date().getHours(),
                     day_of_week: new Date().getDay(),
-                    btc_trend: 0,
-                    dominance_btc: 50,
-                    fear_greed: 50,
+                    btc_trend: globalCtx.btcTrend,
+                    dominance_btc: globalCtx.dominanceBtc,
+                    fear_greed: globalCtx.fearGreed,
                 };
 
                 // Salva o contexto completo substituindo os campos _underscored pelo features final
