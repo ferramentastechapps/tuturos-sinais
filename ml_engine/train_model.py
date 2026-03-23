@@ -5,6 +5,15 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import onnx
+import onnx.helper
+
+# --- ONNX VERSION FIX (Monkeypatch para onnxmltools + onnx modernos) ---
+if not hasattr(onnx, 'mapping'):
+    onnx.mapping = getattr(onnx, '_mapping', None)
+if not hasattr(onnx.helper, 'split_complex_to_pairs'):
+    onnx.helper.split_complex_to_pairs = lambda x: ([], [])
+# --------------------------------------------------------------------
+
 import onnxmltools
 from onnxmltools.convert.common.data_types import FloatTensorType
 from fetch_data import fetch_training_data
