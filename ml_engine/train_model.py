@@ -4,10 +4,18 @@ import numpy as np
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import sys
 import onnx
 import onnx.helper
 
 # --- ONNX VERSION FIX (Monkeypatch para onnxmltools + onnx modernos) ---
+if 'pkg_resources' not in sys.modules:
+    import types
+    _pkg = types.ModuleType('pkg_resources')
+    _pkg.get_distribution = lambda x: type('MockDist', (), {'version': '1.15.0'})()
+    _pkg.parse_version = lambda x: x
+    sys.modules['pkg_resources'] = _pkg
+
 if not hasattr(onnx, 'mapping'):
     onnx.mapping = getattr(onnx, '_mapping', None)
 if not hasattr(onnx.helper, 'split_complex_to_pairs'):
