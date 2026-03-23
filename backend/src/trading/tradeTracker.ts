@@ -395,7 +395,20 @@ export class TradeTracker {
       );
       proc.on('close', (code: number) => {
         if (code === 0) {
-          console.log('[TradeTracker] ✅ Model retrained successfully. Restart the backend to load it.');
+          console.log('[TradeTracker] ✅ Model retrained. Reloading PM2 to apply new model...');
+          // Hot-reload: zero downtime, keeps connections alive
+          const pm2 = spawn('pm2', ['reload', 'tuturos-backend', '--update-env'], {
+            detached: true,
+            stdio: 'ignore',
+          });
+          pm2.on('close', (pm2Code: number) => {
+            if (pm2Code === 0) {
+              console.log('[TradeTracker] 🚀 PM2 reloaded — new ML model is now active!');
+            } else {
+              console.error(`[TradeTracker] ⚠️ PM2 reload failed (code ${pm2Code}). Run manually: pm2 reload tuturos-backend`);
+            }
+          });
+          pm2.unref();
         } else {
           console.error(`[TradeTracker] ❌ Retraining script exited with code ${code}`);
         }
