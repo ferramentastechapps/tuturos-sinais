@@ -11,12 +11,16 @@ import onnx.helper
 # --- ONNX VERSION FIX (Monkeypatch para onnxmltools + onnx modernos) ---
 if 'pkg_resources' not in sys.modules:
     import types
+    try:
+        from packaging.version import parse as parse_version
+    except ImportError:
+        parse_version = lambda x: x
     _pkg = types.ModuleType('pkg_resources')
     class MockDist:
         version = '1.15.0'
-        parsed_version = type('Parsed', (), {'release': (1, 15, 0)})()
+        parsed_version = parse_version('1.15.0')
     _pkg.get_distribution = lambda x: MockDist()
-    _pkg.parse_version = lambda x: MockDist.parsed_version
+    _pkg.parse_version = parse_version
     sys.modules['pkg_resources'] = _pkg
 
 if not hasattr(onnx, 'mapping'):
