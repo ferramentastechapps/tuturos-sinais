@@ -12,8 +12,11 @@ import onnx.helper
 if 'pkg_resources' not in sys.modules:
     import types
     _pkg = types.ModuleType('pkg_resources')
-    _pkg.get_distribution = lambda x: type('MockDist', (), {'version': '1.15.0'})()
-    _pkg.parse_version = lambda x: x
+    class MockDist:
+        version = '1.15.0'
+        parsed_version = type('Parsed', (), {'release': (1, 15, 0)})()
+    _pkg.get_distribution = lambda x: MockDist()
+    _pkg.parse_version = lambda x: MockDist.parsed_version
     sys.modules['pkg_resources'] = _pkg
 
 if not hasattr(onnx, 'mapping'):
