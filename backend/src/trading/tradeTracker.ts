@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { priceStream, PriceUpdate } from './priceStream.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { sendTPNotification, sendSLNotification, sendTrailingStopUpdate, sendActivationNotification } from '../notifications/telegramService.js';
+import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -349,9 +350,58 @@ export class TradeTracker {
         console.error(`[TradeTracker] Failed to insert ML Feedback:`, insertErr);
       } else {
         console.log(`[TradeTracker] ML Feedback Saved Successfully (Supabase + Local JSONL)!`);
+        // Check if we should retrain after this new sample
+        this.checkAndTriggerRetrain().catch(e =>
+          console.error('[TradeTracker] Auto-retrain check failed:', e.message)
+        );
       }
     } catch (err) {
       console.error(`[TradeTracker] Unhandled error submitting ML feedback:`, err);
+    }
+  }
+
+  /**
+   * Checks the total number of records in ml_training_data.
+   * If it is a positive multiple of 50, spawns the Python retraining script.
+   */
+  private async checkAndTriggerRetrain(): Promise<void> {
+    const { count, error } = await supabase
+      .from('ml_training_data')
+      .select('*', { count: 'exact', head: true });
+
+    if (error || count === null) return;
+
+    console.log(`[TradeTracker] ml_training_data count: ${count}`);
+
+    if (count > 0 && count % 50 === 0) {
+      console.log(`[TradeTracker] 🎓 Reached ${count} training samples — triggering auto-retrain...`);
+
+      const __dirname = path.dirname(fileURLToPath(import.meta.url));
+      const backendDir = path.resolve(__dirname, '../../');
+      const pythonBin = path.join(backendDir, '.venv_ml', 'bin', 'python3');
+      const scriptPath = path.join(backendDir, 'scripts', 'retrain_model.py');
+      const onnxOutput = path.join(backendDir, 'current_model.onnx');
+
+      const proc = spawn(pythonBin, [scriptPath, '--min-samples', '50', '--output', onnxOutput], {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      proc.stdout?.on('data', (d: Buffer) =>
+        console.log('[ML Retrain]', d.toString().trim())
+      );
+      proc.stderr?.on('data', (d: Buffer) =>
+        console.error('[ML Retrain ERROR]', d.toString().trim())
+      );
+      proc.on('close', (code: number) => {
+        if (code === 0) {
+          console.log('[TradeTracker] ✅ Model retrained successfully. Restart the backend to load it.');
+        } else {
+          console.error(`[TradeTracker] ❌ Retraining script exited with code ${code}`);
+        }
+      });
+
+      proc.unref(); // Don't block the event loop
     }
   }
 }
