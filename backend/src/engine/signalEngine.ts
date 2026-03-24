@@ -5,7 +5,7 @@ import { config } from '../lib/config.js';
 import { bybitConnector } from '../exchange/bybitConnector.js';
 import { predictSignal, isModelLoaded, getSymbolId } from '../ml/mlPredictionService.js';
 import { telegramService } from '../notifications/telegramService.js';
-import { supabase } from '../lib/supabaseClient.js';
+import { db } from '../lib/dbClient.js';
 import { marketContextService } from '../lib/marketContextService.js';
 import type { TradeSignal, TechnicalIndicator, OHLCPoint, CryptoPair } from '../types/trading.js';
 import { tradeTracker } from '../trading/tradeTracker.js';
@@ -910,36 +910,31 @@ async function runSignalCycle(): Promise<void> {
                 id: s.id,
                 pair: s.pair,
                 type: s.type,
-                entry: s.entry,
-                take_profit: s.takeProfit,
-                take_profit_1: s.takeProfit1 || null,
-                take_profit_2: s.takeProfit2 || null,
-                take_profit_3: s.takeProfit3 || null,
-                stop_loss: s.stopLoss,
+                trade_type: s.tradeType || 'Day Trade',
+                entry_range_low: s.entry_range_low || s.entry,
+                entry_range_high: s.entry_range_high || s.entry,
+                stop_loss: s.stop_loss || s.stopLoss,
+                initial_stop_loss: s.stopLoss,
+                take_profits: JSON.stringify(s.take_profits || [{ level: 1, price: s.takeProfit, percentage: 100, hit: false }]),
                 risk_reward: s.riskReward,
-                timeframe: s.timeframe,
                 status: s.status,
                 confidence: s.confidence,
-                indicators: s.indicators,
-                quality: s.quality || null,
-                trade_type: (s as any).tradeType || 'Day Trade',
-                expected_duration: (s as any).expectedDuration || '12-24 horas',
-                context: undefined, // Column not yet in schema — omit to avoid persist errors
-                ml_data: s.mlData || null,
-                created_at: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+                indicators: JSON.stringify(s.indicators),
+                ml_data: s.mlData ? JSON.stringify(s.mlData) : null,
+                created_at: s.createdAt instanceof Date ? s.createdAt : new Date(s.createdAt)
             }));
 
-            const { error } = await supabase
-                .from('trade_signals')
-                .upsert(rows, { onConflict: 'id' });
+            await db.$transaction(
+                rows.map(row => db.tradeSignal.upsert({
+                    where: { id: row.id },
+                    update: row,
+                    create: row
+                }))
+            );
 
-            if (error) {
-                logger.warn('Failed to persist signals to Supabase', { error: error.message });
-            } else {
-                logger.info(`Persisted ${rows.length} signals to Supabase`);
-            }
+            logger.info(`Persisted ${rows.length} signals to local DB`);
         } catch (dbError) {
-            logger.warn('Supabase persistence error', { error: dbError });
+            logger.warn('SQLite persistence error', { error: dbError });
         }
     }
 

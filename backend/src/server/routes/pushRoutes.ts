@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { supabase } from '../../lib/supabaseClient.js';
+import { db } from '../../lib/dbClient.js';
 import { logger } from '../../lib/logger.js';
 import { sendPushNotification } from '../../notifications/pushService.js';
 
@@ -21,23 +21,24 @@ router.post('/subscribe', async (req: Request, res: Response) => {
         }
 
         // Check if subscription already exists
-        const { data: existing } = await supabase
-            .from('push_subscriptions')
-            .select('id')
-            .eq('endpoint', subscription.endpoint)
-            .single();
+        const existing = await db.pushSubscription.findUnique({
+            where: { endpoint: subscription.endpoint },
+            select: { id: true }
+        });
 
         if (!existing) {
-            // Register new subscription in Supabase
-            const { error } = await supabase.from('push_subscriptions').insert({
-                endpoint: subscription.endpoint,
-                p256dh: subscription.keys.p256dh,
-                auth: subscription.keys.auth,
-                created_at: new Date().toISOString()
-            });
-
-            if (error) {
-                logger.error('Error saving subscription to Supabase', { error });
+            // Register new subscription in DB
+            try {
+                await db.pushSubscription.create({
+                    data: {
+                        endpoint: subscription.endpoint,
+                        p256dh: subscription.keys.p256dh,
+                        auth: subscription.keys.auth,
+                        created_at: new Date()
+                    }
+                });
+            } catch (error) {
+                logger.error('Error saving subscription to DB', { error });
                 res.status(500).json({ error: 'Database error' });
                 return;
             }
@@ -71,14 +72,9 @@ router.post('/unsubscribe', async (req: Request, res: Response) => {
             return;
         }
 
-        const { error } = await supabase
-            .from('push_subscriptions')
-            .delete()
-            .eq('endpoint', endpoint);
-
-        if (error) {
-            throw error;
-        }
+        await db.pushSubscription.delete({
+            where: { endpoint: endpoint }
+        });
 
         logger.info('Push subscription removed.');
         res.status(200).json({ success: true, message: 'Unsubscribed' });

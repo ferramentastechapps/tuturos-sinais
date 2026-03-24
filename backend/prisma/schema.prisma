@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------
+// Core Trading Tables
+// ----------------------------------------------------
+
+model ActiveSignal {
+  id                  String   @id @default(uuid())
+  pair                String
+  type                String   // LONG, SHORT
+  trade_type          String   // DAY_TRADE, SWING, SCALP
+  entry_range_low     Float
+  entry_range_high    Float
+  stop_loss           Float
+  initial_stop_loss   Float
+  take_profits        String   // JSON string of TakeProfit[]
+  status              String   // PENDING, ACTIVE, CLOSED_TP, CLOSED_SL, CANCELLED
+  telegram_message_id String?
+  expected_duration   String?
+  context             String?  // JSON string
+  score               Float?
+
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+}
+
+model TradeSignal {
+  id                  String   @id @default(uuid())
+  pair                String
+  type                String
+  trade_type          String
+  entry_range_low     Float
+  entry_range_high    Float
+  stop_loss           Float
+  initial_stop_loss   Float
+  take_profits        String   // JSON string
+  status              String
+  confidence          Float?
+  risk_reward         Float?
+  indicators          String?  // JSON string
+  ml_data             String?  // JSON string
+  
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+}
+
+model SignalEvent {
+  id             String   @id @default(uuid())
+  signal_id      String
+  event_type     String
+  message        String
+  price_at_event Float
+  
+  created_at     DateTime @default(now())
+}
+
+// ----------------------------------------------------
+// Telegram & Summaries
+// ----------------------------------------------------
+
+model DailySummary {
+  id                String   @id @default(uuid())
+  summary_date      String   @unique
+  total_signals     Int
+  winners           Int
+  losers            Int
+  pnl               Float
+  full_report_text  String   // JSON string
+  
+  created_at        DateTime @default(now())
+}
+
+// ----------------------------------------------------
+// Machine Learning & AI
+// ----------------------------------------------------
+
+model MLTrainingData {
+  id             String   @id @default(uuid())
+  signal_id      String
+  symbol         String
+  outcome_label  Int      // 0 = Loss, 1 = Win
+  outcome_pnl    Float
+  entry_time     String
+  features       String   // JSON string of feature array/object
+  
+  created_at     DateTime @default(now())
+}
+
+model MLModel {
+  id         String   @id @default(uuid())
+  version    String
+  type       String
+  metrics    String   // JSON string
+  isActive   Boolean  @default(false)
+  data       String?  // JSON string (optional local state backup)
+  
+  createdAt  DateTime @default(now())
+}
+
+// ----------------------------------------------------
+// PWA & Users
+// ----------------------------------------------------
+
+model PushSubscription {
+  id         String   @id @default(uuid())
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  
+  created_at DateTime @default(now())
+}
+
+// ----------------------------------------------------
+// Dashboard Web & Users Auxiliary Data
+// ----------------------------------------------------
+
+model UserTrade {
+  id           String   @id @default(uuid())
+  user_id      String
+  pair         String
+  type         String
+  entry_price  Float
+  exit_price   Float?
+  exit_fee     Float?
+  size         Float
+  leverage     Int
+  status       String   // open, closed
+  closed_at    DateTime?
+  
+  created_at   DateTime @default(now())
+}
+
+model PortfolioAsset {
+  id                 String   @id @default(uuid())
+  user_id            String
+  symbol             String
+  name               String
+  quantity           Float
+  average_buy_price  Float
+  total_fees         Float
+  
+  updated_at         DateTime @default(now()) @updatedAt
+
+  @@unique([user_id, symbol])
+}
+
+model IndicatorAlert {
+  id          String   @id @default(uuid())
+  user_id     String
+  symbol      String
+  indicator   String
+  condition   String
+  value       Float
+  message     String
+  read        Boolean  @default(false)
+  
+  created_at  DateTime @default(now())
+}
+
+model IndicatorAlertConfig {
+  id          String   @id @default(uuid())
+  user_id     String   @unique
+  rsi_enabled Boolean  @default(true)
+  macd_enabled Boolean @default(true)
+  bb_enabled  Boolean  @default(true)
+  volume_enabled Boolean @default(true)
+  
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
+}

@@ -29,7 +29,7 @@ router.get('/health', (_req: Request, res: Response) => {
         uptime: getUptime(),
         services: {
             bybitWebSocket: bybitConnector.isConnected() ? 'connected' : 'disconnected',
-            supabase: config.supabase.url ? 'connected' : 'disconnected',
+            db: 'connected',
             telegram: telegramService.getConnectionStatus(),
             mlModel: isModelLoaded() ? 'loaded' : 'not_loaded',
             paperTrading: isEngineRunning() ? 'running' : 'stopped',
@@ -86,7 +86,7 @@ router.get('/signals', (req: Request, res: Response) => {
     res.json(signals.slice(0, limit));
 });
 
-import { supabase } from '../lib/supabaseClient.js';
+import { db } from '../lib/dbClient.js';
 
 router.get('/signals/history', async (req: Request, res: Response) => {
     try {
@@ -96,22 +96,22 @@ router.get('/signals/history', async (req: Request, res: Response) => {
         const type = req.query.type as string;
         const status = req.query.status as string;
 
-        let query = supabase
-            .from('trade_signals')
-            .select('*', { count: 'exact' });
-
-        if (symbol) query = query.eq('pair', symbol);
-        if (type) query = query.eq('type', type);
-        if (status) query = query.eq('status', status);
+        const filter: any = {};
+        if (symbol) filter.pair = symbol;
+        if (type) filter.type = type;
+        if (status) filter.status = status;
 
         const from = (page - 1) * limit;
-        const to = from + limit - 1;
 
-        const { data, error, count } = await query
-            .order('created_at', { ascending: false })
-            .range(from, to);
-
-        if (error) throw error;
+        const [data, count] = await Promise.all([
+            db.tradeSignal.findMany({
+                where: filter,
+                orderBy: { created_at: 'desc' },
+                skip: from,
+                take: limit
+            }),
+            db.tradeSignal.count({ where: filter })
+        ]);
 
         res.json({
             data,

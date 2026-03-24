@@ -1,5 +1,5 @@
 import webpush from 'web-push';
-import { supabase } from '../lib/supabaseClient.js';
+import { db } from '../lib/dbClient.js';
 import { logger } from '../lib/logger.js';
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
@@ -30,7 +30,7 @@ export const sendPushNotification = async (subscription: webpush.PushSubscriptio
         if (error.statusCode === 404 || error.statusCode === 410) {
             // Subscription has expired or is no longer valid
             logger.warn('Push subscription expired/invalid. Removing from database.', { endpoint: subscription.endpoint });
-            await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
+            await db.pushSubscription.delete({ where: { endpoint: subscription.endpoint } }).catch(()=>{});
         } else {
             logger.error('Error sending push notification', { error: error.message });
         }
@@ -45,11 +45,10 @@ export const broadcastPushNotification = async (payload: { title: string; body: 
     if (!VAPID_PUBLIC_KEY) return;
 
     try {
-        const { data: subscriptions, error } = await supabase
-            .from('push_subscriptions')
-            .select('*');
-
-        if (error) {
+        let subscriptions: any[] = [];
+        try {
+            subscriptions = await db.pushSubscription.findMany();
+        } catch (error: any) {
             // Table doesn't exist yet — silently skip, don't throw
             logger.warn('Push subscriptions table not available, skipping broadcast', { error: error.message });
             return;

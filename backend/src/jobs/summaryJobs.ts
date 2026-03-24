@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { supabase } from '../lib/supabaseClient.js';
+import { db } from '../lib/dbClient.js';
 import { telegramService } from '../notifications/telegramService.js';
 import { DailySummaryData } from '../types/telegram.js';
 import { logger } from '../lib/logger.js';
@@ -35,18 +35,28 @@ async function generateAndSendSummary(period: 'daily' | 'weekly') {
             past.setUTCDate(past.getUTCDate() - 7); // Últimos 7 dias
         }
         const pastStr = past.toISOString();
+        const nowStr = now.toISOString();
+
+        logger.info(`[SummaryJobs] Buscando trades fechados entre ${pastStr} e ${nowStr}`);
 
         // Buscar sinais fechados no período
-        const { data: closedSignals, error } = await supabase
-            .from('active_signals')
-            .select('*')
-            .in('status', ['CLOSED_TP', 'CLOSED_SL'])
-            .gte('updated_at', pastStr);
+        let closedSignals: any[] = [];
+        try {
+            closedSignals = await db.activeSignal.findMany({
+                where: {
+                    status: { in: ['CLOSED_TP', 'CLOSED_SL'] },
+                    updated_at: { gte: past, lte: now }
+                }
+            });
+        } catch (error: any) {
+            logger.error(`[SummaryJobs] Erro no Database DB: ${error.message}`);
+            throw error;
+        }
 
-        if (error) throw error;
-
-        const signals = (closedSignals || []) as any as ActiveSignal[];
-        let total = signals.length;
+        const signals = (closedSignals || []) as unknown as ActiveSignal[];
+        logger.info(`[SummaryJobs] Encontrados ${signals.length} trades fechados.`);
+        
+        const total = signals.length;
         let winners = 0;
         let losers = 0;
         let totalPnl = 0;
@@ -56,26 +66,26 @@ async function generateAndSendSummary(period: 'daily' | 'weekly') {
 
         // Processa cada trade
         for (const signal of signals) {
-            // Conta winners vs losers de forma simplificada: CLOSED_TP = win, CLOSED_SL = loss
+            // Conta winners vs losers: CLOSED_TP = win, CLOSED_SL = loss
             const isWinner = signal.status === 'CLOSED_TP';
             if (isWinner) winners++;
             else losers++;
 
-            // PnL Aproximado (simplificação para o sumário)
-            // Se win: a média das TPs atingidas vs Entrada
-            // Se loss: SL atingido vs Entrada
             let tradePnl = 0;
             const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
 
             if (isWinner) {
-                // Assumindo tp final atingido pelo status
-                const lastTp = signal.take_profits && signal.take_profits.length > 0
-                    ? signal.take_profits[signal.take_profits.length - 1].price
+                // Cálculo de Gain: Preço do último TP vs Entrada
+                // Obs: Num trade real seria bom pegar de onde saiu, mas vamos pegar o TP 1 pelo menos
+                const lastTp = signal.take_profits && signal.take_profits.length > 0 && signal.take_profits[0].hit
+                    ? signal.take_profits.filter(t => t.hit).pop()?.price || entryAvg
                     : entryAvg;
+                    
                 tradePnl = signal.type === 'LONG'
                     ? ((lastTp - entryAvg) / entryAvg) * 100
                     : ((entryAvg - lastTp) / entryAvg) * 100;
             } else {
+                // Cálculo de Loss real
                 tradePnl = signal.type === 'LONG'
                     ? ((signal.stop_loss - entryAvg) / entryAvg) * 100
                     : ((entryAvg - signal.stop_loss) / entryAvg) * 100;
@@ -112,13 +122,15 @@ async function generateAndSendSummary(period: 'daily' | 'weekly') {
         await telegramService.sendDailySummary(summaryData);
 
         // Salvar em banco de dados para dashboard / relatórios
-        await supabase.from('daily_summaries').insert({
-            summary_date: dateLabel,
-            total_signals: total,
-            winners,
-            losers,
-            pnl: totalPnl,
-            full_report_text: JSON.stringify(summaryData)
+        await db.dailySummary.create({
+            data: {
+                summary_date: dateLabel,
+                total_signals: total,
+                winners,
+                losers,
+                pnl: totalPnl,
+                full_report_text: JSON.stringify(summaryData)
+            }
         });
 
         logger.info(`[SummaryJobs] Report ${period} gerado e enviado com sucesso (${total} trades).`);

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { supabase } from '../../lib/supabaseClient.js';
+import { db } from '../../lib/dbClient.js';
 import { logger } from '../../lib/logger.js';
 
 const router = Router();
@@ -7,14 +7,12 @@ const ADMIN_USER_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
 router.get('/', async (req: Request, res: Response) => {
     try {
-        const userId = req.headers['x-user-id'] || req.query.userId || ADMIN_USER_ID;
-        const { data, error } = await supabase
-            .from('user_trades')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
+        const userId = (req.headers['x-user-id'] as string) || (req.query.userId as string) || ADMIN_USER_ID;
+        const data = await db.userTrade.findMany({
+            where: { user_id: userId },
+            orderBy: { created_at: 'desc' }
+        });
 
-        if (error) throw error;
         res.json(data);
     } catch (error: any) {
         logger.error('Error fetching user trades', { error: error.message });
@@ -24,17 +22,14 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
     try {
-        const userId = req.headers['x-user-id'] || req.body.userId || ADMIN_USER_ID;
+        const userId = (req.headers['x-user-id'] as string) || req.body.userId || ADMIN_USER_ID;
         const trade = { ...req.body, user_id: userId };
         delete trade.id; // Let DB generate ID
 
-        const { data, error } = await supabase
-            .from('user_trades')
-            .insert(trade)
-            .select()
-            .single();
+        const data = await db.userTrade.create({
+            data: trade
+        });
 
-        if (error) throw error;
         res.json(data);
     } catch (error: any) {
         logger.error('Error creating user trade', { error: error.message });
@@ -45,19 +40,17 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id/close', async (req: Request, res: Response) => {
     try {
         const { exit_price, exit_fee } = req.body;
-        const { data, error } = await supabase
-            .from('user_trades')
-            .update({ 
+        const data = await db.userTrade.update({
+            where: { id: req.params.id as string },
+            data: { 
                 exit_price, 
                 exit_fee, 
                 status: 'closed', 
-                closed_at: new Date().toISOString() 
-            })
-            .eq('id', req.params.id)
-            .select()
-            .single();
+                closed_at: new Date()
+            }
+        });
 
-        if (error) throw error;
+        res.json(data);
         res.json(data);
     } catch (error: any) {
         logger.error('Error closing user trade', { error: error.message });
@@ -67,12 +60,9 @@ router.put('/:id/close', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
     try {
-        const { error } = await supabase
-            .from('user_trades')
-            .delete()
-            .eq('id', req.params.id);
-
-        if (error) throw error;
+        await db.userTrade.delete({
+            where: { id: req.params.id as string }
+        });
         res.json({ success: true });
     } catch (error: any) {
         logger.error('Error deleting user trade', { error: error.message });

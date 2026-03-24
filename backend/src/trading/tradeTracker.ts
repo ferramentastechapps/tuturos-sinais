@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { priceStream, PriceUpdate } from './priceStream.js';
-import { supabase } from '../lib/supabaseClient.js';
-import { sendTPNotification, sendSLNotification, sendTrailingStopUpdate, sendActivationNotification } from '../notifications/telegramService.js';
+import { db } from '../lib/dbClient.js';
+import { sendActivationNotification, sendTrailingStopUpdate, sendTPNotification, sendSLNotification } from '../notifications/telegramService.js';
 import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -41,21 +41,25 @@ export class TradeTracker {
 
   public async initialize() {
     console.log('[TradeTracker] Loading active signals from DB...');
-    const { data, error } = await supabase
-      .from('active_signals')
-      .select('*')
-      .in('status', ['ACTIVE', 'PENDING']);
+    try {
+      const data = await db.activeSignal.findMany({
+        where: { status: { in: ['ACTIVE', 'PENDING'] } }
+      });
 
-    if (error) {
+      this.activeSignals.clear();
+      for (const rawSignal of (data || [])) {
+        const signal = {
+          ...rawSignal,
+          take_profits: typeof rawSignal.take_profits === 'string' ? JSON.parse(rawSignal.take_profits) : rawSignal.take_profits,
+          context: typeof rawSignal.context === 'string' ? JSON.parse(rawSignal.context) : rawSignal.context
+        } as any as ActiveSignal;
+        this.addSignalToMemory(signal);
+      }
+      console.log(`[TradeTracker] Loaded ${data?.length || 0} active signals.`);
+    } catch (error) {
       console.error('[TradeTracker] Failed to load signals', error);
       return;
     }
-
-    this.activeSignals.clear();
-    for (const signal of (data || [])) {
-      this.addSignalToMemory(signal as any as ActiveSignal);
-    }
-    console.log(`[TradeTracker] Loaded ${data?.length || 0} active signals.`);
   }
 
   private addSignalToMemory(signal: ActiveSignal) {
@@ -74,14 +78,20 @@ export class TradeTracker {
     }
 
     try {
-        const { data, error } = await supabase.from('active_signals').insert([signal]).select().single();
-        if (error) {
-            console.warn('[TradeTracker] Supabase warn (Table missing?). Tracking in RAM only.', error.message);
-        } else if (data) {
-            fullSignal = data as any as ActiveSignal;
+        const inputData = { 
+            ...fullSignal, 
+            take_profits: JSON.stringify(fullSignal.take_profits || []),
+            context: typeof fullSignal.context === 'string' ? fullSignal.context : JSON.stringify(fullSignal.context || {})
+        } as any;
+        const data = await db.activeSignal.create({ data: inputData });
+        if (data) {
+            fullSignal = {
+              ...data,
+              take_profits: JSON.parse(data.take_profits)
+            } as any as ActiveSignal;
         }
-    } catch (e) {
-        console.warn('[TradeTracker] Supabase Exception. Tracking in RAM only.');
+    } catch (e: any) {
+        console.warn('[TradeTracker] DB Exception. Tracking in RAM only.', e);
     }
 
     this.addSignalToMemory(fullSignal);
@@ -111,7 +121,7 @@ export class TradeTracker {
              signal.status = 'ACTIVE';
              
              try {
-                await supabase.from('active_signals').update({ status: 'ACTIVE' }).eq('id', signal.id);
+                await db.activeSignal.update({ where: { id: signal.id }, data: { status: 'ACTIVE' } });
                 this.logEvent(signal.id, 'ACTIVATED', `Order activated at ${update.price}`, update.price).catch(()=>{});
              } catch (e) { /* ignore pg error */ }
              
@@ -185,7 +195,7 @@ export class TradeTracker {
       
       // Update DB safely
       try {
-          await supabase.from('active_signals').update({ stop_loss: newSl }).eq('id', signal.id);
+          await db.activeSignal.update({ where: { id: signal.id }, data: { stop_loss: newSl } });
           this.logEvent(signal.id, 'TRAILING_STOP_UPDATED', `Trailing stop moved from ${oldSl} to ${newSl}`, currentPrice).catch(()=>{});
       } catch (e) { /* ignore pg error */ }
       
@@ -219,18 +229,21 @@ export class TradeTracker {
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
 
       // Atualiza o histórico para o robô treinar
-      supabase.from('trade_signals').update({ status: 'hit_tp' }).eq('id', signal.id).then(({ error }) => {
+      db.tradeSignal.update({ where: { id: signal.id }, data: { status: 'hit_tp' } }).catch(({ error }: any) => {
         if (error) console.error('[TradeTracker] Error hit_tp:', error.message);
       });
     }
 
     // Save to DB Safely
     try {
-        await supabase.from('active_signals').update({
-        take_profits: signal.take_profits as any,
-        stop_loss: signal.stop_loss,
-        status: signal.status
-        }).eq('id', signal.id);
+        await db.activeSignal.update({
+          where: { id: signal.id },
+          data: {
+            take_profits: JSON.stringify(signal.take_profits),
+            stop_loss: signal.stop_loss,
+            status: signal.status
+          }
+        });
         this.logEvent(signal.id, 'TP_HIT', `TP${tp.level} hit at ${currentPrice}`, currentPrice).catch(()=>{});
     } catch (e) { /* ignore */ }
 
@@ -248,14 +261,15 @@ export class TradeTracker {
     this.submitFeedbackToML(signal, 0, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
 
     // Atualiza o histórico para o robô treinar
-    supabase.from('trade_signals').update({ status: 'hit_sl' }).eq('id', signal.id).then(({ error }) => {
+    db.tradeSignal.update({ where: { id: signal.id }, data: { status: 'hit_sl' } }).catch(({ error }: any) => {
       if (error) console.error('[TradeTracker] Error hit_sl:', error.message);
     });
 
     try {
-        await supabase.from('active_signals').update({
-            status: signal.status
-        }).eq('id', signal.id);
+        await db.activeSignal.update({
+            where: { id: signal.id },
+            data: { status: signal.status }
+        });
         this.logEvent(signal.id, 'SL_HIT', `Stop Loss hit at ${currentPrice}`, currentPrice).catch(()=>{});
     } catch (e) { /* skip */ }
 
@@ -263,12 +277,14 @@ export class TradeTracker {
   }
 
   private async logEvent(signalId: string, eventType: string, message: string, price: number) {
-    await supabase.from('signal_events').insert({
-      signal_id: signalId,
-      event_type: eventType,
-      message,
-      price_at_event: price
-    });
+    await db.signalEvent.create({
+      data: {
+        signal_id: signalId,
+        event_type: eventType,
+        message,
+        price_at_event: price
+      }
+    }).catch(e => console.error('[TradeTracker] Error logging event', e.message));
   }
 
   private removeSignalFromMemory(id: string, pair: string) {
@@ -292,11 +308,15 @@ export class TradeTracker {
     console.log(`[TradeTracker] Submitting ML Feedback for ${activeSignal.id} - Outcome: ${outcomeLabel === 1 ? 'WIN' : 'LOSS'}`);
     try {
       // 1. Fetch original signal details and ML features
-      const { data: originalSignal, error: fetchErr } = await supabase
-        .from('trade_signals')
-        .select('*')
-        .eq('id', activeSignal.id)
-        .single();
+      let originalSignal;
+      let fetchErr = null;
+      try {
+        originalSignal = await db.tradeSignal.findUnique({
+          where: { id: activeSignal.id }
+        });
+      } catch (err) {
+        fetchErr = err;
+      }
 
       if (fetchErr || !originalSignal) {
         console.warn(`[TradeTracker] Original signal ${activeSignal.id} not found for ML Feedback.`);
@@ -312,8 +332,10 @@ export class TradeTracker {
       // But for now, we pass score and basic metrics as feature placeholders if missing.
       // E.g., The best place to save full feature vectors is during Signal generation, 
       // but if we store them in `ml_data` we grab them here.
-      if (originalSignal.ml_data && typeof originalSignal.ml_data === 'object') {
-          features = { ...originalSignal.ml_data };
+      if (originalSignal.ml_data && typeof originalSignal.ml_data === 'string') {
+          try {
+            features = JSON.parse(originalSignal.ml_data);
+          } catch(e){}
       }
 
       // Merge base signal info into features 
@@ -336,7 +358,17 @@ export class TradeTracker {
       };
 
       // 2. Insert into training table
-      const { error: insertErr } = await supabase.from('ml_training_data').insert(rowToSave);
+      const dbRowSave = {
+        ...rowToSave,
+        features: JSON.stringify(features)
+      };
+      
+      let insertErr: any = null;
+      try {
+        await db.mLTrainingData.create({ data: dbRowSave as any });
+      } catch (err: any) {
+        insertErr = err;
+      }
 
       // 3. Keep local JSONL updated for VPS local training
       try {
@@ -365,11 +397,9 @@ export class TradeTracker {
    * If it is a positive multiple of 50, spawns the Python retraining script.
    */
   private async checkAndTriggerRetrain(): Promise<void> {
-    const { count, error } = await supabase
-      .from('ml_training_data')
-      .select('*', { count: 'exact', head: true });
+    const count = await db.mLTrainingData.count().catch(e => null);
 
-    if (error || count === null) return;
+    if (count === null) return;
 
     console.log(`[TradeTracker] ml_training_data count: ${count}`);
 
