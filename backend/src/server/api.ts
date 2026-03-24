@@ -43,6 +43,29 @@ router.get('/health', (_req: Request, res: Response) => {
     });
 });
 
+// ──── Telegram Proxy ────
+
+router.post('/telegram/proxy', async (req: Request, res: Response) => {
+    try {
+        const token = config.telegram.botToken;
+        if (!token) {
+            return res.status(400).json({ error: 'Telegram bot token not configured on server' });
+        }
+        
+        const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body)
+        });
+        
+        const data = await response.json();
+        res.json(data);
+    } catch (error: any) {
+        logger.error('Telegram proxy error', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ──── Status ────
 
 router.get('/status', (_req: Request, res: Response) => {

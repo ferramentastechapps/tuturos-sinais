@@ -88,17 +88,14 @@ class TelegramServiceClass {
 
         try {
             // Usa o proxy local ou de produção
-            // Em dev: http://localhost:54321/functions/v1/telegram-proxy (se rodando supabase local)
-            // Em prod: VITE_SUPABASE_URL/functions/v1/telegram-proxy
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'http://localhost:54321';
-            const proxyUrl = `${supabaseUrl}/functions/v1/telegram-proxy`;
+            // Redireciona via API Server da VPS para burlar CORS sem precisar o Supabase
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const proxyUrl = `${apiUrl}/api/telegram/proxy`;
 
             const response = await fetch(proxyUrl, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    // Adicione Authorization se sua Edge Function exigir RLS/JWT anonimo
-                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     action: 'sendMessage',
