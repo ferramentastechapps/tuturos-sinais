@@ -237,6 +237,27 @@ router.get('/ml/stats', (_req: Request, res: Response) => {
     });
 });
 
+// ──── ML Force Retrain ────
+
+import { executeRetrain } from '../jobs/mlRetrainJob.js';
+
+router.post('/ml/retrain', async (_req: Request, res: Response) => {
+    if (!config.ml.enabled) {
+        res.status(503).json({ error: 'ML disabled in config. Set ML_ENABLED=true.' });
+        return;
+    }
+
+    logger.info('[API] Force retrain requested via POST /ml/retrain');
+    res.json({ status: 'started', message: 'Retraining initiated. Check server logs for progress.' });
+
+    // Run async so we don't hold the HTTP connection open
+    executeRetrain().then(success => {
+        logger.info(`[API] Force retrain finished — success: ${success}`);
+    }).catch(err => {
+        logger.error('[API] Force retrain failed', { error: err });
+    });
+});
+
 // ──── ML Predict ────
 
 import { predictSignal } from '../ml/mlPredictionService.js';

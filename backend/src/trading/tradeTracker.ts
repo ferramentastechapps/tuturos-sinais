@@ -34,6 +34,7 @@ export interface ActiveSignal {
 
 export class TradeTracker {
   private activeSignals: Map<string, ActiveSignal[]> = new Map();
+  private lastTrainedCount: number = 0;
 
   constructor() {
     this.setupListeners();
@@ -372,7 +373,7 @@ export class TradeTracker {
 
       // 3. Keep local JSONL updated for VPS local training
       try {
-        const dataPath = path.join(__dirname, '../../../../ml_engine/data/historical_ml_data.jsonl');
+        const dataPath = path.join(__dirname, '../../../ml_engine/data/historical_ml_data.jsonl');
         fs.appendFileSync(dataPath, JSON.stringify(rowToSave) + '\n', 'utf-8');
       } catch (err) {
         console.error(`[TradeTracker] Failed to append ML data locally:`, err);
@@ -394,21 +395,31 @@ export class TradeTracker {
 
   /**
    * Checks the total number of records in ml_training_data.
-   * If it is a positive multiple of 50, spawns the Python retraining script.
+   * If there are at least 50 new samples since last train, spawns Python retraining.
    */
   private async checkAndTriggerRetrain(): Promise<void> {
     const count = await db.mLTrainingData.count().catch(e => null);
 
     if (count === null) return;
 
-    console.log(`[TradeTracker] ml_training_data count: ${count}`);
+    if (this.lastTrainedCount === 0) {
+      this.lastTrainedCount = Math.floor(count / 50) * 50;
+    }
 
-    if (count > 0 && count % 50 === 0) {
+    console.log(`[TradeTracker] ml_training_data count: ${count} (Next retrain at ${this.lastTrainedCount + 50})`);
+
+    if (count >= this.lastTrainedCount + 50) {
       console.log(`[TradeTracker] 🎓 Reached ${count} training samples — triggering auto-retrain...`);
+      this.lastTrainedCount = count; // Prevent multiple triggers
 
       const __dirname = path.dirname(fileURLToPath(import.meta.url));
       const backendDir = path.resolve(__dirname, '../../');
-      const pythonBin = path.join(backendDir, '.venv_ml', 'bin', 'python3');
+      
+      const isWin = process.platform === 'win32';
+      const pythonBin = isWin
+        ? path.join(backendDir, '.venv_ml', 'Scripts', 'python.exe')
+        : path.join(backendDir, '.venv_ml', 'bin', 'python3');
+        
       const scriptPath = path.join(backendDir, 'scripts', 'retrain_model.py');
       const onnxOutput = path.join(backendDir, 'current_model.onnx');
 
@@ -427,15 +438,15 @@ export class TradeTracker {
         if (code === 0) {
           console.log('[TradeTracker] ✅ Model retrained. Reloading PM2 to apply new model...');
           // Hot-reload: zero downtime, keeps connections alive
-          const pm2 = spawn('pm2', ['reload', 'tuturos-backend', '--update-env'], {
+          const pm2 = spawn('pm2', ['reload', 'signal-engine', 'telegram-bot', '--update-env'], {
             detached: true,
             stdio: 'ignore',
           });
           pm2.on('close', (pm2Code: number) => {
             if (pm2Code === 0) {
-              console.log('[TradeTracker] 🚀 PM2 reloaded — new ML model is now active!');
+              console.log('[TradeTracker] 🚀 PM2 apps (signal-engine, telegram-bot) reloaded — ML model is now active!');
             } else {
-              console.error(`[TradeTracker] ⚠️ PM2 reload failed (code ${pm2Code}). Run manually: pm2 reload tuturos-backend`);
+              console.error(`[TradeTracker] ⚠️ PM2 reload failed (code ${pm2Code}). Run manually: pm2 reload signal-engine telegram-bot`);
             }
           });
           pm2.unref();
