@@ -1,15 +1,29 @@
 import { AdvancedSignal, AdvancedSignalInput } from '../advancedSignalGenerator';
 import { MLFeatureVector } from '@/types/mlTypes';
+import { MarketContext } from './marketContextService';
 
 /**
- * Extracts a numeric feature vector from a signal for ML training/inference.
- * All features should be normalized or scalable.
+ * Cria um ID numérico simples a partir do nome do símbolo (ex: BTCUSDT -> 1832039)
+ * Mantém paridade com o algoritmo de hash do backend.
+ */
+export function getSymbolId(symbol: string): number {
+    let hash = 0;
+    for (let i = 0; i < symbol.length; i++) {
+        hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
+        hash = hash & hash; // Convert to 32bit int
+    }
+    return Math.abs(hash); // Garantir sempre positivo
+}
+
+/**
+ * Extrai um vetor de características numéricas de um sinal para treinamento/inferência de ML.
  */
 export const extractFeatures = (
     signal: AdvancedSignal,
-    input: AdvancedSignalInput
+    input: AdvancedSignalInput,
+    marketContext?: MarketContext
 ): MLFeatureVector => {
-    const { indicators, currentPrice, high24h, low24h, volume24h, ohlcData, futuresData } = input;
+    const { symbol, indicators, currentPrice, high24h, low24h, volume24h, ohlcData, futuresData } = input as any;
 
     // Helper to get indicator value safely
     const getIndValue = (name: string, defaultVal = 0): number => {
@@ -59,21 +73,24 @@ export const extractFeatures = (
     // 3. Futures Data (if available)
     const fundingRate = futuresData?.fundingRate?.fundingRate || 0;
     const openInterestVar = futuresData?.openInterest?.openInterest || 0;
-    const longShortRatio = (futuresData as any)?.longShortRatio?.value || 1;
+    const longShortRatio = (futuresData as any)?.longShortRatio ? (futuresData as any).longShortRatio.value : 1;
 
     // 4. Time Context
-    const now = new Date(); // In backtest this should be passed from signal timestamp, but input doesn't have it explicitly yet. 
-    // TODO: Pass timestamp in input for backtest accuracy. For now using current time which is wrong for backtest.
-    // We will fix this by assuming `input` might have a timestamp or we ignore it for now.
-    const hour = now.getUTCHours();
-    const day = now.getUTCDay();
+    // Extract timestamp from the signal if it exists (usually added at generation),
+    // otherwise fallback to current time. In backtesting, this must be the synthetic signal time.
+    const signalTime = (signal as any).createdAt ? new Date((signal as any).createdAt) : new Date();
+    const hour = signalTime.getUTCHours();
+    const day = signalTime.getUTCDay();
 
     // 5. Signal Properties
     const isLong = signal.type === 'long' ? 1 : 0;
     const stopLossPercent = ((Math.abs(currentPrice - signal.stopLoss)) / currentPrice) * 100;
-    const takeProfitPercent = ((Math.abs(signal.takeProfit - currentPrice)) / currentPrice) * 100;
+    const takeProfitPercent = ((Math.abs((signal.takeProfit1 || signal.takeProfit) - currentPrice)) / currentPrice) * 100;
 
     return {
+        // --- Identity ---
+        symbol_id: getSymbolId(symbol),
+
         // --- Technicals ---
         rsi,
         adx,
@@ -103,9 +120,9 @@ export const extractFeatures = (
         hour_of_day: hour,
         day_of_week: day,
 
-        // Placeholder for potentially missing data
-        btc_trend: 0,
-        dominance_btc: 0,
-        fear_greed: 50,
+        // Real market context if injected, otherwise 0/neutral defaults
+        btc_trend: marketContext?.btcTrend ?? 0,
+        dominance_btc: marketContext?.dominanceBtc ?? 50,
+        fear_greed: marketContext?.fearGreed ?? 50,
     };
 };

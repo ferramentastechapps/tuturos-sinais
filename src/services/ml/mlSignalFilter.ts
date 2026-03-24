@@ -1,6 +1,7 @@
 import { AdvancedSignal, AdvancedSignalInput } from '@/services/advancedSignalGenerator';
 import { extractFeatures } from './featureExtractor';
 import { predictSignal as getMLPrediction } from './mlPredictionService';
+import { marketContextService } from './marketContextService';
 
 // Configuration for ML filtering
 const ML_CONFIG = {
@@ -29,8 +30,9 @@ export const filterSignalWithML = async (
     }
 
     try {
-        // 2. Extract features
-        const features = extractFeatures(signal, input);
+        // 2. Extract features with real market context
+        const marketContext = await marketContextService.getGlobalContext();
+        const features = extractFeatures(signal, input, marketContext);
 
         // 3. Get Prediction
         const prediction = await getMLPrediction(features);

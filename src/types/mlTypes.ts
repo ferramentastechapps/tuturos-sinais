@@ -1,4 +1,7 @@
 export interface MLFeatureVector {
+    // --- Identity ---
+    symbol_id: number; // Hash numérico do símbolo (ex: BTCUSDT → 1832039)
+
     // --- Technicals ---
     rsi: number;
     adx: number;
@@ -47,6 +50,14 @@ export interface MLTrainingSample {
     timestamp: number;
 }
 
+export interface MLTrainingData {
+    id: string;
+    periodStart: number;
+    periodEnd: number;
+    samples: MLTrainingSample[];
+    createdAt: number;
+}
+
 export interface MLModelMetrics {
     accuracy: number;
     precision: number;
@@ -78,7 +89,7 @@ export interface MLModelArtifact {
     createdAt: number;
     metrics: MLModelMetrics;
     isActive: boolean;
-    data: any; // Serialized model tree/weights
+    data: Record<string, unknown>; // Serialized model tree/weights
 }
 
 export interface MLServiceStatus {

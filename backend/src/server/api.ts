@@ -214,6 +214,44 @@ router.get('/ml/stats', (_req: Request, res: Response) => {
     });
 });
 
+// ──── ML Predict ────
+
+import { predictSignal } from '../ml/mlPredictionService.js';
+
+router.post('/ml/predict', async (req: Request, res: Response) => {
+    if (!config.ml.enabled) {
+        res.status(503).json({ error: 'ML disabled' });
+        return;
+    }
+
+    if (!isModelLoaded()) {
+        const loaded = await import('../ml/mlPredictionService.js').then(m => m.loadModel());
+        if (!loaded) {
+            res.status(503).json({ error: 'ML model not available' });
+            return;
+        }
+    }
+
+    try {
+        const features = req.body;
+        if (!features || typeof features !== 'object') {
+            res.status(400).json({ error: 'Invalid feature vector' });
+            return;
+        }
+
+        const prediction = await predictSignal(features);
+        if (!prediction) {
+            res.status(500).json({ error: 'Prediction failed' });
+            return;
+        }
+
+        res.json(prediction);
+    } catch (error: any) {
+        logger.error('ML predict error', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ──── Paper Trading Actions ────
 
 router.post('/paper/open', (req: Request, res: Response) => {
