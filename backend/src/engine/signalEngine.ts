@@ -824,59 +824,49 @@ async function runSignalCycle(): Promise<void> {
                         const isSweep = anySignal.smartMoney?.isLiquiditySweep;
                         const obZone = anySignal.obEntryZone;
 
-                        // Calcular entryZone para reutilizar no Telegram e no TradeTracker
-                        const entryZone = obZone
-                            ? { min: obZone.low, max: obZone.high }
-                            : { min: signal.entry * 0.998, max: signal.entry * 1.002 };
-
-                        // FIX: Verificar se o preço atual JÁ está dentro da zona de entrada.
-                        // Se sim, a ordem já está "ativa" — não faz sentido notificar como PENDENTE
-                        // e logo depois como ATIVA (causando o bug das duas mensagens simultaneamente).
-                        const alreadyInZone = currentPrice >= entryZone.min && currentPrice <= entryZone.max;
-
-                        const takeProfits = [
-                            { level: 1, price: signal.takeProfit1 || signal.takeProfit, percent: Math.abs(signal.takeProfit - signal.entry) / signal.entry * 100, closePercent: 40 },
-                            ...(signal.takeProfit2 ? [{ level: 2, price: signal.takeProfit2, percent: Math.abs(signal.takeProfit2 - signal.entry) / signal.entry * 100, closePercent: 30 }] : []),
-                            ...(signal.takeProfit3 ? [{ level: 3, price: signal.takeProfit3, percent: Math.abs(signal.takeProfit3 - signal.entry) / signal.entry * 100, closePercent: 30 }] : []),
-                        ];
-
-                        const contextNarrative = `${anySignal.contextNarrative} ${isSweep ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : isOB ? '**ORDER BLOCK ICT CONFIRMADO.** Entrada na zona institucional com Stop no swing estrutural. TPs por extensões Fibonacci.' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`;
-
-                        let tgResult;
-                        if (alreadyInZone) {
-                            // Preço já dentro da zona: registra como ATIVA e notifica como ordem ativada
-                            logger.info(`[SignalEngine] ${symbol}: preço (${currentPrice}) já dentro da entryZone — registrando como ACTIVE diretamente.`);
-                            tgResult = await telegramService.sendActivationNotification(
-                                { pair: signal.pair, type: signal.type.toUpperCase() },
-                                currentPrice
-                            );
+                        // BUG FIX: Calcular entryZone com recuo (pullback) para criar uma verdadeira ORDEM PENDENTE limit.
+                        // Isso dá tempo para o usuário reagir antes do preço ativar a ordem.
+                        let entryZone;
+                        if (obZone && signal.type === 'long' && signal.entry > obZone.high) {
+                            entryZone = { min: obZone.low, max: obZone.high };
+                        } else if (obZone && signal.type === 'short' && signal.entry < obZone.low) {
+                            entryZone = { min: obZone.low, max: obZone.high };
                         } else {
-                            // Preço fora da zona: ordem pendente aguardando pullback
-                            tgResult = await telegramService.sendNewSignal({
-                                type: signal.type,
-                                symbol: signal.pair,
-                                score: signal.quality.score,
-                                scoreLabel: signal.quality.score >= 80 ? 'Excelente' : signal.quality.score >= 70 ? 'Bom' : 'Moderado',
-                                timeframe: signal.timeframe,
-                                currentPrice: signal.entry,
-                                entryZone,
-                                stopLoss: {
-                                    price: signal.stopLoss,
-                                    percent: Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100,
-                                },
-                                takeProfits,
-                                riskReward: signal.riskReward,
-                                confluences: signal.indicators.map(i => ({ name: i, confirmed: true })),
-                                leverage: anySignal.dynamicLeverage || 5,
-                                positionSizePercent: anySignal.positionSizePercent || 10,
-                                riskPercent: anySignal.riskPercent || 2,
-                                timestamp: new Date().toISOString(),
-                                tradeType: isSweep ? 'Smart Money (ICT)' : isOB ? 'Order Block (ICT)' : anySignal.tradeType,
-                                expectedDuration: anySignal.expectedDuration,
-                                mtfContext: anySignal.mtfContext,
-                                contextNarrative,
-                            });
+                            // Se já estiver dentro ou for outro indicador, forçamos um recuo de 0.2%
+                            const pullback = 0.002;
+                            entryZone = signal.type === 'long'
+                                ? { min: signal.entry * (1 - pullback - 0.002), max: signal.entry * (1 - pullback) }
+                                : { min: signal.entry * (1 + pullback), max: signal.entry * (1 + pullback + 0.002) };
                         }
+
+                        const tgResult = await telegramService.sendNewSignal({
+                            type: signal.type,
+                            symbol: signal.pair,
+                            score: signal.quality.score,
+                            scoreLabel: signal.quality.score >= 80 ? 'Excelente' : signal.quality.score >= 70 ? 'Bom' : 'Moderado',
+                            timeframe: signal.timeframe,
+                            currentPrice: signal.entry,
+                            entryZone,
+                            stopLoss: {
+                                price: signal.stopLoss,
+                                percent: Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100,
+                            },
+                            takeProfits: [
+                                { level: 1, price: signal.takeProfit1 || signal.takeProfit, percent: Math.abs(signal.takeProfit - signal.entry) / signal.entry * 100, closePercent: 40 },
+                                ...(signal.takeProfit2 ? [{ level: 2, price: signal.takeProfit2, percent: Math.abs(signal.takeProfit2 - signal.entry) / signal.entry * 100, closePercent: 30 }] : []),
+                                ...(signal.takeProfit3 ? [{ level: 3, price: signal.takeProfit3, percent: Math.abs(signal.takeProfit3 - signal.entry) / signal.entry * 100, closePercent: 30 }] : []),
+                            ],
+                            riskReward: signal.riskReward,
+                            confluences: signal.indicators.map(i => ({ name: i, confirmed: true })),
+                            leverage: anySignal.dynamicLeverage || 5,
+                            positionSizePercent: anySignal.positionSizePercent || 10,
+                            riskPercent: anySignal.riskPercent || 2,
+                            timestamp: new Date().toISOString(),
+                            tradeType: isSweep ? 'Smart Money (ICT)' : isOB ? 'Order Block (ICT)' : anySignal.tradeType,
+                            expectedDuration: anySignal.expectedDuration,
+                            mtfContext: anySignal.mtfContext,
+                            contextNarrative: `${anySignal.contextNarrative} ${isSweep ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : isOB ? '**ORDER BLOCK ICT CONFIRMADO.** Entrada na zona institucional com Stop no swing estrutural. TPs por extensões Fibonacci.' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`,
+                        });
                         signalsSent++;
 
                         // --- ATIVAR O GESTOR DE POSIÇÕES ---
@@ -894,8 +884,7 @@ async function runSignalCycle(): Promise<void> {
                                 ...(signal.takeProfit2 ? [{ level: 2, price: signal.takeProfit2, hit: false }] : []),
                                 ...(signal.takeProfit3 ? [{ level: 3, price: signal.takeProfit3, hit: false }] : []),
                             ],
-                            // Se já estava na zona, registra como ATIVO para evitar re-notificação
-                            status: alreadyInZone ? 'ACTIVE' : 'PENDING',
+                            status: 'PENDING',
                             telegram_message_id: tgResult.messageId?.toString(),
                             expected_duration: anySignal.expectedDuration,
                             score: signal.quality.score,

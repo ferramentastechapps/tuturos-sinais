@@ -371,15 +371,23 @@ class TelegramService {
     async sendActivationNotification(signal: any, currentPrice: number): Promise<TelegramSendResult> {
         const dir = signal.type;
         const emoji = dir === 'LONG' ? '🟢' : '🔴';
+        let tpText = '';
+        if (signal.take_profits && Array.isArray(signal.take_profits)) {
+            tpText = '\\n🎯 Take Profits:\\n' + signal.take_profits.map((tp: any) => 
+                `  TP${tp.level}: $${formatPrice(tp.price)}`
+            ).join('\\n');
+        }
+
         const text = [
             `🚨 <b>ORDEM ATIVADA — ${signal.pair}</b>`,
             `${emoji} O preço atingiu a zona de entrada!`,
             ``,
             `💰 Preço de Entrada: $${formatPrice(currentPrice)}`,
-            `🎯 Alvos e Stop Loss sendo rastreados.`,
+            signal.stop_loss ? `❌ Stop Loss: $${formatPrice(signal.stop_loss)}` : null,
+            tpText ? tpText : `🎯 Alvos e Stop Loss sendo rastreados.`,
             ``,
             `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
-        ].join('\n');
+        ].filter(Boolean).join('\\n');
         
         broadcastPushNotification({
             title: `Ordem Ativada — ${signal.pair}`,
