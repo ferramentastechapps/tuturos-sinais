@@ -111,13 +111,10 @@ export class TradeTracker {
 
     for (const signal of signals) {
       if (signal.status === 'PENDING') {
-         // Check if price reached the entry zone or crossed it
+         // Activate only when price enters the defined entry zone
          const isEntered = update.price >= signal.entry_range_low && update.price <= signal.entry_range_high;
-         const tradeDir = signal.type.toUpperCase();
-         const isCrossedLong = tradeDir === 'LONG' && update.price < signal.entry_range_low;
-         const isCrossedShort = tradeDir === 'SHORT' && update.price > signal.entry_range_high;
 
-         if (isEntered || isCrossedLong || isCrossedShort) {
+         if (isEntered) {
              console.log(`[TradeTracker] Signal ${signal.pair} ACTIVATED at ${update.price}`);
              signal.status = 'ACTIVE';
              
@@ -128,7 +125,8 @@ export class TradeTracker {
              
              sendActivationNotification(signal, update.price).catch(e => console.error('TG error', e));
              
-             // Fall through to allow immediate initial TP/SL check if necessary
+             // Wait for the next price tick before checking SL/TP to avoid same-tick double-processing
+             continue;
          } else {
              continue; // Wait for activation
          }
