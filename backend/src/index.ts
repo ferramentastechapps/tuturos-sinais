@@ -187,13 +187,8 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 process.on('uncaughtException', (error) => {
-    // EPIPE is a benign error caused by PM2 log rotation breaking the stdout pipe.
-    // Logging it would cause more EPIPEs, creating an infinite crash loop.
-    if ((error as NodeJS.ErrnoException).code === 'EPIPE') return;
-
     logger.error('Uncaught exception', { error: error.message, stack: error.stack });
     sendCriticalErrorAlert(error.message, 'uncaughtException').catch(() => { });
-    process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
