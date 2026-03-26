@@ -57,8 +57,8 @@ npm run build
 cd ..
 
 echo '  ♻️  pm2 cleanup & restart...'
-pm2 delete telegram-bot --silent 2>/dev/null || true
-pm2 restart all --silent
+cd backend
+pm2 start ecosystem.config.js --env production --update-env
 pm2 save --force
 pm2 status
 "@
