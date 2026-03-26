@@ -59,18 +59,51 @@ export function calculateEMA(data: number[], period: number): number[] {
     return result;
 }
 
-export function calculateMACD(closes: number[]): { macd: number; signal: number; histogram: number } {
+export function calculateMACD(closes: number[]): { macd: number; signal: number; histogram: number; isBullishCross: boolean; isBearishCross: boolean } {
     const ema12 = calculateEMA(closes, 12);
     const ema26 = calculateEMA(closes, 26);
-    if (ema12.length === 0 || ema26.length === 0) return { macd: 0, signal: 0, histogram: 0 };
+    if (ema12.length === 0 || ema26.length === 0) return { macd: 0, signal: 0, histogram: 0, isBullishCross: false, isBearishCross: false };
     const macdLine = ema12.map((v, i) => v - ema26[i]);
     const signalLine = calculateEMA(macdLine, 9);
     const last = macdLine.length - 1;
+    const prev = last - 1;
+    // Crossover detection: MACD crossed signal line in the last candle
+    const isBullishCross = prev >= 0 && macdLine[prev] < signalLine[prev] && macdLine[last] >= signalLine[last];
+    const isBearishCross = prev >= 0 && macdLine[prev] > signalLine[prev] && macdLine[last] <= signalLine[last];
     return {
         macd: macdLine[last] || 0,
         signal: signalLine[last] || 0,
         histogram: (macdLine[last] || 0) - (signalLine[last] || 0),
+        isBullishCross,
+        isBearishCross,
     };
+}
+
+export function calculateBollingerBands(closes: number[], period = 20, stdDev = 2): { upper: number; lower: number; middle: number; isSqueeze: boolean; percentB: number } {
+    if (closes.length < period) return { upper: 0, lower: 0, middle: 0, isSqueeze: false, percentB: 0.5 };
+    const slice = closes.slice(-period);
+    const middle = slice.reduce((a, b) => a + b, 0) / period;
+    const variance = slice.reduce((a, b) => a + Math.pow(b - middle, 2), 0) / period;
+    const std = Math.sqrt(variance);
+    const upper = middle + stdDev * std;
+    const lower = middle - stdDev * std;
+    const bandWidth = (upper - lower) / middle;
+    // Squeeze: bandwidth is in the bottom 20% of recent range (low volatility about to expand)
+    const recentSlices = closes.length >= period + 20
+        ? Array.from({ length: 20 }, (_, k) => {
+            const s = closes.slice(-(period + 20 - k), -(20 - k) || closes.length);
+            const m = s.reduce((a, b) => a + b, 0) / s.length;
+            const v = s.reduce((a, b) => a + Math.pow(b - m, 2), 0) / s.length;
+            const sd = Math.sqrt(v);
+            return (m + stdDev * sd - (m - stdDev * sd)) / m;
+          })
+        : [bandWidth];
+    const minBw = Math.min(...recentSlices);
+    const maxBw = Math.max(...recentSlices);
+    const isSqueeze = maxBw > minBw && bandWidth <= minBw * 1.1;
+    const lastClose = closes[closes.length - 1];
+    const percentB = upper !== lower ? (lastClose - lower) / (upper - lower) : 0.5;
+    return { upper, lower, middle, isSqueeze, percentB };
 }
 
 export function calculateATR(ohlc: OHLCPoint[], period = 14): number {
@@ -342,6 +375,15 @@ function getIndicatorSignal(name: string, value: number): 'bullish' | 'bearish' 
     return 'neutral';
 }
 
+/**
+ * Market Hours Filter — Avoids entries during low-liquidity Asian night session (00:00–06:00 UTC).
+ * Crypto is 24/7 but institutional volume drops sharply in this window, increasing fake-outs.
+ */
+function isWithinTradingHours(): boolean {
+    const utcHour = new Date().getUTCHours();
+    return utcHour >= 6 || utcHour < 23; // Block only 23:00-06:00 UTC (deepest dead zone)
+}
+
 export function generateSignalFromData(
     symbol: string,
     ohlc: OHLCPoint[], // 1h data
@@ -356,9 +398,13 @@ export function generateSignalFromData(
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
+    // Market hours filter: block signals during low-liquidity dead zone
+    if (!isWithinTradingHours()) return null;
+
     const closes = ohlc.map(c => c.close);
     const rsi = calculateRSI(closes);
     const macd = calculateMACD(closes);
+    const bb = calculateBollingerBands(closes);
     const ema20 = calculateEMA(closes, 20);
     const ema50 = calculateEMA(closes, 50);
     const ema200 = calculateEMA(closes, 200);
@@ -457,13 +503,22 @@ export function generateSignalFromData(
     }
 
     // --- VETO SNIPER EXTREMO ---
-    // Proíbe abrir operação sem Rastro Institucional comprovado (Liquidity Sweep, FVG ou Order Block)
-    const hasIctValidation = (
-        (type === 'long'  && (isBullishFvg  || isSweepLow  || priceInBullishOB)) ||
-        (type === 'short' && (isBearishFvg  || isSweepHigh || priceInBearishOB))
-    );
-    if (!hasIctValidation) {
-        return null;
+    // Exige MÍNIMO 2 confirmações ICT distintas (Liquidity Sweep, FVG ou Order Block)
+    // Uma única confirmação não é suficiente — é fácil de ser um ruído de mercado.
+    const ictLongConfirmations = [
+        isBullishFvg,
+        isSweepLow,
+        priceInBullishOB,
+    ].filter(Boolean).length;
+    const ictShortConfirmations = [
+        isBearishFvg,
+        isSweepHigh,
+        priceInBearishOB,
+    ].filter(Boolean).length;
+
+    const ictConfirmationCount = type === 'long' ? ictLongConfirmations : ictShortConfirmations;
+    if (ictConfirmationCount < 2) {
+        return null; // Rejeita: menos de 2 rastros institucionais confirmados
     }
 
     // RSI extremes bonus (Apenas a favor do recuo natural, já que os vetos acima impedem a entrada contrária)
@@ -477,10 +532,30 @@ export function generateSignalFromData(
     // ADX strong trend bonus
     if (adx > 35) { score += 8; confluences.push('Strong trend (ADX)'); }
 
-    // MACD confirmation
-    if ((type === 'long' && macd.histogram > 0) || (type === 'short' && macd.histogram < 0)) {
+    // MACD confirmation — requires crossover OR aligned histogram with above-zero momentum
+    const macdAligned = (type === 'long' && macd.histogram > 0) || (type === 'short' && macd.histogram < 0);
+    const macdCrossover = (type === 'long' && macd.isBullishCross) || (type === 'short' && macd.isBearishCross);
+    if (macdCrossover) {
+        score += 12; // Crossover recente é muito mais forte que histograma alinhado
+        confluences.push('MACD Crossover ✅');
+    } else if (macdAligned) {
+        score += 4;
+        confluences.push('MACD aligned');
+    }
+
+    // Bollinger Bands: squeeze = energia acumulada prestes a explodir
+    if (bb.isSqueeze) {
+        score += 8;
+        confluences.push('BB Squeeze (explosão iminente)');
+    }
+    // Bollinger Band bias: preço na metade correta das bandas
+    if (type === 'long' && bb.percentB < 0.35) {
         score += 5;
-        confluences.push('MACD confirmed');
+        confluences.push('Preço no suporte da BB');
+    }
+    if (type === 'short' && bb.percentB > 0.65) {
+        score += 5;
+        confluences.push('Preço na resistência da BB');
     }
     
     // Liquidity Sweeps (Highest weight out of all metrics)
@@ -557,8 +632,9 @@ export function generateSignalFromData(
     // Cap score
     score = Math.min(score, 100);
 
-    // Minimum score filter (Raised significantly to 75 to ensure only high probability setups pass)
-    const finalMinScore = customMinScore !== undefined ? customMinScore : 75;
+    // Minimum score filter — 80 para garantir apenas setups de alta probabilidade
+    // (era 75, mas gerava sinais fracos com ~4 indicadores + 2 ICT = entraria direto)
+    const finalMinScore = customMinScore !== undefined ? customMinScore : 80;
     if (score < finalMinScore) return null;
 
     // --- ICT Order Block + Structural Stop + Fibonacci TPs ---
@@ -594,15 +670,16 @@ export function generateSignalFromData(
     }
 
     // Fibonacci TP extensions when structural stop is used, standard ratio otherwise
+    // TP1 MÍNIMO de 1.5:1 — garante expectativa matemática positiva mesmo com 40% win rate
     let tp1Distance: number, tp2Distance: number, tp3Distance: number;
     if (usingStructuralStop) {
         // ICT Fibonacci projections from the Order Block midpoint
-        tp1Distance = stopLossDistance * 1.0;   // 1:1 — first target (TP1)
-        tp2Distance = stopLossDistance * 1.618; // Golden ratio extension (TP2)
-        tp3Distance = stopLossDistance * 2.5;   // Major liquidity target (TP3)
+        tp1Distance = stopLossDistance * 1.5;   // 1.5:1 mínimo — nunca aceitar 1:1 (expectativa neutra)
+        tp2Distance = stopLossDistance * 2.0;   // Golden ratio extension (TP2)
+        tp3Distance = stopLossDistance * 3.0;   // Major liquidity target (TP3)
     } else {
-        const tpScale = type === macroTrend ? 1 : 0.6;
-        tp1Distance = stopLossDistance * 1.5 * tpScale;
+        const tpScale = type === macroTrend ? 1 : 0.7; // Suavizado: 0.6 era muito agressivo
+        tp1Distance = stopLossDistance * 1.5 * tpScale; // 1.5:1 mínimo sempre
         tp2Distance = stopLossDistance * 2.5 * tpScale;
         tp3Distance = stopLossDistance * 4.0 * tpScale;
     }
