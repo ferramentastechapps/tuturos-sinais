@@ -58,7 +58,7 @@ cd ..
 
 echo '  ♻️  pm2 cleanup & restart...'
 cd backend
-pm2 start ecosystem.config.js --env production --update-env
+pm2 start ecosystem.config.cjs --env production --update-env
 pm2 save --force
 pm2 status
 "@
