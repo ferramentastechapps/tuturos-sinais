@@ -1,16 +1,28 @@
 import React, { useState } from 'react';
-import { Pencil, ChevronDown, Share, FileText, Settings2 } from 'lucide-react';
+import { Pencil, ChevronDown, Share, FileText, Settings2, Zap, Target } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { usePaperTrading } from '@/hooks/usePaperTrading';
+import { useRealTimeSignals } from '@/hooks/useRealTimeSignals';
+import { useCryptoPrices } from '@/hooks/useCryptoPrices';
 import { PaperPosition } from '@/types/paperTrading';
+import { formatCurrency as fmt } from '@/utils/formatters';
+import { cn } from '@/lib/utils';
 
 export const ActivePositionsList = () => {
   const { state, closePosition } = usePaperTrading();
   const [activeTab, setActiveTab] = useState('positions');
+  const { data: realTimeSignals = [] } = useRealTimeSignals({ limit: 50 });
+  const { data: cryptoPairs = [] } = useCryptoPrices();
 
   const positions = state?.positions || [];
-  const openOrdersCount = 0; // Replace when open orders/limits are implemented
+  const openOrdersCount = 0;
+
+  // Fallback: use active bot signals when no paper positions exist
+  const activeSignals = realTimeSignals.filter(
+    s => (s.status as string).toLowerCase() === 'active' || (s.status as string).toLowerCase() === 'pending'
+  );
 
   // Utility to format currency
   const formatCurrency = (val: number, decimals: number = 4) => {
@@ -159,17 +171,87 @@ export const ActivePositionsList = () => {
         </div>
 
         <TabsContent value="positions" className="m-0 border-none outline-none p-0 overflow-x-auto min-h-[300px]">
-          {positions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
-              <FileText className="w-12 h-12 mb-4 opacity-20" />
-              <p>Você não tem posições abertas</p>
-              <Button variant="outline" size="sm" className="mt-4" onClick={() => setActiveTab('orders')}>
-                Ver Ordens
-              </Button>
-            </div>
-          ) : (
+          {positions.length > 0 ? (
             <div className="flex flex-col min-w-[700px]">
               {positions.map(renderPositionCard)}
+            </div>
+          ) : activeSignals.length > 0 ? (
+            // Fallback: show active bot signals as open positions
+            <div className="p-3 space-y-3">
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5 px-1">
+                <Zap className="w-3 h-3 text-primary" />
+                Sinais ativos do robô ({activeSignals.length})
+              </p>
+              {activeSignals.map(signal => {
+                const isLong = (signal.type as string).toUpperCase() === 'LONG';
+                const currentPair = cryptoPairs.find(p => p.symbol === signal.pair);
+                const currentPrice = currentPair?.price ?? signal.entry;
+                const tp = signal.takeProfit1 ?? signal.takeProfit;
+                const sl = signal.stopLoss;
+                const range = Math.abs(tp - sl);
+                const rawPct = range > 0 ? ((currentPrice - sl) / range) * 100 : 50;
+                const pct = Math.min(100, Math.max(0, rawPct));
+                const entryPct = range > 0 ? Math.min(100, Math.max(0, ((signal.entry - sl) / range) * 100)) : 50;
+                const inProfit = isLong ? currentPrice > signal.entry : currentPrice < signal.entry;
+                const pnlPct = ((currentPrice - signal.entry) / signal.entry * 100) * (isLong ? 1 : -1);
+
+                return (
+                  <div
+                    key={signal.id}
+                    className={cn(
+                      "border border-border/40 border-l-4 rounded-xl p-3 space-y-2 bg-card hover:bg-muted/5 transition-colors",
+                      isLong ? "border-l-signal-buy" : "border-l-signal-sell"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-foreground">{signal.pair}</span>
+                        <Badge className={cn("text-[10px] font-bold", isLong ? "bg-signal-buy text-white" : "bg-signal-sell text-white")}>
+                          {isLong ? '▲ LONG' : '▼ SHORT'}
+                        </Badge>
+                      </div>
+                      <div className="text-right">
+                        <p className={cn("text-sm font-mono font-bold", inProfit ? "text-signal-buy" : "text-signal-sell")}>
+                          {inProfit ? '+' : ''}{pnlPct.toFixed(2)}%
+                        </p>
+                        <p className="text-[10px] text-muted-foreground font-mono">{fmt(currentPrice)}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 text-xs">
+                      <div>
+                        <p className="text-muted-foreground text-[10px]">Entrada</p>
+                        <p className="font-mono font-medium">{fmt(signal.entry)}</p>
+                      </div>
+                      <div>
+                        <p className="text-signal-buy text-[10px]">TP1</p>
+                        <p className="font-mono font-medium text-signal-buy">{fmt(tp)}</p>
+                      </div>
+                      <div>
+                        <p className="text-signal-sell text-[10px]">Stop</p>
+                        <p className="font-mono font-medium text-signal-sell">{fmt(sl)}</p>
+                      </div>
+                    </div>
+
+                    <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="absolute top-0 h-full w-0.5 bg-primary/60 z-10" style={{ left: `${entryPct}%` }} />
+                      <div
+                        className={cn("h-full rounded-full", pct > entryPct ? (isLong ? "bg-signal-buy/70" : "bg-signal-sell/70") : "bg-muted-foreground/40")}
+                        style={{ width: `${pct}%` }}
+                      />
+                      <div
+                        className={cn("absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ring-2 ring-card -translate-x-1/2", isLong ? "bg-signal-buy" : "bg-signal-sell")}
+                        style={{ left: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+              <Target className="w-12 h-12 mb-4 opacity-20" />
+              <p>Nenhum sinal ativo no momento</p>
             </div>
           )}
         </TabsContent>

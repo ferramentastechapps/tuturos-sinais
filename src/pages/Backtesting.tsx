@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useBacktest } from '@/hooks/useBacktest';
 import { BacktestConfig, DEFAULT_BACKTEST_CONFIG, BacktestTrade } from '@/types/backtestTypes';
 import { DEFAULT_OPTIMIZATION_PARAMS } from '@/utils/backtestHelpers';
+import { loadBotConfig } from '@/services/backtestService';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     BarChart, Bar, ScatterChart, Scatter, Cell, Area, AreaChart, ComposedChart,
@@ -89,7 +90,7 @@ const Backtesting: React.FC = () => {
                             display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem',
                         }}
                     >
-                        <Zap size={16} /> Backtest Rápido (30d)
+                        <Zap size={16} /> Backtest Rápido (90d)
                     </button>
                     <button
                         onClick={handleRun}
@@ -246,8 +247,50 @@ const ConfigPanel: React.FC<{ config: BacktestConfig; setConfig: (c: BacktestCon
         setConfig(newConfig);
     };
 
+    // Period presets helper
+    const applyPeriod = (days: number) => {
+        const end = new Date().toISOString().split('T')[0];
+        const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        setConfig({ ...config, startDate: start, endDate: end });
+    };
+
+    // Load live bot config from API
+    const [loadingBot, setLoadingBot] = React.useState(false);
+    const [botLoadMsg, setBotLoadMsg] = React.useState<string | null>(null);
+    const handleLoadBotConfig = async () => {
+        setLoadingBot(true);
+        setBotLoadMsg(null);
+        try {
+            const partial = await loadBotConfig();
+            const end = new Date().toISOString().split('T')[0];
+            const start = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            setConfig({ ...config, ...partial, startDate: start, endDate: end });
+            setBotLoadMsg(`✅ Config do robô carregada!${partial.symbols ? ` Pares: ${partial.symbols.join(', ')}` : ''} Score mín: ${partial.signal?.minScore ?? config.signal.minScore}`);
+        } catch (e: any) {
+            setBotLoadMsg(`⚠️ Não foi possível carregar config do robô (${e.message}).`);
+        } finally {
+            setLoadingBot(false);
+        }
+    };
+
     return (
         <div style={{ display: 'grid', gap: '1.25rem' }}>
+            {/* Load Bot Config Banner */}
+            <div style={{ background: 'linear-gradient(135deg, #1e3a5f33, #0f2027)', borderRadius: '0.75rem', padding: '1rem 1.25rem', border: '1px solid #3b82f640', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                    <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#60a5fa', marginBottom: '0.15rem' }}>🤖 Configurações do Robô</p>
+                    <p style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Carrega automaticamente o score mínimo, pares e limites de risco do robô ativo.</p>
+                    {botLoadMsg && <p style={{ fontSize: '0.75rem', color: botLoadMsg.startsWith('✅') ? '#22c55e' : '#f59e0b', marginTop: '0.25rem' }}>{botLoadMsg}</p>}
+                </div>
+                <button
+                    onClick={handleLoadBotConfig}
+                    disabled={loadingBot}
+                    style={{ padding: '0.5rem 1.25rem', borderRadius: '0.5rem', border: 'none', background: loadingBot ? '#374151' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', cursor: loadingBot ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+                >
+                    {loadingBot ? '⏳ Carregando...' : '🤖 Usar Config do Robô (90d)'}
+                </button>
+            </div>
+
             {/* Presets */}
             <div style={sectionStyle}>
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#d1d5db', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -271,6 +314,21 @@ const ConfigPanel: React.FC<{ config: BacktestConfig; setConfig: (c: BacktestCon
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#d1d5db', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Clock size={16} /> Período & Ativos
                 </h3>
+                {/* Quick period selectors */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    {[['30d', 30], ['60d', 60], ['90d', 90], ['180d', 180], ['1 Ano', 365]].map(([label, days]) => (
+                        <button
+                            key={label as string}
+                            onClick={() => applyPeriod(Number(days))}
+                            style={{
+                                padding: '0.3rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.75rem', fontWeight: 600,
+                                border: '1px solid #374151', background: '#111827', color: '#9ca3af', cursor: 'pointer',
+                            }}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
                 <div style={gridStyle}>
                     <div>
                         <label style={labelStyle}>Data Início</label>

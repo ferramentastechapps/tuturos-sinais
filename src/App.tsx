@@ -29,6 +29,25 @@ const SymbolAnalysis = lazy(() => import("./pages/SymbolAnalysis"));
 const SignalHistory = lazy(() => import("./pages/SignalHistory"));
 
 import { BottomNav } from "@/components/layout/BottomNav";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
+// Mobile pages — lazy loaded
+const MobileSignals = lazy(() => import("./pages/mobile/MobileSignals"));
+const MobileChart = lazy(() => import("./pages/mobile/MobileChart"));
+const MobileBacktest = lazy(() => import("./pages/mobile/MobileBacktest"));
+const MobilePositions = lazy(() => import("./pages/mobile/MobilePositions"));
+const MobileResults = lazy(() => import("./pages/mobile/MobileResults"));
+
+// Redirect from / to /m/sinais on mobile, keep desktop intact
+const SmartRedirect = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) navigate('/m/sinais', { replace: true });
+  }, [navigate]);
+  return null;
+};
 
 const queryClient = new QueryClient();
 
@@ -53,7 +72,14 @@ const App = () => (
               <Route path="/login" element={<Login />} />
 
               {/* Protected routes — require valid admin session */}
-              <Route path="/" element={<PrivateRoute><Index /></PrivateRoute>} />
+              <Route path="/" element={
+                <PrivateRoute>
+                  <>
+                    <SmartRedirect />
+                    <Index />
+                  </>
+                </PrivateRoute>
+              } />
               <Route path="/portfolio" element={<PrivateRoute><Portfolio /></PrivateRoute>} />
               <Route path="/trades" element={<PrivateRoute><Trades /></PrivateRoute>} />
               <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
@@ -68,6 +94,13 @@ const App = () => (
               <Route path="/strategy-config" element={<PrivateRoute><StrategyConfig /></PrivateRoute>} />
               <Route path="/symbol-analysis" element={<PrivateRoute><SymbolAnalysis /></PrivateRoute>} />
               <Route path="/signals-history" element={<PrivateRoute><SignalHistory /></PrivateRoute>} />
+
+              {/* ── Mobile-first routes ── */}
+              <Route path="/m/sinais" element={<PrivateRoute><MobileSignals /></PrivateRoute>} />
+              <Route path="/m/grafico" element={<PrivateRoute><MobileChart /></PrivateRoute>} />
+              <Route path="/m/backtest" element={<PrivateRoute><MobileBacktest /></PrivateRoute>} />
+              <Route path="/m/posicoes" element={<PrivateRoute><MobilePositions /></PrivateRoute>} />
+              <Route path="/m/resultados" element={<PrivateRoute><MobileResults /></PrivateRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

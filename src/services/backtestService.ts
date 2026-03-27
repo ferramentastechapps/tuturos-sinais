@@ -108,24 +108,66 @@ export const runBacktest = async (
     return result;
 };
 
-// ──────────── Quick Backtest (30 days) ────────────
+// ──────────── Quick Backtest (90 days with bot config) ────────────
 
 export const runQuickBacktest = async (
-    symbols: string[] = ['BTCUSDT'],
+    symbols?: string[],
     onProgress?: (progress: BacktestProgress) => void
 ): Promise<BacktestResult> => {
     const endDate = new Date().toISOString().split('T')[0];
-    const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Try to load bot settings, fall back to defaults
+    const botConfig = await loadBotConfig().catch(() => null);
 
     const config: BacktestConfig = {
         ...DEFAULT_BACKTEST_CONFIG,
-        symbols,
+        ...botConfig,
+        symbols: symbols ?? botConfig?.symbols ?? ['BTCUSDT'],
         startDate,
         endDate,
         timeframe: '1h',
     };
 
     return runBacktest(config, onProgress);
+};
+
+// ──────────── Load Bot Settings as BacktestConfig ────────────
+
+export const loadBotConfig = async (): Promise<Partial<BacktestConfig>> => {
+    const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+    
+    const [portfolioRes, marketRes] = await Promise.all([
+        fetch(`${apiUrl}/api/portfolio`, { credentials: 'include' }).catch(() => null),
+        fetch(`${apiUrl}/api/market`, { credentials: 'include' }).catch(() => null)
+    ]);
+
+    if (!portfolioRes?.ok && !marketRes?.ok) {
+        throw new Error('Não foi possível acessar a API do servidor');
+    }
+
+    const partial: Partial<BacktestConfig> = {};
+
+    if (portfolioRes?.ok) {
+        const pData = await portfolioRes.json();
+        const auto = pData?.config?.autoTrade;
+        if (auto) {
+            partial.signal = { 
+                ...(partial.signal ?? DEFAULT_BACKTEST_CONFIG.signal), 
+                minScore: Number(auto.minScore ?? 75),
+                maxSimultaneousPositions: Number(auto.maxSimultaneousPositions ?? 5)
+            };
+        }
+    }
+
+    if (marketRes?.ok) {
+        const mData = await marketRes.json();
+        if (Array.isArray(mData) && mData.length > 0) {
+            partial.symbols = mData.map((m: any) => m.symbol.replace('/', '').toUpperCase());
+        }
+    }
+
+    return partial;
 };
 
 // ──────────── Optimization ────────────
