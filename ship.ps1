@@ -54,6 +54,8 @@ echo '  ⚙️  build backend...'
 cd backend
 npm install -q
 npm run build
+npx prisma generate
+npx prisma db push --accept-data-loss
 cd ..
 
 echo '  ♻️  pm2 cleanup & restart...'
