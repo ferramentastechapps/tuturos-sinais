@@ -1041,20 +1041,68 @@ async function runSignalCycle(): Promise<void> {
 
 // ──── Public API ────
 
+export async function loadPersistedSignals(): Promise<void> {
+    try {
+        const data = await db.tradeSignal.findMany({
+            orderBy: { created_at: 'desc' },
+            take: 200
+        });
+
+        const loadedSignals: TradeSignal[] = data.map(s => {
+            let tps: any[] = [];
+            try { tps = JSON.parse(s.take_profits || '[]'); } catch (e) {}
+            let inds: string[] = [];
+            try { inds = JSON.parse(s.indicators || '[]'); } catch (e) {}
+            let mlData: any = undefined;
+            try { if (s.ml_data) mlData = JSON.parse(s.ml_data); } catch (e) {}
+
+            return {
+                id: s.id,
+                pair: s.pair,
+                type: s.type as 'long' | 'short',
+                tradeType: s.trade_type,
+                entry: s.entry_range_low,
+                takeProfit: tps[0]?.price || 0,
+                takeProfit1: tps[0]?.price || 0,
+                takeProfit2: tps[1]?.price || undefined,
+                takeProfit3: tps[2]?.price || undefined,
+                stopLoss: s.stop_loss,
+                riskReward: s.risk_reward || 0,
+                timeframe: '1h',
+                status: s.status as any,
+                confidence: s.confidence || 0,
+                createdAt: new Date(s.created_at),
+                indicators: inds,
+                quality: { score: s.confidence || 0, factors: inds },
+                mlData: mlData,
+            };
+        });
+
+        activeSignals = loadedSignals.filter(s => s.status === 'active' || s.status === 'pending').slice(0, 50);
+        signalHistory = loadedSignals.slice(0, 500);
+
+        logger.info(`[Engine] Loaded ${loadedSignals.length} persisted signals from DB (${activeSignals.length} active)`);
+    } catch (err) {
+        logger.error('Failed to load persisted signals', { error: err });
+    }
+}
+
 export function startEngine(): void {
     if (engineRunning) return;
     engineRunning = true;
     signalsToday = 0;
     signalsSent = 0;
 
-    // Run immediately, then on interval
-    runSignalCycle().catch(err => logger.error('Signal cycle error', { error: err }));
-
-    engineInterval = setInterval(() => {
+    loadPersistedSignals().then(() => {
+        // Run immediately, then on interval
         runSignalCycle().catch(err => logger.error('Signal cycle error', { error: err }));
-    }, config.engine.signalIntervalMs);
 
-    logger.info('Signal engine started', { interval: `${config.engine.signalIntervalMs / 1000}s` });
+        engineInterval = setInterval(() => {
+            runSignalCycle().catch(err => logger.error('Signal cycle error', { error: err }));
+        }, config.engine.signalIntervalMs);
+
+        logger.info('Signal engine started', { interval: `${config.engine.signalIntervalMs / 1000}s` });
+    });
 }
 
 export function stopEngine(): void {
