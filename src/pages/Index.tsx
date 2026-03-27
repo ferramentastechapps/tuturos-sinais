@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useCryptoPrices } from '@/hooks/useCryptoPrices';
 import { usePriceAlerts } from '@/hooks/usePriceAlerts';
-import { usePortfolio } from '@/hooks/usePortfolio';
-import { useTrades } from '@/hooks/useTrades';
 import { useTechnicalIndicators } from '@/hooks/useTechnicalIndicators';
 import { useMarketMonitor } from '@/hooks/useMarketMonitor';
 import { useIndicatorAlerts } from '@/hooks/useIndicatorAlerts';
@@ -35,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { RiskDisclaimer } from '@/components/trading/RiskDisclaimer';
 import BacktestWidget from '@/components/dashboard/BacktestWidget';
 
+import { usePaperTrading } from '@/hooks/usePaperTrading';
 // Data & Types
 import { CryptoPair, TechnicalIndicator } from '@/types/trading';
 import { getCoinSignalScores } from '@/services/dashboardDataService';
@@ -46,12 +45,33 @@ const Index = () => {
   const [selectedPair, setSelectedPair] = useState<CryptoPair | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Portfolio and layout data
-  const { summary: portfolioSummary } = usePortfolio();
-  const totalValue = portfolioSummary?.totalValue || 0;
-  const totalPnL = portfolioSummary?.totalPnL || 0;
+  // Portfolio and layout data (Simulated Paper Trading)
+  const { state: paperState, metrics: paperMetrics, lastClosedOrders } = usePaperTrading();
 
-  const { trades: recentTrades } = useTrades();
+  const portfolioSummary = useMemo(() => ({
+    totalValue: paperState?.equity || 100,
+    totalInvested: 100,
+    totalPnL: paperMetrics?.totalPnL || 0,
+    totalPnLPercentage: paperMetrics?.totalPnLPercent || 0,
+    assets: paperState?.positions || [],
+  }), [paperState, paperMetrics]);
+
+  const totalValue = portfolioSummary.totalValue;
+  const totalPnL = portfolioSummary.totalPnL;
+  const dailyPnL = paperMetrics?.pnlToday || 0;
+
+  const recentTrades = useMemo(() => {
+    return lastClosedOrders.map(order => ({
+      id: order.id,
+      symbol: order.symbol,
+      type: order.direction === 'long' ? 'buy' : 'sell',
+      price: order.exitPrice,
+      amount: order.quantity,
+      pnl: order.netPnl,
+      pnlPercentage: order.pnlPercent,
+      closedAt: new Date(order.exitTime).toISOString(),
+    }));
+  }, [lastClosedOrders]);
 
   // Signals for all coins (limit 50 for sidebar scores)
   const { data: allSignals = [] } = useRealTimeSignals({ limit: 50 });
@@ -218,9 +238,10 @@ const Index = () => {
           <div className="space-y-4 pb-20 lg:pb-0">
             {/* Top Stats Overview */}
             <DashboardOverview
-              portfolioSummary={portfolioSummary}
+              portfolioSummary={portfolioSummary as unknown as PortfolioSummary}
               recentTrades={recentTrades}
               activeAlerts={activeAlerts}
+              dailyPnL={dailyPnL}
             />
 
             {/* Selected Pair Info & Chart */}

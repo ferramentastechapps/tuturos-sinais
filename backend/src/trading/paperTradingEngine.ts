@@ -26,7 +26,7 @@ class PaperTradingEngine {
 
     constructor() {
         this.state = this.createInitialState({
-            initialBalance: 10000,
+            initialBalance: 100,
             currency: 'USDT',
             startDate: new Date().toISOString(),
             execution: { spread: 0.02, slippage: 0.05, makerFee: 0.02, takerFee: 0.05, useMarketOrders: true },

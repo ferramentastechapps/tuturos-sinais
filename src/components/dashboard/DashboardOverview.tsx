@@ -11,12 +11,14 @@ interface DashboardOverviewProps {
   portfolioSummary: PortfolioSummary;
   recentTrades: TradeWithMetrics[];
   activeAlerts: PriceAlert[];
+  dailyPnL?: number;
 }
 
 export const DashboardOverview = ({
   portfolioSummary,
   recentTrades,
   activeAlerts,
+  dailyPnL = 0,
 }: DashboardOverviewProps) => {
   const formatCurrency = (value: number) => {
     return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -66,11 +68,19 @@ export const DashboardOverview = ({
                 </span>
               </div>
               <span className={`text-xs sm:text-sm ${portfolioSummary.totalPnL >= 0 ? 'text-success' : 'text-destructive'}`}>
-                ({portfolioSummary.totalPnLPercentage >= 0 ? '+' : ''}{portfolioSummary.totalPnLPercentage.toFixed(2)}%)
+                ({portfolioSummary.totalPnLPercentage >= 0 ? '+' : ''}{portfolioSummary.totalPnLPercentage.toFixed(2)}%) Total
               </span>
             </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {portfolioSummary.assets.length} ativo{portfolioSummary.assets.length !== 1 ? 's' : ''}
+            
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap text-xs sm:text-sm">
+              <span className="text-muted-foreground mr-1">PnL do dia:</span>
+              <span className={`font-medium ${dailyPnL >= 0 ? 'text-success' : 'text-destructive'}`}>
+                {dailyPnL >= 0 ? '+' : ''}${formatCurrency(dailyPnL)}
+              </span>
+            </div>
+            
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-2">
+              {portfolioSummary.assets.length} ativo{portfolioSummary.assets.length !== 1 ? 's' : ''} em simulação
             </p>
           </div>
         </CardContent>
