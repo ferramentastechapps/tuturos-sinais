@@ -97,15 +97,21 @@ const BacktestWidget = () => {
                     )}
                 </>
             ) : (
-                <div className="text-center py-6">
-                    <BarChart3 className="w-10 h-10 mx-auto mb-3 text-muted-foreground/20" />
-                    <p className="text-sm text-muted-foreground mb-3">Nenhum backtest executado</p>
+                <div className="space-y-3">
+                    <div className="p-3 rounded-lg bg-muted/30 border border-border/50 text-xs text-muted-foreground space-y-1.5">
+                        <p className="font-medium text-foreground/80 flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5 text-primary" /> Por que fazer backtest?
+                        </p>
+                        <p>✓ Valide a estratégia em dados históricos</p>
+                        <p>✓ Descubra o win rate real do sistema</p>
+                        <p>✓ Identifique períodos de drawdown</p>
+                    </div>
                     <Button
                         size="sm"
-                        className="bg-primary hover:bg-primary/90"
+                        className="w-full bg-primary hover:bg-primary/90 text-sm"
                         onClick={() => navigate('/backtesting')}
                     >
-                        <Zap className="w-4 h-4 mr-1" />
+                        <Zap className="w-4 h-4 mr-1.5" />
                         Rodar Primeiro Backtest
                     </Button>
                 </div>

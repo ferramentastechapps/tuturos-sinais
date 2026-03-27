@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Wallet, TrendingUp, TrendingDown, Bell, ArrowUpRight, Clock } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, Bell, ArrowUpRight, Clock, SlidersHorizontal } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,13 +22,14 @@ export const DashboardOverview = ({
     return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const formatTime = (date: Date) => {
-    return new Date(date).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const getRelativeTime = (date: Date | string) => {
+    const diff = Date.now() - new Date(date).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'agora';
+    if (minutes < 60) return `${minutes}m atrás`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h atrás`;
+    return `${Math.floor(hours / 24)}d atrás`;
   };
 
   return (
@@ -110,7 +111,14 @@ export const DashboardOverview = ({
                     >
                       {trade.type === 'buy' ? 'C' : 'V'}
                     </Badge>
-                    <span className="text-xs sm:text-sm font-medium">{trade.symbol}</span>
+                    <div>
+                      <span className="text-xs sm:text-sm font-medium">{trade.symbol}</span>
+                      {trade.closedAt && (
+                        <p className="text-[10px] text-muted-foreground leading-none mt-0.5">
+                          {getRelativeTime(trade.closedAt)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className={`text-xs sm:text-sm font-mono ${trade.pnl >= 0 ? 'text-success' : 'text-destructive'}`}>
@@ -132,11 +140,18 @@ export const DashboardOverview = ({
               <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
               Alertas Ativos
             </span>
-            {activeAlerts.length > 0 && (
-              <Badge variant="secondary" className="text-[10px] sm:text-xs">
-                {activeAlerts.length}
-              </Badge>
-            )}
+            <div className="flex items-center gap-1.5">
+              {activeAlerts.length > 0 && (
+                <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                  {activeAlerts.length}
+                </Badge>
+              )}
+              <Link to="/signals-history">
+                <Button variant="ghost" size="sm" className="h-5 sm:h-6 px-1.5 sm:px-2 text-[10px] sm:text-xs">
+                  <SlidersHorizontal className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                </Button>
+              </Link>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">

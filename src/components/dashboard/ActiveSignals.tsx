@@ -119,10 +119,65 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                 </div>
                 
                 {/* Risk and additional context */}
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-5 bg-muted/30 p-2.5 rounded-lg border border-border/50">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-3 bg-muted/30 p-2.5 rounded-lg border border-border/50">
                     <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> R:R 1:{getRR(signal)}</span>
                     <span className="flex items-center gap-1.5 text-signal-sell/90 font-medium">SL {formatCurrency(signal.stopLoss)}</span>
                 </div>
+
+                {/* Price Progress Bar */}
+                {(() => {
+                    const current: number = (signal as any).currentPrice ?? signal.entry;
+                    const sl = signal.stopLoss;
+                    const tp = signal.takeProfit1 || signal.takeProfit;
+                    const range = Math.abs(tp - sl);
+                    const rawPct = range > 0 ? ((current - sl) / range) * 100 : 50;
+                    const pct = Math.min(100, Math.max(0, rawPct));
+                    const entryLow = (signal as any).entryZone?.low ?? signal.entry * 0.998;
+                    const entryHigh = (signal as any).entryZone?.high ?? signal.entry * 1.002;
+                    const inZone = current >= entryLow && current <= entryHigh;
+                    const entryPct = range > 0 ? Math.min(100, Math.max(0, ((signal.entry - sl) / range) * 100)) : 50;
+
+                    return (
+                        <div className="mb-5 space-y-1.5">
+                            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                <span className="text-signal-sell font-medium">SL</span>
+                                <span className="font-mono">{formatCurrency(current)}</span>
+                                <span className={cn("font-medium", isLong ? "text-signal-buy" : "text-signal-sell")}>TP1</span>
+                            </div>
+                            <div className="relative h-2 rounded-full bg-muted overflow-hidden">
+                                {/* Entry zone marker */}
+                                <div
+                                    className="absolute top-0 h-full w-0.5 bg-primary/60 z-10"
+                                    style={{ left: `${entryPct}%` }}
+                                />
+                                {/* Progress fill */}
+                                <div
+                                    className={cn(
+                                        "h-full rounded-full transition-all duration-500",
+                                        pct > entryPct
+                                            ? (isLong ? "bg-signal-buy/70" : "bg-signal-sell/70")
+                                            : "bg-muted-foreground/40"
+                                    )}
+                                    style={{ width: `${pct}%` }}
+                                />
+                                {/* Current price dot */}
+                                <div
+                                    className={cn(
+                                        "absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full ring-2 ring-card -translate-x-1/2",
+                                        isLong ? "bg-signal-buy" : "bg-signal-sell"
+                                    )}
+                                    style={{ left: `${pct}%` }}
+                                />
+                            </div>
+                            {inZone && (
+                                <div className="flex items-center gap-1 text-[10px] font-semibold text-signal-buy">
+                                    <Crosshair className="w-3 h-3" />
+                                    Em zona de entrada
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
 
                 {/* Action Buttons */}
                 <div className="flex gap-2 w-full mt-2">

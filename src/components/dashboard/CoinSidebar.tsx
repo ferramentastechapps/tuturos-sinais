@@ -17,6 +17,28 @@ import { cn } from '@/lib/utils';
 import { CryptoPair, AssetCategory } from '@/types/trading';
 import { CoinSignalScore } from '@/services/dashboardDataService';
 
+const CoinIcon = ({ symbol }: { symbol: string }) => {
+    const ticker = symbol.replace('USDT', '').toLowerCase();
+    const [failed, setFailed] = useState(false);
+
+    if (failed) {
+        return (
+            <span className="text-[10px] font-bold text-foreground/70 uppercase">
+                {ticker.slice(0, 3)}
+            </span>
+        );
+    }
+
+    return (
+        <img
+            src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/${ticker}.svg`}
+            alt={ticker}
+            className="w-6 h-6 object-contain"
+            onError={() => setFailed(true)}
+        />
+    );
+};
+
 interface CoinSidebarProps {
     pairs: CryptoPair[];
     scores: CoinSignalScore[];
@@ -259,10 +281,10 @@ export const CoinSidebar = ({
                                 )}
                             >
                                 <div className="flex items-center gap-2.5">
-                                    {/* Coin Icon placeholder + signal indicator */}
+                                    {/* Coin Icon + signal indicator */}
                                     <div className="relative flex-shrink-0">
-                                        <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-foreground/70">
-                                            {pair.symbol.replace('USDT', '').slice(0, 3)}
+                                        <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center overflow-hidden">
+                                            <CoinIcon symbol={pair.symbol} />
                                         </div>
                                         {/* Blinking active signal dot */}
                                         {hasSignal && (

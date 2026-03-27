@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PanelLeft, PanelRight, X } from 'lucide-react';
+import { PanelLeft, PanelRight, X, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -77,7 +77,8 @@ export const DashboardLayout = ({
                                 className="h-8 gap-1.5 text-xs ml-auto"
                                 onClick={() => setRightPanelOpen(true)}
                             >
-                                Posições
+                                <Wrench className="h-3.5 w-3.5" />
+                                Ferramentas
                                 <PanelRight className="h-3.5 w-3.5" />
                             </Button>
                         )}
@@ -104,7 +105,7 @@ export const DashboardLayout = ({
                         />
                         <aside className="relative w-[340px] max-w-[90vw] bg-card border-l border-border flex flex-col shadow-2xl">
                             <div className="flex items-center justify-between p-3 border-b border-border">
-                                <span className="text-sm font-semibold text-foreground">Posições & Métricas</span>
+                                <span className="text-sm font-semibold text-foreground flex items-center gap-2"><Wrench className="h-4 w-4 text-muted-foreground" /> Ferramentas</span>
                                 <Button
                                     variant="ghost"
                                     size="icon"
