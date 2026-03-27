@@ -381,7 +381,7 @@ function getIndicatorSignal(name: string, value: number): 'bullish' | 'bearish' 
  */
 function isWithinTradingHours(): boolean {
     const utcHour = new Date().getUTCHours();
-    return utcHour >= 6 || utcHour < 23; // Block only 23:00-06:00 UTC (deepest dead zone)
+    return utcHour >= 6 && utcHour < 23; // Block only 23:00-05:59 UTC (deepest dead zone)
 }
 
 export function generateSignalFromData(
@@ -399,7 +399,10 @@ export function generateSignalFromData(
     if (ohlc.length < 50) return null;
 
     // Market hours filter: block signals during low-liquidity dead zone
-    if (!isWithinTradingHours()) return null;
+    if (!isWithinTradingHours()) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ BLOQUEADO: Fora do horário de trading (Dead zone UTC)`);
+        return null;
+    }
 
     const closes = ohlc.map(c => c.close);
     const rsi = calculateRSI(closes);
@@ -464,12 +467,14 @@ export function generateSignalFromData(
     const { bullishOB, bearishOB, priceInBullishOB, priceInBearishOB } = detectOrderBlock(ohlc, atr);
     const { swingLow, swingHigh } = detectSwingStructure(ohlc, 20);
 
+    logger.debug(`[SIGNAL-DIAG] ${symbol} | bull:${bullishCount} bear:${bearishCount} | RSI:${rsi.toFixed(1)} RVOL:${rvol.toFixed(2)} macro:${macroTrend}`);
+
     if (bullishCount >= 4) {
         type = 'long';
         // --- VETOS ABSOLUTOS (ANTI-SARDINHA) ---
-        if (rsi > 65) return null; // Nunca comprar na máxima saturação (Topo)
-        if (rvol < 0.70) return null; // Sem volume / Feriado = Abortar
-        if (macroTrend === 'short') return null; // Bloqueio total contra a tendência macro de 4H
+        if (rsi > 65) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: RSI=${rsi.toFixed(1)} > 65 (topo saturado)`); return null; }
+        if (rvol < 0.70) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: RVOL=${rvol.toFixed(2)} < 0.70 (sem volume)`); return null; }
+        if (macroTrend === 'short') { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: Macro tendência SHORT (EMA200 4H)`); return null; }
         
         // Formata MTF para LONG
         mtfContext.macro.push(macroTrend === 'long' ? 'Preço acima da EMA 200 (4H) ✅' : 'Preço abaixo da EMA 200 (4H) ❌');
@@ -484,9 +489,9 @@ export function generateSignalFromData(
     } else if (bearishCount >= 4) {
         type = 'short';
         // --- VETOS ABSOLUTOS (ANTI-SARDINHA) ---
-        if (rsi < 35) return null; // Nunca vender no fundo saturado
-        if (rvol < 0.70) return null; // Sem volume / Feriado = Abortar
-        if (macroTrend === 'long') return null; // Bloqueio total contra a tendência macro de 4H
+        if (rsi < 35) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: RSI=${rsi.toFixed(1)} < 35 (fundo saturado)`); return null; }
+        if (rvol < 0.70) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: RVOL=${rvol.toFixed(2)} < 0.70 (sem volume)`); return null; }
+        if (macroTrend === 'long') { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: Macro tendência LONG (EMA200 4H)`); return null; }
         
         // Formata MTF para SHORT
         mtfContext.macro.push(macroTrend === 'short' ? 'Preço abaixo da EMA 200 (4H) ✅' : 'Preço acima da EMA 200 (4H) ❌');
@@ -499,7 +504,8 @@ export function generateSignalFromData(
         score = 60 + bearishCount * 5;
         confluences.push(`${bearishCount} ind. bearish`);
     } else {
-        return null; // Not enough confluence
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ Sem confluência: bull=${bullishCount} bear=${bearishCount} (precisa ≥4)`);
+        return null;
     }
 
     // --- VETO SNIPER EXTREMO ---
@@ -517,8 +523,10 @@ export function generateSignalFromData(
     ].filter(Boolean).length;
 
     const ictConfirmationCount = type === 'long' ? ictLongConfirmations : ictShortConfirmations;
-    if (ictConfirmationCount < 2) {
-        return null; // Rejeita: menos de 2 rastros institucionais confirmados
+    logger.debug(`[SIGNAL-DIAG] ${symbol} ICT check (${type}): FVG=${type==='long'?isBullishFvg:isBearishFvg} Sweep=${type==='long'?isSweepLow:isSweepHigh} OB=${type==='long'?priceInBullishOB:priceInBearishOB} → confirmações=${ictConfirmationCount}`);
+    if (ictConfirmationCount < 1) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ICT: ${ictConfirmationCount} confirmações (precisa ≥1)`);
+        return null;
     }
 
     // RSI extremes bonus (Apenas a favor do recuo natural, já que os vetos acima impedem a entrada contrária)
@@ -632,9 +640,9 @@ export function generateSignalFromData(
     // Cap score
     score = Math.min(score, 100);
 
-    // Minimum score filter — 80 para garantir apenas setups de alta probabilidade
-    // (era 75, mas gerava sinais fracos com ~4 indicadores + 2 ICT = entraria direto)
-    const finalMinScore = customMinScore !== undefined ? customMinScore : 80;
+    // Minimum score filter — 75 (reduzido de 80 + ICT veto agora exige só 1 confirmação)
+    const finalMinScore = customMinScore !== undefined ? customMinScore : 75;
+    logger.debug(`[SIGNAL-DIAG] ${symbol} score=${score} | minScore=${finalMinScore} | ${score >= finalMinScore ? '✅ PASSOU' : '❌ VETADO'}`);
     if (score < finalMinScore) return null;
 
     // --- ICT Order Block + Structural Stop + Fibonacci TPs ---
