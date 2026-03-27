@@ -12,8 +12,9 @@ interface SignalsPanelProps {
 export const SignalsPanel = ({ symbol }: SignalsPanelProps) => {
   const { data: signals, isLoading, error: isError } = useRealTimeSignals({ symbol });
   
-  const activeSignals = signals?.filter(s => s.status === 'active') || [];
-  const completedSignals = signals?.filter(s => s.status !== 'active') || [];
+  const isActive = (status: string) => status === 'active' || status === 'pending';
+  const activeSignals = signals?.filter(s => isActive(s.status)) || [];
+  const completedSignals = signals?.filter(s => !isActive(s.status)) || [];
 
   if (isLoading) {
     return (

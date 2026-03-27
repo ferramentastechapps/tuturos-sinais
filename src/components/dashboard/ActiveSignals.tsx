@@ -26,8 +26,9 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
     const [executeSignal, setExecuteSignal] = useState<TradeSignal | null>(null);
     const [executeModalOpen, setExecuteModalOpen] = useState(false);
 
-    const activeSignals = signals.filter(s => s.status === 'active');
-    const closedSignals = signals.filter(s => s.status !== 'active');
+    const isActive = (status: string) => status === 'active' || status === 'pending';
+    const activeSignals = signals.filter(s => isActive(s.status));
+    const closedSignals = signals.filter(s => !isActive(s.status));
 
     const getRelativeTime = (timestamp: number) => {
         const diff = Date.now() - timestamp;
