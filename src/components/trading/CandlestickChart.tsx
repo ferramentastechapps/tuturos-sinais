@@ -200,7 +200,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
     return () => {
       chart.remove();
     };
-  }, [ohlcData, patterns]);
+  }, [ohlcData, patterns, isExpanded]);
 
   return (
     <>
@@ -235,7 +235,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             </div>
           </div>
           {/* Expanded Chart Area */}
-          <div className="flex-1 min-h-0" ref={chartContainerRef} />
+          <div className="flex-1 min-h-0 min-w-0 bg-transparent flex" ref={isExpanded ? chartContainerRef : undefined} />
           {/* MA Legend strip */}
           <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground shrink-0">
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#f59e0b' }} /><span>EMA 9</span></div>
@@ -306,7 +306,7 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             </div>
           </div>
 
-          <div className="h-[400px] mb-4 relative" ref={chartContainerRef} />
+          <div className="h-[400px] mb-4 relative w-full" ref={!isExpanded ? chartContainerRef : undefined} />
 
           <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#f59e0b' }} /><span>EMA 9</span></div>

@@ -152,26 +152,39 @@ model PortfolioAsset {
 }
 
 model IndicatorAlert {
-  id          String   @id @default(uuid())
-  user_id     String
-  symbol      String
-  indicator   String
-  condition   String
-  value       Float
-  message     String
-  read        Boolean  @default(false)
+  id             String   @id @default(uuid())
+  user_id        String
+  type           String
+  symbol         String
+  indicator_name String
+  value          Float
+  threshold      Float?
+  message        String
+  direction      String   // 'bullish' | 'bearish'
+  read           Boolean  @default(false)
   
-  created_at  DateTime @default(now())
+  created_at     DateTime @default(now())
 }
 
 model IndicatorAlertConfig {
-  id          String   @id @default(uuid())
-  user_id     String   @unique
-  rsi_enabled Boolean  @default(true)
-  macd_enabled Boolean @default(true)
-  bb_enabled  Boolean  @default(true)
-  volume_enabled Boolean @default(true)
+  id                       String   @id @default(uuid())
+  user_id                  String   @unique
+  enabled                  Boolean  @default(true)
+  browser_notifications    Boolean  @default(false)
+  rsi_oversold             Float    @default(30)
+  rsi_overbought           Float    @default(70)
+  stoch_oversold           Float    @default(20)
+  stoch_overbought         Float    @default(80)
+  enable_macd_cross        Boolean  @default(true)
+  enable_ema_cross         Boolean  @default(true)
+  enable_bollinger_touch   Boolean  @default(true)
+  enable_ichimoku_signals  Boolean  @default(true)
+  enable_adx_cross         Boolean  @default(true)
+  adx_strong_trend         Float    @default(25)
+  enable_atr_alerts        Boolean  @default(true)
+  atr_high_volatility      Float    @default(3)
+  atr_low_volatility       Float    @default(1)
   
-  created_at  DateTime @default(now())
-  updated_at  DateTime @default(now()) @updatedAt
+  created_at               DateTime @default(now())
+  updated_at               DateTime @default(now()) @updatedAt
 }

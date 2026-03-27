@@ -9,9 +9,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useRef } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { TelegramSettings } from '@/components/dashboard/TelegramSettings';
+import { useDashboardSettings } from '@/hooks/useDashboardSettings';
+import { LayoutDashboard } from 'lucide-react';
 
 const Settings = () => {
   const { exportBackup, importBackup, clearAllData } = useDataBackup();
+  const { settings, toggleSetting } = useDashboardSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportClick = () => {
@@ -112,6 +115,114 @@ const Settings = () => {
               </div>
               <Switch />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Dashboard Layout Customization */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LayoutDashboard className="h-5 w-5" />
+              Personalização do Dashboard
+            </CardTitle>
+            <CardDescription>
+              Escolha quais cards e painéis serão exibidos na tela inicial
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Valor do Portfolio</Label>
+                <p className="text-sm text-muted-foreground">O card principal com o saldo e PnL diário</p>
+              </div>
+              <Switch checked={settings.showPortfolioValue} onCheckedChange={() => toggleSetting('showPortfolioValue')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Operações Recentes</Label>
+                <p className="text-sm text-muted-foreground">Histórico rápido das últimas operações</p>
+              </div>
+              <Switch checked={settings.showRecentTrades} onCheckedChange={() => toggleSetting('showRecentTrades')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Alertas Ativos</Label>
+                <p className="text-sm text-muted-foreground">Card de resumo com a contagem de alertas ativos</p>
+              </div>
+              <Switch checked={settings.showActiveAlerts} onCheckedChange={() => toggleSetting('showActiveAlerts')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Módulo de Posições (Bybit)</Label>
+                <p className="text-sm text-muted-foreground">Painel realista com abas de ordens, posições, métricas de TP/SL e PnL não realizado</p>
+              </div>
+              <Switch checked={settings.showActivePositions} onCheckedChange={() => toggleSetting('showActivePositions')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Sinais Históricos</Label>
+                <p className="text-sm text-muted-foreground">Card com botão para ver histórico de sinais e sinais listados</p>
+              </div>
+              <Switch checked={settings.showHistoricalSignals} onCheckedChange={() => toggleSetting('showHistoricalSignals')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Módulo de Backtest</Label>
+                <p className="text-sm text-muted-foreground">Ferramenta para testar estratégias baseadas em IA no topo da barra direita</p>
+              </div>
+              <Switch checked={settings.showBacktest} onCheckedChange={() => toggleSetting('showBacktest')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Painel de Sinais Ativos</Label>
+                <p className="text-sm text-muted-foreground">Card lateral com opções de sinais gerados automaticamente</p>
+              </div>
+              <Switch checked={settings.showSignalsPanel} onCheckedChange={() => toggleSetting('showSignalsPanel')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Calculadora de Risco</Label>
+                <p className="text-sm text-muted-foreground">Ferramenta de cálculo de lotes e risco na barra lateral</p>
+              </div>
+              <Switch checked={settings.showRiskCalculator} onCheckedChange={() => toggleSetting('showRiskCalculator')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Painel de Alertas de Indicadores (Mágico)</Label>
+                <p className="text-sm text-muted-foreground">Alertas como RSI Sobrevendido e MACD na barra lateral</p>
+              </div>
+              <Switch checked={settings.showIndicatorAlerts} onCheckedChange={() => toggleSetting('showIndicatorAlerts')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Painel de Alertas de Preço (Ouvir Preços)</Label>
+                <p className="text-sm text-muted-foreground">Criação manual de alertas de preço na barra lateral</p>
+              </div>
+              <Switch checked={settings.showPriceAlerts} onCheckedChange={() => toggleSetting('showPriceAlerts')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Painel de Análise Técnica</Label>
+                <p className="text-sm text-muted-foreground">Resumo de indicadores da moeda no rodapé da área central</p>
+              </div>
+              <Switch checked={settings.showTechnicalAnalysis} onCheckedChange={() => toggleSetting('showTechnicalAnalysis')} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Gráfico Avançado (TradingView)</Label>
+                <p className="text-sm text-muted-foreground">Ocultar o gráfico avançado interativo caso prefira telas mais simples</p>
+              </div>
+              <Switch checked={settings.showAdvancedChart} onCheckedChange={() => toggleSetting('showAdvancedChart')} />
+            </div>
+            {import.meta.env.DEV && (
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Testar Alertas (Demo Panel)</Label>
+                <p className="text-sm text-muted-foreground">Botões para simular recebimento de alertas simulados via push/som</p>
+              </div>
+              <Switch checked={settings.showAlertDemo} onCheckedChange={() => toggleSetting('showAlertDemo')} />
+            </div>
+            )}
           </CardContent>
         </Card>
 

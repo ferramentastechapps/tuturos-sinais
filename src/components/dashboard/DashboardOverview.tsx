@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { PortfolioSummary } from '@/types/portfolio';
 import { TradeWithMetrics } from '@/types/trades';
 import { PriceAlert } from '@/types/priceAlerts';
+import { useDashboardSettings } from '@/hooks/useDashboardSettings';
 
 interface DashboardOverviewProps {
   portfolioSummary: PortfolioSummary;
@@ -20,6 +21,8 @@ export const DashboardOverview = ({
   activeAlerts,
   dailyPnL = 0,
 }: DashboardOverviewProps) => {
+  const { settings } = useDashboardSettings();
+
   const formatCurrency = (value: number) => {
     return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
@@ -37,6 +40,7 @@ export const DashboardOverview = ({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
       {/* Portfolio Value Card */}
+      {settings.showPortfolioValue && (
       <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 sm:col-span-2 lg:col-span-1">
         <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
           <CardTitle className="flex items-center justify-between text-xs sm:text-sm font-medium">
@@ -85,8 +89,10 @@ export const DashboardOverview = ({
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Recent Trades Card */}
+      {settings.showRecentTrades && (
       <Card>
         <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
           <CardTitle className="flex items-center justify-between text-xs sm:text-sm font-medium">
@@ -141,8 +147,10 @@ export const DashboardOverview = ({
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Active Alerts Card */}
+      {settings.showActiveAlerts && (
       <Card>
         <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
           <CardTitle className="flex items-center justify-between text-xs sm:text-sm font-medium">
@@ -198,6 +206,7 @@ export const DashboardOverview = ({
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 };

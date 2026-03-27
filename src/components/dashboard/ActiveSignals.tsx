@@ -54,7 +54,7 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
             <div
                 key={signal.id}
                 className={cn(
-                    "p-5 rounded-xl border bg-card transition-all relative overflow-hidden group hover:border-primary/50 shadow-sm hover:shadow-md",
+                    "p-3.5 rounded-xl border bg-card transition-all relative overflow-hidden group hover:border-primary/50 shadow-sm hover:shadow-md mb-3",
                     isLong ? "border-l-4 border-l-signal-buy" : "border-l-4 border-l-signal-sell"
                 )}
             >
@@ -67,51 +67,48 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                 {/* Header: Direction, Symbol, Score */}
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                        <Badge
-                            variant="outline"
-                            className={cn(
-                                "font-bold text-xs px-2 py-0.5 border-transparent shadow-sm",
-                                isLong ? "bg-signal-buy text-white" : "bg-signal-sell text-white"
-                            )}
-                        >
-                            {isLong ? '🟢 LONG' : '🔴 SHORT'}
-                        </Badge>
-                        <span className="font-bold text-lg text-foreground tracking-tight">{signal.pair}</span>
+                        <div className={cn("w-2 h-2 rounded-full", isLong ? "bg-signal-buy" : "bg-signal-sell")} />
+                        <span className="font-bold text-[15px] text-foreground tracking-tight leading-none">{signal.pair}</span>
                     </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5 font-medium">Score</span>
+                    <div className="flex items-center gap-1.5">
                         <Badge variant="outline" className={cn(
-                            "font-bold font-mono text-sm px-2 py-0.5 shadow-sm",
-                            score >= 80 ? "bg-signal-buy/10 text-signal-buy border-signal-buy/20" : 
-                            score >= 50 ? "bg-warning/10 text-warning border-warning/20" : 
-                            "bg-signal-sell/10 text-signal-sell border-signal-sell/20"
+                            "font-bold font-mono text-[9px] px-1 py-0 shadow-none h-4 border-transparent",
+                            isLong ? "bg-signal-buy/10 text-signal-buy" : "bg-signal-sell/10 text-signal-sell"
                         )}>
-                            {score}/100
+                            {isLong ? 'LONG' : 'SHORT'}
                         </Badge>
+                        <span className={cn(
+                            "font-mono text-[11px] font-bold flex items-center gap-0.5",
+                            score >= 80 ? "text-signal-buy" : score >= 50 ? "text-warning" : "text-signal-sell"
+                        )}>
+                            ⚡{score}
+                        </span>
                     </div>
                 </div>
 
                 {/* Subheader: Trade Type & Duration */}
-                <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-1.5 mb-3 text-[10px] text-muted-foreground">
                     <span className="font-medium text-foreground/80">{signal.tradeType || 'Day Trade'}</span>
                     <span>•</span>
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {signal.expectedDuration || signal.timeframe || '12-24h'}</span>
-                    <span className="ml-auto text-[10px] bg-muted/50 px-2 py-0.5 rounded-3xl">{getRelativeTime(new Date(signal.createdAt).getTime())}</span>
+                    <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {signal.expectedDuration || signal.timeframe || '1h'}</span>
+                    <span className="ml-auto text-[9px] bg-muted/60 px-1.5 py-0.5 rounded-sm whitespace-nowrap">
+                        {getRelativeTime(new Date(signal.createdAt).getTime())}
+                    </span>
                 </div>
 
-                <div className="w-full h-px bg-border/50 mb-4" />
+                <div className="w-full h-px bg-border/40 mb-3" />
 
                 {/* Prices: Entry & Current/TP/SL context */}
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                    <div className="space-y-1">
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Entrada Target</p>
-                        <p className="text-sm font-mono font-bold text-foreground">{formatCurrency(signal.entry)}</p>
+                <div className="flex items-end justify-between mb-3 bg-muted/20 p-2 rounded-lg border border-border/40">
+                    <div className="space-y-0.5">
+                        <p className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider">Entrada</p>
+                        <p className="text-xs font-mono font-bold text-foreground leading-none">{formatCurrency(signal.entry)}</p>
                     </div>
                     {/* Target Progress */}
-                    <div className="space-y-1 text-right">
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{signal.status === 'active' ? 'Alvo Inicial (TP1)' : 'Alvo Final'}</p>
+                    <div className="space-y-0.5 text-right">
+                        <p className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider">{signal.status === 'active' ? 'Alvo TP1' : 'Alvo Final'}</p>
                         <p className={cn(
-                            "text-sm font-mono font-bold",
+                            "text-xs font-mono font-bold leading-none",
                             isLong ? "text-signal-buy" : "text-signal-sell"
                         )}>
                             {formatCurrency(signal.takeProfit1 || signal.takeProfit)}
@@ -120,9 +117,9 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                 </div>
                 
                 {/* Risk and additional context */}
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-3 bg-muted/30 p-2.5 rounded-lg border border-border/50">
-                    <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> R:R 1:{getRR(signal)}</span>
-                    <span className="flex items-center gap-1.5 text-signal-sell/90 font-medium">SL {formatCurrency(signal.stopLoss)}</span>
+                <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-muted-foreground mb-3 px-1">
+                    <span className="flex items-center gap-1 font-medium"><Shield className="w-3 h-3 opacity-60" /> R:R 1:{getRR(signal)}</span>
+                    <span className="flex items-center gap-1 text-signal-sell font-bold">SL {formatCurrency(signal.stopLoss)}</span>
                 </div>
 
                 {/* Price Progress Bar */}
@@ -181,17 +178,19 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                 })()}
 
                 {/* Action Buttons */}
-                <div className="flex gap-2 w-full mt-2">
+                <div className="grid grid-cols-2 gap-2 w-full mt-3">
                     <Button 
                         variant="outline" 
-                        className="flex-1 bg-background hover:bg-muted hover:text-foreground font-semibold text-xs h-10 border-border/80 shadow-sm"
+                        size="sm"
+                        className="w-full bg-background hover:bg-muted hover:text-foreground font-semibold text-[10px] h-7 px-2 border-border/80 shadow-sm"
                         onClick={(e) => { e.stopPropagation(); setSelectedSignal(signal); }}
                     >
-                        📊 Ver Análise
+                        📊 Analisar
                     </Button>
                     <Button 
+                        size="sm"
                         className={cn(
-                            "flex-1 font-semibold text-xs h-10 shadow-md hover:shadow-lg transition-all",
+                            "w-full font-semibold text-[10px] h-7 px-2 shadow-sm hover:shadow-md transition-all",
                             isLong ? "bg-signal-buy hover:bg-signal-buy/90 text-white" : "bg-signal-sell hover:bg-signal-sell/90 text-white"
                         )}
                         onClick={(e) => {
@@ -200,7 +199,7 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                             setExecuteModalOpen(true);
                         }}
                     >
-                        ⚡ Executar Trade
+                        ⚡ Executar
                     </Button>
                 </div>
             </div>
@@ -209,12 +208,12 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
 
     return (
         <div className="trading-card animate-fade-up">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Target className="w-5 h-5 text-primary" />
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h3 className="text-base font-semibold flex items-center gap-1.5">
+                    <Target className="w-4 h-4 text-primary" />
                     Sinais Ativos
                 </h3>
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] px-1.5">
                     {signals.length} Sinais
                 </Badge>
             </div>

@@ -23,15 +23,16 @@ import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
 import { CandlestickChart } from '@/components/trading/CandlestickChart';
 import { AdvancedChart } from '@/components/trading/AdvancedChart';
 import { TechnicalPanel } from '@/components/trading/TechnicalPanel';
-import { SignalsPanel } from '@/components/trading/SignalsPanel';
 import { RiskCalculator } from '@/components/trading/RiskCalculator';
 import { IndicatorAlertsPanel } from '@/components/trading/IndicatorAlertsPanel';
 import { PriceAlertsPanel } from '@/components/trading/PriceAlertsPanel';
 import { AlertDemoPanel } from '@/components/trading/AlertDemoPanel';
+import { ActivePositionsList } from '@/components/trading/ActivePositionsList';
 import { Loader2, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RiskDisclaimer } from '@/components/trading/RiskDisclaimer';
 import BacktestWidget from '@/components/dashboard/BacktestWidget';
+import { useDashboardSettings } from '@/hooks/useDashboardSettings';
 
 import { usePaperTrading } from '@/hooks/usePaperTrading';
 // Data & Types
@@ -44,6 +45,7 @@ const Index = () => {
   const { data: cryptoPairs = [], isLoading } = useCryptoPrices();
   const [selectedPair, setSelectedPair] = useState<CryptoPair | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const { settings } = useDashboardSettings();
 
   // Portfolio and layout data (Simulated Paper Trading)
   const { state: paperState, metrics: paperMetrics, lastClosedOrders } = usePaperTrading();
@@ -274,13 +276,20 @@ const Index = () => {
               {/* Main Charts */}
               <div className="space-y-6">
                 <CandlestickChart symbol={selectedPair.symbol} name={selectedPair.name} />
+                
+                {settings.showAdvancedChart && (
                 <AdvancedChart
                   symbol={selectedPair.symbol}
                   name={selectedPair.name}
                   activeSignal={selectedPairSignal}
                 />
+                )}
+
+                {/* Active Positions & Orders Panel */}
+                {settings.showActivePositions && <ActivePositionsList />}
 
                 <div className="space-y-4">
+                  {settings.showHistoricalSignals && (
                   <div className="flex w-full justify-between items-center bg-card p-4 rounded-xl border border-border/40 shadow-sm">
                     <div>
                       <h3 className="text-lg font-bold text-foreground">Sinais Históricos</h3>
@@ -290,23 +299,18 @@ const Index = () => {
                       <History className="w-4 h-4 mr-2" /> Ver Histórico Completo
                     </Button>
                   </div>
-                  
-                  <ActiveSignals
-                    signals={enrichedSignals}
-                    onSelectSignal={(signal) => {
-                      const pair = cryptoPairs.find(p => p.symbol === signal.pair);
-                      if (pair) setSelectedPair(pair);
-                    }}
-                  />
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Technical Analysis */}
-            <TechnicalPanel symbol={selectedPair.symbol} />
+            {settings.showTechnicalAnalysis && (
+              <TechnicalPanel symbol={selectedPair.symbol} />
+            )}
 
             {/* Dev Tools — hidden in production */}
-            {import.meta.env.DEV && (
+            {(import.meta.env.DEV && settings.showAlertDemo) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <AlertDemoPanel
                   onTriggerTP={() => triggerTPAlert('BTCUSDT', 69500, 3.42)}
@@ -323,12 +327,21 @@ const Index = () => {
         // ── Right: Tools & Alerts ──
         rightPanel={
           <div className="p-3 space-y-4">
-            <BacktestWidget />
+            {settings.showBacktest && <BacktestWidget />}
 
-            <SignalsPanel symbol={selectedPair.symbol} />
+            {settings.showSignalsPanel && (
+              <ActiveSignals
+                signals={enrichedSignals}
+                onSelectSignal={(signal) => {
+                  const pair = cryptoPairs.find(p => p.symbol === signal.pair);
+                  if (pair) setSelectedPair(pair);
+                }}
+              />
+            )}
 
-            <RiskCalculator />
+            {settings.showRiskCalculator && <RiskCalculator />}
 
+            {settings.showIndicatorAlerts && (
             <IndicatorAlertsPanel
               alerts={indicatorAlerts}
               unreadCount={indicatorUnreadCount}
@@ -341,7 +354,9 @@ const Index = () => {
               onRequestNotificationPermission={requestNotificationPermission}
               notificationStatus={getNotificationStatus()}
             />
+            )}
 
+            {settings.showPriceAlerts && (
             <PriceAlertsPanel
               pairs={cryptoPairs}
               activeAlerts={activeAlerts}
@@ -350,6 +365,7 @@ const Index = () => {
               onRemove={removeAlert}
               onClearTriggered={clearTriggeredAlerts}
             />
+            )}
           </div>
         }
 
