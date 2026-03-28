@@ -241,13 +241,13 @@ router.get('/ml/stats', async (_req: Request, res: Response) => {
         });
 
         const totalSignals = trainingData.length;
-        const wins = trainingData.filter(d => d.outcome_label === 1).length;
-        const losses = trainingData.filter(d => d.outcome_label === 0).length;
+        const wins = trainingData.filter((d: any) => d.outcome_label === 1).length;
+        const losses = trainingData.filter((d: any) => d.outcome_label === 0).length;
         const winRate = totalSignals > 0 ? (wins / totalSignals) * 100 : 0;
 
         // Calcular PnL médio
         const avgPnl = totalSignals > 0
-            ? trainingData.reduce((sum, d) => sum + d.outcome_pnl, 0) / totalSignals
+            ? trainingData.reduce((sum: number, d: any) => sum + d.outcome_pnl, 0) / totalSignals
             : 0;
 
         // Contar quantos TPs foram alcançados (buscar nos sinais fechados)

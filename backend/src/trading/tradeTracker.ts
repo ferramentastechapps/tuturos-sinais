@@ -225,8 +225,8 @@ export class TradeTracker {
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
       
       // Atualiza o histórico
-      db.tradeSignal.update({ where: { id: signal.id }, data: { status: 'hit_tp' } }).catch(({ error }: any) => {
-        if (error) console.error('[TradeTracker] Error hit_tp:', error.message);
+      db.tradeSignal.update({ where: { id: signal.id }, data: { status: 'CLOSED_TP' } }).catch(({ error }: any) => {
+        if (error) console.error('[TradeTracker] Error CLOSED_TP:', error.message);
       });
     }
 
@@ -277,7 +277,7 @@ export class TradeTracker {
     this.submitFeedbackToML(signal, outcomeLabel, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
 
     // Atualiza o histórico para o robô treinar
-    const dbStatus = isWin ? 'hit_tp' : 'hit_sl';
+    const dbStatus = isWin ? 'CLOSED_TP' : 'CLOSED_SL';
     db.tradeSignal.update({ where: { id: signal.id }, data: { status: dbStatus } }).catch(({ error }: any) => {
       if (error) console.error('[TradeTracker] Error updating status:', error.message);
     });
@@ -301,7 +301,7 @@ export class TradeTracker {
         message,
         price_at_event: price
       }
-    }).catch(e => console.error('[TradeTracker] Error logging event', e.message));
+    }).catch((e: any) => console.error('[TradeTracker] Error logging event', e.message));
   }
 
   private removeSignalFromMemory(id: string, pair: string) {

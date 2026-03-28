@@ -53,7 +53,7 @@ export interface TradeSignal {
     stop_loss?: number;
     riskReward: number;
     timeframe: string;
-    status: 'pending' | 'active' | 'hit_tp' | 'hit_sl' | 'cancelled';
+    status: 'PENDING' | 'ACTIVE' | 'CLOSED_TP' | 'CLOSED_SL' | 'CANCELLED';
     confidence: number;
     score?: number;
     metricsValues?: Record<string, number>;

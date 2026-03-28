@@ -753,7 +753,7 @@ export function generateSignalFromData(
         positionSizePercent: marginPercent,
         riskPercent: accountRiskLevel,
         timeframe: '1h',
-        status: 'pending',
+        status: 'PENDING',
         confidence: score,
         createdAt: new Date(),
         indicators: confluences,
@@ -1048,7 +1048,7 @@ export async function loadPersistedSignals(): Promise<void> {
             take: 200
         });
 
-        const loadedSignals: TradeSignal[] = data.map(s => {
+        const loadedSignals: TradeSignal[] = data.map((s: any) => {
             let tps: any[] = [];
             try { tps = JSON.parse(s.take_profits || '[]'); } catch (e) {}
             let inds: string[] = [];
@@ -1078,7 +1078,7 @@ export async function loadPersistedSignals(): Promise<void> {
             };
         });
 
-        activeSignals = loadedSignals.filter(s => s.status === 'active' || s.status === 'pending').slice(0, 50);
+        activeSignals = loadedSignals.filter(s => s.status === 'ACTIVE' || s.status === 'PENDING').slice(0, 50);
         signalHistory = loadedSignals.slice(0, 500);
 
         logger.info(`[Engine] Loaded ${loadedSignals.length} persisted signals from DB (${activeSignals.length} active)`);
