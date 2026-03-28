@@ -18,13 +18,15 @@ export function startMLRetrainJob() {
         return;
     }
 
-    // Roda todo Domingo as 03:00 da manhã
-    cron.schedule('0 3 * * 0', async () => {
-        logger.info('Iniciando o Job de Retreinamento de Machine Learning...');
+    // Roda todo dia às 23:55 (final do dia)
+    cron.schedule('55 23 * * *', async () => {
+        logger.info('🎓 Iniciando o Job de Retreinamento Diário de Machine Learning...');
         await executeRetrain();
+    }, {
+        timezone: 'UTC'
     });
 
-    logger.info('ML Retrain Job agendado (Domingos 03:00 AM).');
+    logger.info('ML Retrain Job agendado (Diariamente às 23:55 UTC).');
 }
 
 /**

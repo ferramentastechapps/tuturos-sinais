@@ -28,35 +28,54 @@ export function startSummaryJobs() {
 async function generateAndSendSummary(period: 'daily' | 'weekly') {
     try {
         const now = new Date();
-        const past = new Date();
+
+        // Usar limites exatos do dia/semana UTC em vez de janela rolante de 24h
+        // Isso garante que o resumo represente o dia calendário correto
+        let periodStart: Date;
         if (period === 'daily') {
-            past.setUTCDate(past.getUTCDate() - 1); // Últimas 24h
+            // Início do dia atual em UTC (00:00:00)
+            periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
         } else {
-            past.setUTCDate(past.getUTCDate() - 7); // Últimos 7 dias
+            // Últimos 7 dias
+            periodStart = new Date(now);
+            periodStart.setUTCDate(periodStart.getUTCDate() - 7);
         }
-        const pastStr = past.toISOString();
-        const nowStr = now.toISOString();
 
-        logger.info(`[SummaryJobs] Buscando trades fechados entre ${pastStr} e ${nowStr}`);
+        logger.info(`[SummaryJobs] Período: ${periodStart.toISOString()} → ${now.toISOString()}`);
 
-        // Buscar sinais fechados no período
+        // 1. Total de sinais GERADOS no período (todos os status — criados hoje)
+        let allSignalsToday: any[] = [];
+        try {
+            allSignalsToday = await db.activeSignal.findMany({
+                where: {
+                    created_at: { gte: periodStart, lte: now }
+                }
+            });
+        } catch (error: any) {
+            logger.error(`[SummaryJobs] Erro ao buscar sinais gerados: ${error.message}`);
+            throw error;
+        }
+
+        const signalsGenerated = allSignalsToday.length;
+        logger.info(`[SummaryJobs] Encontrados ${signalsGenerated} sinais gerados no período.`);
+
+        // 2. Trades FECHADOS no período (para cálculo de PnL, wins e losses)
         let closedSignals: any[] = [];
         try {
             closedSignals = await db.activeSignal.findMany({
                 where: {
                     status: { in: ['CLOSED_TP', 'CLOSED_SL'] },
-                    updated_at: { gte: past, lte: now }
+                    updated_at: { gte: periodStart, lte: now }
                 }
             });
         } catch (error: any) {
-            logger.error(`[SummaryJobs] Erro no Database DB: ${error.message}`);
+            logger.error(`[SummaryJobs] Erro ao buscar trades fechados: ${error.message}`);
             throw error;
         }
 
         const signals = (closedSignals || []) as unknown as ActiveSignal[];
         logger.info(`[SummaryJobs] Encontrados ${signals.length} trades fechados.`);
-        
-        const total = signals.length;
+
         let winners = 0;
         let losers = 0;
         let totalPnl = 0;
@@ -64,9 +83,8 @@ async function generateAndSendSummary(period: 'daily' | 'weekly') {
         let bestTrade = { symbol: '', pnlPercent: -9999 };
         let worstTrade = { symbol: '', pnlPercent: 9999 };
 
-        // Processa cada trade
+        // Processa cada trade fechado
         for (const signal of signals) {
-            // Conta winners vs losers: CLOSED_TP = win, CLOSED_SL = loss
             const isWinner = signal.status === 'CLOSED_TP';
             if (isWinner) winners++;
             else losers++;
@@ -75,17 +93,14 @@ async function generateAndSendSummary(period: 'daily' | 'weekly') {
             const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
 
             if (isWinner) {
-                // Cálculo de Gain: Preço do último TP vs Entrada
-                // Obs: Num trade real seria bom pegar de onde saiu, mas vamos pegar o TP 1 pelo menos
                 const lastTp = signal.take_profits && signal.take_profits.length > 0 && signal.take_profits[0].hit
-                    ? signal.take_profits.filter(t => t.hit).pop()?.price || entryAvg
+                    ? signal.take_profits.filter((t: any) => t.hit).pop()?.price || entryAvg
                     : entryAvg;
                     
                 tradePnl = signal.type === 'LONG'
                     ? ((lastTp - entryAvg) / entryAvg) * 100
                     : ((entryAvg - lastTp) / entryAvg) * 100;
             } else {
-                // Cálculo de Loss real
                 tradePnl = signal.type === 'LONG'
                     ? ((signal.stop_loss - entryAvg) / entryAvg) * 100
                     : ((entryAvg - signal.stop_loss) / entryAvg) * 100;
@@ -108,7 +123,7 @@ async function generateAndSendSummary(period: 'daily' | 'weekly') {
         // Top signals (apenas como fallback sem lógica AI extra no cron para não pesar)
         const summaryData: DailySummaryData = {
             date: dateLabel,
-            signalsGenerated: total,
+            signalsGenerated,
             winners,
             losers,
             pnlPercent: totalPnl,

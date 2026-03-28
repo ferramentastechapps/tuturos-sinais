@@ -7,6 +7,8 @@ import { PortfolioSummary } from '@/types/portfolio';
 import { TradeWithMetrics } from '@/types/trades';
 import { PriceAlert } from '@/types/priceAlerts';
 import { useDashboardSettings } from '@/hooks/useDashboardSettings';
+import { MLStatsCard } from './MLStatsCard';
+import { FearGreedCard } from './FearGreedCard';
 
 interface DashboardOverviewProps {
   portfolioSummary: PortfolioSummary;
@@ -207,6 +209,12 @@ export const DashboardOverview = ({
         </CardContent>
       </Card>
       )}
+
+      {/* ML Stats Card */}
+      <MLStatsCard />
+
+      {/* Fear & Greed Card */}
+      <FearGreedCard />
     </div>
   );
 };

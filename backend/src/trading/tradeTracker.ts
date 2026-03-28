@@ -4,7 +4,6 @@ import { fileURLToPath } from 'url';
 import { priceStream, PriceUpdate } from './priceStream.js';
 import { db } from '../lib/dbClient.js';
 import { sendActivationNotification, sendTrailingStopUpdate, sendTPNotification, sendSLNotification } from '../notifications/telegramService.js';
-import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,7 +33,6 @@ export interface ActiveSignal {
 
 export class TradeTracker {
   private activeSignals: Map<string, ActiveSignal[]> = new Map();
-  private lastTrainedCount: number = 0;
 
   constructor() {
     this.setupListeners();
@@ -212,10 +210,24 @@ export class TradeTracker {
     const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
     
     if (tp.level === 1) {
-      // Move to breakeven
+      // Move to breakeven após TP1
       signal.stop_loss = signal.type.toUpperCase() === 'LONG' 
         ? Math.max(signal.stop_loss, entryAvg)
         : Math.min(signal.stop_loss, entryAvg);
+    }
+
+    // Qualquer TP batido já é WIN para o ML
+    // Mesmo que não bata todos os TPs, já garantiu lucro
+    const isFirstTP = !signal.take_profits.slice(0, signal.take_profits.indexOf(tp)).some(t => t.hit);
+    
+    if (isFirstTP) {
+      // Primeira vez que bate qualquer TP = WIN
+      this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
+      
+      // Atualiza o histórico
+      db.tradeSignal.update({ where: { id: signal.id }, data: { status: 'hit_tp' } }).catch(({ error }: any) => {
+        if (error) console.error('[TradeTracker] Error hit_tp:', error.message);
+      });
     }
 
     // Is it fully closed?
@@ -223,14 +235,6 @@ export class TradeTracker {
     if (allHit) {
       signal.status = 'CLOSED_TP';
       this.removeSignalFromMemory(signal.id, signal.pair);
-      
-      // ML Feedback Loop - Win
-      this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
-
-      // Atualiza o histórico para o robô treinar
-      db.tradeSignal.update({ where: { id: signal.id }, data: { status: 'hit_tp' } }).catch(({ error }: any) => {
-        if (error) console.error('[TradeTracker] Error hit_tp:', error.message);
-      });
     }
 
     // Save to DB Safely
@@ -256,12 +260,26 @@ export class TradeTracker {
     
     this.removeSignalFromMemory(signal.id, signal.pair);
 
-    // ML Feedback Loop - Loss
-    this.submitFeedbackToML(signal, 0, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
+    // Calcular se o SL foi com lucro ou prejuízo
+    const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
+    const pnl = signal.type === 'LONG' 
+      ? ((currentPrice - entryAvg) / entryAvg) * 100 
+      : ((entryAvg - currentPrice) / entryAvg) * 100;
+
+    // WIN: Se bateu TP1 (trailing stop) ou SL com lucro
+    // LOSS: Se SL com prejuízo
+    const isWin = pnl > 0;
+    const outcomeLabel = isWin ? 1 : 0;
+
+    console.log(`[TradeTracker] SL PnL: ${pnl.toFixed(2)}% - Outcome: ${isWin ? 'WIN' : 'LOSS'}`);
+
+    // ML Feedback Loop
+    this.submitFeedbackToML(signal, outcomeLabel, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
 
     // Atualiza o histórico para o robô treinar
-    db.tradeSignal.update({ where: { id: signal.id }, data: { status: 'hit_sl' } }).catch(({ error }: any) => {
-      if (error) console.error('[TradeTracker] Error hit_sl:', error.message);
+    const dbStatus = isWin ? 'hit_tp' : 'hit_sl';
+    db.tradeSignal.update({ where: { id: signal.id }, data: { status: dbStatus } }).catch(({ error }: any) => {
+      if (error) console.error('[TradeTracker] Error updating status:', error.message);
     });
 
     try {
@@ -269,7 +287,7 @@ export class TradeTracker {
             where: { id: signal.id },
             data: { status: signal.status }
         });
-        this.logEvent(signal.id, 'SL_HIT', `Stop Loss hit at ${currentPrice}`, currentPrice).catch(()=>{});
+        this.logEvent(signal.id, 'SL_HIT', `Stop Loss hit at ${currentPrice} (PnL: ${pnl.toFixed(2)}%)`, currentPrice).catch(()=>{});
     } catch (e) { /* skip */ }
 
     sendSLNotification(signal, currentPrice).catch(e => console.error('TG error', e));
@@ -381,81 +399,14 @@ export class TradeTracker {
         console.error(`[TradeTracker] Failed to insert ML Feedback:`, insertErr);
       } else {
         console.log(`[TradeTracker] ML Feedback Saved Successfully (Supabase + Local JSONL)!`);
-        // Check if we should retrain after this new sample
-        this.checkAndTriggerRetrain().catch(e =>
-          console.error('[TradeTracker] Auto-retrain check failed:', e.message)
-        );
+        // Retreinamento agora é feito diariamente às 23:55 UTC via mlRetrainJob
       }
     } catch (err) {
       console.error(`[TradeTracker] Unhandled error submitting ML feedback:`, err);
     }
   }
 
-  /**
-   * Checks the total number of records in ml_training_data.
-   * If there are at least 50 new samples since last train, spawns Python retraining.
-   */
-  private async checkAndTriggerRetrain(): Promise<void> {
-    const count = await db.mLTrainingData.count().catch(e => null);
-
-    if (count === null) return;
-
-    if (this.lastTrainedCount === 0) {
-      this.lastTrainedCount = Math.floor(count / 50) * 50;
-    }
-
-    console.log(`[TradeTracker] ml_training_data count: ${count} (Next retrain at ${this.lastTrainedCount + 50})`);
-
-    if (count >= this.lastTrainedCount + 50) {
-      console.log(`[TradeTracker] 🎓 Reached ${count} training samples — triggering auto-retrain...`);
-      this.lastTrainedCount = count; // Prevent multiple triggers
-
-      const __dirname = path.dirname(fileURLToPath(import.meta.url));
-      const backendDir = path.resolve(__dirname, '../../');
-      
-      const isWin = process.platform === 'win32';
-      const pythonBin = isWin
-        ? path.join(backendDir, '.venv_ml', 'Scripts', 'python.exe')
-        : path.join(backendDir, '.venv_ml', 'bin', 'python3');
-        
-      const scriptPath = path.join(backendDir, 'scripts', 'retrain_model.py');
-      const onnxOutput = path.join(backendDir, 'current_model.onnx');
-
-      const proc = spawn(pythonBin, [scriptPath, '--min-samples', '50', '--output', onnxOutput], {
-        detached: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-
-      proc.stdout?.on('data', (d: Buffer) =>
-        console.log('[ML Retrain]', d.toString().trim())
-      );
-      proc.stderr?.on('data', (d: Buffer) =>
-        console.error('[ML Retrain ERROR]', d.toString().trim())
-      );
-      proc.on('close', (code: number) => {
-        if (code === 0) {
-          console.log('[TradeTracker] ✅ Model retrained. Reloading PM2 to apply new model...');
-          // Hot-reload: zero downtime, keeps connections alive
-          const pm2 = spawn('pm2', ['reload', 'signal-engine', 'telegram-bot', '--update-env'], {
-            detached: true,
-            stdio: 'ignore',
-          });
-          pm2.on('close', (pm2Code: number) => {
-            if (pm2Code === 0) {
-              console.log('[TradeTracker] 🚀 PM2 apps (signal-engine, telegram-bot) reloaded — ML model is now active!');
-            } else {
-              console.error(`[TradeTracker] ⚠️ PM2 reload failed (code ${pm2Code}). Run manually: pm2 reload signal-engine telegram-bot`);
-            }
-          });
-          pm2.unref();
-        } else {
-          console.error(`[TradeTracker] ❌ Retraining script exited with code ${code}`);
-        }
-      });
-
-      proc.unref(); // Don't block the event loop
-    }
-  }
+  // Retreinamento agora é gerenciado pelo mlRetrainJob (diário às 23:55 UTC)
 }
 
 export const tradeTracker = new TradeTracker();

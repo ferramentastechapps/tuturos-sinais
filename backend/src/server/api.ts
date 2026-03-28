@@ -229,12 +229,71 @@ router.get('/metrics', (_req: Request, res: Response) => {
 
 // ──── ML Stats ────
 
-router.get('/ml/stats', (_req: Request, res: Response) => {
-    res.json({
-        enabled: config.ml.enabled,
-        loaded: isModelLoaded(),
-        modelPath: config.ml.modelPath,
-    });
+router.get('/ml/stats', async (_req: Request, res: Response) => {
+    try {
+        // Buscar dados de treinamento
+        const trainingData = await db.mLTrainingData.findMany({
+            select: {
+                outcome_label: true,
+                outcome_pnl: true,
+                features: true,
+            }
+        });
+
+        const totalSignals = trainingData.length;
+        const wins = trainingData.filter(d => d.outcome_label === 1).length;
+        const losses = trainingData.filter(d => d.outcome_label === 0).length;
+        const winRate = totalSignals > 0 ? (wins / totalSignals) * 100 : 0;
+
+        // Calcular PnL médio
+        const avgPnl = totalSignals > 0
+            ? trainingData.reduce((sum, d) => sum + d.outcome_pnl, 0) / totalSignals
+            : 0;
+
+        // Contar quantos TPs foram alcançados (buscar nos sinais fechados)
+        const closedSignals = await db.activeSignal.findMany({
+            where: {
+                status: { in: ['CLOSED_TP', 'CLOSED_SL'] }
+            },
+            select: {
+                take_profits: true,
+                status: true,
+            }
+        });
+
+        let tp1Hits = 0, tp2Hits = 0, tp3Hits = 0;
+        
+        for (const signal of closedSignals) {
+            if (signal.status === 'CLOSED_TP') {
+                try {
+                    const tps = JSON.parse(signal.take_profits);
+                    if (Array.isArray(tps)) {
+                        if (tps.find(t => t.level === 1 && t.hit)) tp1Hits++;
+                        if (tps.find(t => t.level === 2 && t.hit)) tp2Hits++;
+                        if (tps.find(t => t.level === 3 && t.hit)) tp3Hits++;
+                    }
+                } catch (e) {
+                    // Ignore parse errors
+                }
+            }
+        }
+
+        res.json({
+            enabled: config.ml.enabled,
+            loaded: isModelLoaded(),
+            totalSignals,
+            wins,
+            losses,
+            winRate,
+            tp1Hits,
+            tp2Hits,
+            tp3Hits,
+            avgPnl,
+        });
+    } catch (error: any) {
+        logger.error('Error fetching ML stats', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // ──── ML Force Retrain ────

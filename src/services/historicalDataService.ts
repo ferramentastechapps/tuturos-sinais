@@ -1,23 +1,33 @@
 // ═══════════════════════════════════════════════════════════
-// Historical Data Service — Binance Futures Klines with Cache
+// Historical Data Service — Bybit V5 Linear Klines with Cache
 // Supports paginated fetching for long periods (up to 3 years)
 // ═══════════════════════════════════════════════════════════
 
 import { OHLCPoint } from '@/services/coingeckoOHLC';
 import { BacktestTimeframe, OHLCCacheEntry } from '@/types/backtestTypes';
 
-const BINANCE_FUTURES_BASE = 'https://fapi.binance.com';
-const MAX_KLINES_PER_REQUEST = 1500;
-const RATE_LIMIT_DELAY = 150; // ms between requests
+const BYBIT_BASE = 'https://api.bybit.com';
+const MAX_KLINES_PER_REQUEST = 1000; // Bybit max per request
+const RATE_LIMIT_DELAY = 200; // ms between requests
+
+// Bybit usa códigos numéricos para intervalos (exceto '1d' e 'W')
+const BYBIT_INTERVAL: Record<BacktestTimeframe, string> = {
+    '1m':  '1',
+    '5m':  '5',
+    '15m': '15',
+    '1h':  '60',
+    '4h':  '240',
+    '1d':  'D',
+};
 
 // Intervalo em ms por timeframe
 const TIMEFRAME_MS: Record<BacktestTimeframe, number> = {
-    '1m': 60 * 1000,
-    '5m': 5 * 60 * 1000,
+    '1m':  60 * 1000,
+    '5m':  5 * 60 * 1000,
     '15m': 15 * 60 * 1000,
-    '1h': 60 * 60 * 1000,
-    '4h': 4 * 60 * 60 * 1000,
-    '1d': 24 * 60 * 60 * 1000,
+    '1h':  60 * 60 * 1000,
+    '4h':  4 * 60 * 60 * 1000,
+    '1d':  24 * 60 * 60 * 1000,
 };
 
 // ──────────── Cache ────────────
@@ -26,7 +36,6 @@ const CACHE_PREFIX = 'bt_ohlc_';
 const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
 const getCacheKey = (symbol: string, timeframe: BacktestTimeframe, startMs: number, endMs: number): string => {
-    // Arredonda para dia para reutilizar cache
     const startDay = new Date(startMs).toISOString().split('T')[0];
     const endDay = new Date(endMs).toISOString().split('T')[0];
     return `${CACHE_PREFIX}${symbol}_${timeframe}_${startDay}_${endDay}`;
@@ -69,7 +78,6 @@ const saveToCache = (
             endTimestamp: data[data.length - 1].timestamp,
         };
 
-        // Verificar se cabe no localStorage (limite ~5MB)
         const serialized = JSON.stringify(entry);
         if (serialized.length > 4 * 1024 * 1024) {
             console.warn(`[HistoricalData] Cache entry too large for ${symbol}, skipping cache`);
@@ -79,7 +87,6 @@ const saveToCache = (
         localStorage.setItem(key, serialized);
     } catch (e) {
         console.warn('[HistoricalData] Failed to cache data:', e);
-        // Se localStorage cheio, limpar caches antigos
         cleanOldCaches();
     }
 };
@@ -92,19 +99,18 @@ const cleanOldCaches = (): void => {
             keys.push(key);
         }
     }
-
-    // Remove os mais antigos (primeiro 50%)
     const toRemove = keys.slice(0, Math.ceil(keys.length / 2));
     toRemove.forEach(k => localStorage.removeItem(k));
 };
 
-// ──────────── Fetch Paginado ────────────
+// ──────────── Fetch Paginado (Bybit V5) ────────────
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Busca klines de um período da Binance Futures API.
- * Se o período requerer mais de 1500 candles, faz múltiplos requests.
+ * Busca klines da Bybit V5 Linear API com paginação.
+ * A Bybit retorna os dados do mais recente para o mais antigo,
+ * então paginamos do fim para o início e revertemos no final.
  */
 const fetchKlinesPaginated = async (
     symbol: string,
@@ -118,17 +124,22 @@ const fetchKlinesPaginated = async (
         : `${symbol.toUpperCase()}USDT`;
 
     const intervalMs = TIMEFRAME_MS[interval];
+    const bybitInterval = BYBIT_INTERVAL[interval];
     const estimatedCandles = Math.ceil((endMs - startMs) / intervalMs);
     const allCandles: OHLCPoint[] = [];
-    let currentStart = startMs;
+
+    // Bybit pagina do fim para o início: começamos com end = endMs
+    // e vamos reduzindo conforme coletamos candles
+    let currentEnd = endMs;
     let requestCount = 0;
 
-    while (currentStart < endMs) {
-        const url = new URL(`${BINANCE_FUTURES_BASE}/fapi/v1/klines`);
+    while (currentEnd > startMs) {
+        const url = new URL(`${BYBIT_BASE}/v5/market/kline`);
+        url.searchParams.set('category', 'linear');
         url.searchParams.set('symbol', formattedSymbol);
-        url.searchParams.set('interval', interval);
-        url.searchParams.set('startTime', currentStart.toString());
-        url.searchParams.set('endTime', endMs.toString());
+        url.searchParams.set('interval', bybitInterval);
+        url.searchParams.set('start', startMs.toString());
+        url.searchParams.set('end', currentEnd.toString());
         url.searchParams.set('limit', MAX_KLINES_PER_REQUEST.toString());
 
         try {
@@ -136,38 +147,51 @@ const fetchKlinesPaginated = async (
 
             if (!response.ok) {
                 if (response.status === 429) {
-                    // Rate limited, wait and retry
-                    console.warn('[HistoricalData] Rate limited, waiting 3s...');
-                    await delay(3000);
+                    console.warn('[HistoricalData] Rate limited, waiting 5s...');
+                    await delay(5000);
                     continue;
                 }
-                throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+                throw new Error(`Bybit API error: ${response.status} ${response.statusText}`);
             }
 
-            const data = await response.json() as any[];
+            const json = await response.json() as {
+                retCode: number;
+                retMsg: string;
+                result?: { list: string[][] };
+            };
 
-            if (data.length === 0) break;
+            if (json.retCode !== 0) {
+                throw new Error(`Bybit API error: ${json.retMsg}`);
+            }
 
-            const candles: OHLCPoint[] = data.map(k => ({
-                timestamp: k[0] as number,
-                open: parseFloat(k[1]),
-                high: parseFloat(k[2]),
-                low: parseFloat(k[3]),
-                close: parseFloat(k[4]),
-                volume: parseFloat(k[5]),
+            const list = json.result?.list ?? [];
+            if (list.length === 0) break;
+
+            // Bybit retorna [startTime, open, high, low, close, volume, turnover]
+            // em ordem do mais recente para o mais antigo
+            const candles: OHLCPoint[] = list.map(k => ({
+                timestamp: parseInt(k[0], 10),
+                open:      parseFloat(k[1]),
+                high:      parseFloat(k[2]),
+                low:       parseFloat(k[3]),
+                close:     parseFloat(k[4]),
+                volume:    parseFloat(k[5]),
             }));
 
             allCandles.push(...candles);
 
-            // Avançar startTime para depois do último candle
-            const lastTimestamp = candles[candles.length - 1].timestamp;
-            currentStart = lastTimestamp + intervalMs;
+            // Próxima página: end = timestamp do candle mais antigo desta página - 1ms
+            const oldestTimestamp = candles[candles.length - 1].timestamp;
+
+            // Se o candle mais antigo já está antes ou igual ao início, terminamos
+            if (oldestTimestamp <= startMs) break;
+
+            currentEnd = oldestTimestamp - 1;
 
             requestCount++;
             onProgress?.(allCandles.length, estimatedCandles);
 
-            // Rate limit
-            if (currentStart < endMs) {
+            if (currentEnd > startMs) {
                 await delay(RATE_LIMIT_DELAY);
             }
 
@@ -177,15 +201,17 @@ const fetchKlinesPaginated = async (
         }
     }
 
-    // Remover duplicatas (pode haver overlap entre páginas)
+    // Remover candles fora do range e duplicatas
     const seen = new Set<number>();
-    const unique = allCandles.filter(c => {
-        if (seen.has(c.timestamp)) return false;
-        seen.add(c.timestamp);
-        return true;
-    });
+    const unique = allCandles
+        .filter(c => {
+            if (c.timestamp < startMs || c.timestamp > endMs) return false;
+            if (seen.has(c.timestamp)) return false;
+            seen.add(c.timestamp);
+            return true;
+        });
 
-    // Ordenar por timestamp
+    // Ordenar crescente (mais antigo primeiro) — Bybit retorna decrescente
     unique.sort((a, b) => a.timestamp - b.timestamp);
 
     return unique;
@@ -203,7 +229,7 @@ export interface FetchHistoricalDataOptions {
 }
 
 /**
- * Busca dados históricos OHLCV da Binance Futures.
+ * Busca dados históricos OHLCV da Bybit V5 Linear.
  * Automaticamente pagina e faz cache.
  */
 export const fetchHistoricalData = async (
@@ -225,7 +251,6 @@ export const fetchHistoricalData = async (
         throw new Error('startDate must be before endDate');
     }
 
-    // Check cache
     const cacheKey = getCacheKey(symbol, timeframe, startMs, endMs);
 
     if (useCache) {
@@ -237,14 +262,12 @@ export const fetchHistoricalData = async (
         }
     }
 
-    // Fetch from Binance
-    console.log(`[HistoricalData] Fetching ${symbol} ${timeframe} from ${startDate} to ${endDate}...`);
+    console.log(`[HistoricalData] Fetching ${symbol} ${timeframe} from ${startDate} to ${endDate} via Bybit...`);
 
     const data = await fetchKlinesPaginated(symbol, timeframe, startMs, endMs, onProgress);
 
     console.log(`[HistoricalData] Fetched ${data.length} candles for ${symbol}`);
 
-    // Cache result
     if (useCache && data.length > 0) {
         saveToCache(cacheKey, symbol, timeframe, data);
     }
