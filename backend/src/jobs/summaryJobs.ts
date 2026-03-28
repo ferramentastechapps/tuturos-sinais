@@ -140,7 +140,7 @@ async function generateAndSendSummary(period: 'daily' | 'weekly') {
         await db.dailySummary.create({
             data: {
                 summary_date: dateLabel,
-                total_signals: total,
+                total_signals: signals.length,
                 winners,
                 losers,
                 pnl: totalPnl,
@@ -148,7 +148,7 @@ async function generateAndSendSummary(period: 'daily' | 'weekly') {
             }
         });
 
-        logger.info(`[SummaryJobs] Report ${period} gerado e enviado com sucesso (${total} trades).`);
+        logger.info(`[SummaryJobs] Report ${period} gerado e enviado com sucesso (${signals.length} trades fechados).`);
     } catch (err) {
         logger.error(`[SummaryJobs] Falha ao gerar relatório ${period}:`, err);
     }
