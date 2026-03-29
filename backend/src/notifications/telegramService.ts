@@ -21,15 +21,11 @@ const formatPrice = (rawPrice: number | string): string => {
     const price = typeof rawPrice === 'string' ? parseFloat(rawPrice) : rawPrice;
     if (isNaN(price)) return '0.00';
     
-    // Mostrar mais casas decimais para preços menores
-    if (price >= 1000) return price.toFixed(2);      // $1000+ → 2 casas
-    if (price >= 100) return price.toFixed(3);       // $100-999 → 3 casas
-    if (price >= 10) return price.toFixed(4);        // $10-99 → 4 casas
-    if (price >= 1) return price.toFixed(5);         // $1-9 → 5 casas
-    if (price >= 0.1) return price.toFixed(6);       // $0.1-0.9 → 6 casas
-    if (price >= 0.01) return price.toFixed(7);      // $0.01-0.09 → 7 casas
-    if (price >= 0.001) return price.toFixed(8);     // $0.001-0.009 → 8 casas
-    return price.toFixed(10);                        // < $0.001 → 10 casas
+    // Formato simplificado: máximo 3 casas decimais
+    if (price >= 1) return price.toFixed(3);         // $1+ → 3 casas
+    if (price >= 0.01) return price.toFixed(4);      // $0.01-0.99 → 4 casas
+    if (price >= 0.001) return price.toFixed(5);     // $0.001-0.009 → 5 casas
+    return price.toFixed(6);                         // < $0.001 → 6 casas
 };
 
 interface QueueItem {
