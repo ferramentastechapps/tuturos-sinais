@@ -183,6 +183,76 @@ router.get('/portfolio', (_req: Request, res: Response) => {
     });
 });
 
+// ──── Portfolio Assets ────
+
+router.get('/portfolio/assets', async (_req: Request, res: Response) => {
+    try {
+        const assets = await db.portfolioAsset.findMany({
+            orderBy: { updated_at: 'desc' }
+        });
+        res.json(assets);
+    } catch (error: any) {
+        logger.error('Error fetching portfolio assets', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/portfolio/assets', async (req: Request, res: Response) => {
+    try {
+        const { symbol, name, quantity, average_buy_price, total_fees } = req.body;
+        
+        // Check if asset already exists
+        const existing = await db.portfolioAsset.findFirst({
+            where: { 
+                user_id: 'default', // TODO: Add user authentication
+                symbol 
+            }
+        });
+
+        if (existing) {
+            // Update existing asset
+            const updated = await db.portfolioAsset.update({
+                where: { id: existing.id },
+                data: {
+                    quantity,
+                    average_buy_price,
+                    total_fees,
+                    updated_at: new Date()
+                }
+            });
+            res.json(updated);
+        } else {
+            // Create new asset
+            const asset = await db.portfolioAsset.create({
+                data: {
+                    user_id: 'default', // TODO: Add user authentication
+                    symbol,
+                    name,
+                    quantity,
+                    average_buy_price,
+                    total_fees
+                }
+            });
+            res.json(asset);
+        }
+    } catch (error: any) {
+        logger.error('Error creating/updating portfolio asset', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.delete('/portfolio/assets/:id', async (req: Request, res: Response) => {
+    try {
+        await db.portfolioAsset.delete({
+            where: { id: req.params.id }
+        });
+        res.json({ success: true });
+    } catch (error: any) {
+        logger.error('Error deleting portfolio asset', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ──── History ────
 
 router.get('/history', (req: Request, res: Response) => {
