@@ -113,6 +113,29 @@ export class TradeTracker {
          const isEntered = update.price >= signal.entry_range_low && update.price <= signal.entry_range_high;
 
          if (isEntered) {
+             // VALIDAÇÃO: Verificar se a direção do sinal ainda é válida
+             const isDirectionValid = await this.validateSignalDirection(signal, update.price);
+             
+             if (!isDirectionValid) {
+                 console.log(`[TradeTracker] ⚠️  Signal ${signal.pair} CANCELADO: Direção mudou de ${signal.type.toUpperCase()}`);
+                 signal.status = 'CANCELLED';
+                 
+                 try {
+                    await db.activeSignal.update({ 
+                        where: { id: signal.id }, 
+                        data: { status: 'CANCELLED' } 
+                    });
+                    this.logEvent(signal.id, 'CANCELLED', `Order cancelled: Direction changed from ${signal.type.toUpperCase()}`, update.price).catch(()=>{});
+                 } catch (e) { /* ignore pg error */ }
+                 
+                 // Notificar cancelamento
+                 this.sendCancellationNotification(signal, 'Direção do mercado mudou').catch(e => console.error('TG error', e));
+                 
+                 // Remover da memória
+                 this.removeSignalFromMemory(signal.id, signal.pair);
+                 continue;
+             }
+             
              console.log(`[TradeTracker] Signal ${signal.pair} ACTIVATED at ${update.price}`);
              signal.status = 'ACTIVE';
              
@@ -407,6 +430,89 @@ export class TradeTracker {
   }
 
   // Retreinamento agora é gerenciado pelo mlRetrainJob (diário às 23:55 UTC)
+
+  /**
+   * Valida se a direção do sinal ainda é válida antes de ativar
+   * Retorna true se a direção ainda é válida, false se mudou
+   */
+  private async validateSignalDirection(signal: ActiveSignal, currentPrice: number): Promise<boolean> {
+    try {
+      // Buscar dados OHLC atuais para recalcular indicadores
+      const { fetchOHLC } = await import('../services/binanceService.js');
+      const ohlc = await fetchOHLC(signal.pair, '1h', 100);
+      
+      if (!ohlc || ohlc.length < 50) {
+        console.warn(`[TradeTracker] Não foi possível validar direção de ${signal.pair}: dados insuficientes`);
+        return true; // Se não conseguir validar, permite ativar
+      }
+
+      const closes = ohlc.map(c => c.close);
+      
+      // Importar funções de cálculo de indicadores
+      const { calculateRSI, calculateEMA } = await import('../indicators/technicalIndicators.js');
+      
+      const rsi = calculateRSI(closes);
+      const ema20 = calculateEMA(closes, 20);
+      const ema50 = calculateEMA(closes, 50);
+      const ema200 = calculateEMA(closes, 200);
+      
+      const lastEma20 = ema20[ema20.length - 1] || currentPrice;
+      const lastEma50 = ema50[ema50.length - 1] || currentPrice;
+      const lastEma200 = ema200[ema200.length - 1] || currentPrice;
+
+      // Contar indicadores bullish e bearish
+      let bullishCount = 0;
+      let bearishCount = 0;
+
+      if (rsi < 70 && rsi > 30) {
+        if (rsi < 45) bearishCount++;
+        if (rsi > 55) bullishCount++;
+      }
+      
+      if (currentPrice > lastEma20) bullishCount++; else bearishCount++;
+      if (currentPrice > lastEma50) bullishCount++; else bearishCount++;
+      if (currentPrice > lastEma200) bullishCount++; else bearishCount++;
+
+      // Determinar direção atual
+      const currentDirection = bullishCount >= bearishCount ? 'LONG' : 'SHORT';
+      const originalDirection = signal.type.toUpperCase();
+
+      if (currentDirection !== originalDirection) {
+        console.log(`[TradeTracker] 🔄 Direção mudou: ${originalDirection} → ${currentDirection} (bull:${bullishCount} bear:${bearishCount})`);
+        return false;
+      }
+
+      console.log(`[TradeTracker] ✅ Direção validada: ${originalDirection} (bull:${bullishCount} bear:${bearishCount})`);
+      return true;
+
+    } catch (error: any) {
+      console.error(`[TradeTracker] Erro ao validar direção:`, error.message);
+      return true; // Em caso de erro, permite ativar
+    }
+  }
+
+  /**
+   * Envia notificação de cancelamento via Telegram
+   */
+  private async sendCancellationNotification(signal: ActiveSignal, reason: string) {
+    try {
+      const { sendTelegramMessage } = await import('../services/telegramService.js');
+      
+      const message = `
+🚫 <b>ORDEM CANCELADA</b>
+
+<b>Par:</b> ${signal.pair}
+<b>Tipo:</b> ${signal.type.toUpperCase()}
+<b>Motivo:</b> ${reason}
+
+<i>A ordem pendente foi cancelada porque as condições de mercado mudaram.</i>
+      `.trim();
+
+      await sendTelegramMessage(message);
+    } catch (error: any) {
+      console.error('[TradeTracker] Erro ao enviar notificação de cancelamento:', error.message);
+    }
+  }
 }
 
 export const tradeTracker = new TradeTracker();

@@ -125,3 +125,40 @@ Padronização para **MAIÚSCULO** em todo o sistema:
 ```bash
 bash deploy_fix_status.sh
 ```
+
+
+## 6. Validação de Direção de Ordem Pendente ✅
+
+### Problema:
+Ordens pendentes eram ativadas mesmo quando a direção do mercado mudava (SHORT → LONG ou LONG → SHORT), causando trades contra a tendência.
+
+### Solução:
+Implementada validação de direção antes de ativar ordem pendente:
+
+**Fluxo:**
+1. Preço entra na zona de entrada
+2. Sistema recalcula indicadores atuais (RSI, EMA20, EMA50, EMA200)
+3. Determina direção atual do mercado
+4. Compara com direção original do sinal
+5. Se mudou: CANCELA ordem e notifica
+6. Se válida: ATIVA ordem normalmente
+
+**Implementação:**
+- `validateSignalDirection()`: Recalcula indicadores e valida direção
+- `sendCancellationNotification()`: Notifica cancelamento via Telegram
+- Modificado `processPriceUpdate()`: Adiciona validação antes de ativar
+
+**Benefícios:**
+- Evita trades contra a tendência
+- Reduz perdas por sinais desatualizados
+- Melhora win rate
+- Notifica usuário sobre cancelamentos
+
+**Arquivo:** `backend/src/trading/tradeTracker.ts`
+
+### Deploy:
+```bash
+cd backend
+npm run build
+pm2 restart signal-engine
+```
