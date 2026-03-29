@@ -21,7 +21,8 @@ export function useMLStats(refreshInterval = 30000) {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('/api/ml/stats');
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+        const response = await fetch(`${API_URL}/ml/stats`);
         if (!response.ok) {
           throw new Error('Falha ao buscar estatísticas ML');
         }
