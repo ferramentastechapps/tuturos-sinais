@@ -33,6 +33,7 @@ export interface ActiveSignal {
 
 export class TradeTracker {
   private activeSignals: Map<string, ActiveSignal[]> = new Map();
+  private activatedSignals: Set<string> = new Set(); // Rastrear sinais já ativados
 
   constructor() {
     this.setupListeners();
@@ -113,6 +114,11 @@ export class TradeTracker {
          const isEntered = update.price >= signal.entry_range_low && update.price <= signal.entry_range_high;
 
          if (isEntered) {
+             // Verificar se já foi ativado (evitar duplicatas)
+             if (this.activatedSignals.has(signal.id)) {
+                 continue; // Já foi ativado, pular
+             }
+             
              // VALIDAÇÃO: Verificar se a direção do sinal ainda é válida
              const isDirectionValid = await this.validateSignalDirection(signal, update.price);
              
@@ -138,6 +144,9 @@ export class TradeTracker {
              
              console.log(`[TradeTracker] Signal ${signal.pair} ACTIVATED at ${update.price}`);
              signal.status = 'ACTIVE';
+             
+             // Marcar como ativado ANTES de enviar notificação
+             this.activatedSignals.add(signal.id);
              
              try {
                 await db.activeSignal.update({ where: { id: signal.id }, data: { status: 'ACTIVE' } });
@@ -330,6 +339,10 @@ export class TradeTracker {
   private removeSignalFromMemory(id: string, pair: string) {
     let signals = this.activeSignals.get(pair) || [];
     signals = signals.filter(s => s.id !== id);
+    
+    // Remover do Set de sinais ativados
+    this.activatedSignals.delete(id);
+    
     if (signals.length === 0) {
       this.activeSignals.delete(pair);
       priceStream.unsubscribe(pair);

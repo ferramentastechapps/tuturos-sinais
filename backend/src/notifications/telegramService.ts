@@ -20,13 +20,16 @@ const RETRY_BASE_DELAY_MS = 1000;
 const formatPrice = (rawPrice: number | string): string => {
     const price = typeof rawPrice === 'string' ? parseFloat(rawPrice) : rawPrice;
     if (isNaN(price)) return '0.00';
-    if (price >= 1000) return price.toFixed(2);
-    if (price >= 1) return price.toFixed(3);
-    if (price >= 0.1) return price.toFixed(4);
-    if (price >= 0.01) return price.toFixed(5);
-    if (price >= 0.001) return price.toFixed(6);
-    if (price >= 0.0001) return price.toFixed(7);
-    return price.toFixed(8);
+    
+    // Mostrar mais casas decimais para preços menores
+    if (price >= 1000) return price.toFixed(2);      // $1000+ → 2 casas
+    if (price >= 100) return price.toFixed(3);       // $100-999 → 3 casas
+    if (price >= 10) return price.toFixed(4);        // $10-99 → 4 casas
+    if (price >= 1) return price.toFixed(5);         // $1-9 → 5 casas
+    if (price >= 0.1) return price.toFixed(6);       // $0.1-0.9 → 6 casas
+    if (price >= 0.01) return price.toFixed(7);      // $0.01-0.09 → 7 casas
+    if (price >= 0.001) return price.toFixed(8);     // $0.001-0.009 → 8 casas
+    return price.toFixed(10);                        // < $0.001 → 10 casas
 };
 
 interface QueueItem {
