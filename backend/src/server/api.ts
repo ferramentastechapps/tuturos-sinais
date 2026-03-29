@@ -19,6 +19,13 @@ import backtestRoutes from './routes/backtestRoutes.js';
 
 const router = Router();
 
+// Helper function to safely get string from req.params or req.query
+const getStringParam = (value: any): string => {
+    if (Array.isArray(value)) return value[0] || '';
+    if (typeof value === 'string') return value;
+    return '';
+};
+
 // ──── Health Check ────
 
 router.get('/health', (_req: Request, res: Response) => {
@@ -100,8 +107,8 @@ router.get('/status', (_req: Request, res: Response) => {
 // ──── Signals ────
 
 router.get('/signals', (req: Request, res: Response) => {
-    const limit = parseInt(req.query.limit as string) || 20;
-    const minScore = parseInt(req.query.minScore as string) || 0;
+    const limit = parseInt(getStringParam(req.query.limit)) || 20;
+    const minScore = parseInt(getStringParam(req.query.minScore)) || 0;
     let signals = getActiveSignals();
     if (minScore > 0) {
         signals = signals.filter(s => (s.quality?.score ?? s.confidence) >= minScore);
@@ -113,11 +120,11 @@ import { db } from '../lib/dbClient.js';
 
 router.get('/signals/history', async (req: Request, res: Response) => {
     try {
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 50;
-        const symbol = req.query.symbol as string;
-        const type = req.query.type as string;
-        const status = req.query.status as string;
+        const page = parseInt(getStringParam(req.query.page)) || 1;
+        const limit = parseInt(getStringParam(req.query.limit)) || 50;
+        const symbol = getStringParam(req.query.symbol);
+        const type = getStringParam(req.query.type);
+        const status = getStringParam(req.query.status);
 
         const filter: any = {};
         if (symbol) filter.pair = symbol;
@@ -152,7 +159,8 @@ router.get('/signals/history', async (req: Request, res: Response) => {
 });
 
 router.get('/signals/:id', (req: Request, res: Response) => {
-    const signal = getSignalById(req.params.id as string);
+    const id = getStringParam(req.params.id);
+    const signal = getSignalById(id);
     if (!signal) {
         res.status(404).json({ error: 'Signal not found' });
         return;
@@ -243,8 +251,9 @@ router.post('/portfolio/assets', async (req: Request, res: Response) => {
 
 router.delete('/portfolio/assets/:id', async (req: Request, res: Response) => {
     try {
+        const id = getStringParam(req.params.id);
         await db.portfolioAsset.delete({
-            where: { id: req.params.id }
+            where: { id }
         });
         res.json({ success: true });
     } catch (error: any) {
@@ -256,7 +265,7 @@ router.delete('/portfolio/assets/:id', async (req: Request, res: Response) => {
 // ──── History ────
 
 router.get('/history', (req: Request, res: Response) => {
-    const limit = parseInt(req.query.limit as string) || 50;
+    const limit = parseInt(getStringParam(req.query.limit)) || 50;
     const state = paperTradingEngine.getState();
     res.json(state.history.slice(0, limit));
 });
