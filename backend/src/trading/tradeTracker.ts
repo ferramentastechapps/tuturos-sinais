@@ -438,18 +438,18 @@ export class TradeTracker {
   private async validateSignalDirection(signal: ActiveSignal, currentPrice: number): Promise<boolean> {
     try {
       // Buscar dados OHLC atuais para recalcular indicadores
-      const { fetchOHLC } = await import('../services/binanceService.js');
-      const ohlc = await fetchOHLC(signal.pair, '1h', 100);
+      const { bybitConnector } = await import('../exchange/bybitConnector.js');
+      const ohlc = await bybitConnector.fetchKlines(signal.pair, '60', 100);
       
       if (!ohlc || ohlc.length < 50) {
         console.warn(`[TradeTracker] Não foi possível validar direção de ${signal.pair}: dados insuficientes`);
         return true; // Se não conseguir validar, permite ativar
       }
 
-      const closes = ohlc.map(c => c.close);
+      const closes = ohlc.map((c: any) => c.close);
       
-      // Importar funções de cálculo de indicadores
-      const { calculateRSI, calculateEMA } = await import('../indicators/technicalIndicators.js');
+      // Importar funções de cálculo de indicadores do signalEngine
+      const { calculateRSI, calculateEMA } = await import('../engine/signalEngine.js');
       
       const rsi = calculateRSI(closes);
       const ema20 = calculateEMA(closes, 20);
@@ -496,7 +496,7 @@ export class TradeTracker {
    */
   private async sendCancellationNotification(signal: ActiveSignal, reason: string) {
     try {
-      const { sendTelegramMessage } = await import('../services/telegramService.js');
+      const { telegramService } = await import('../notifications/telegramService.js');
       
       const message = `
 🚫 <b>ORDEM CANCELADA</b>
@@ -508,7 +508,7 @@ export class TradeTracker {
 <i>A ordem pendente foi cancelada porque as condições de mercado mudaram.</i>
       `.trim();
 
-      await sendTelegramMessage(message);
+      await telegramService.send(message, 'market_alert', signal.pair);
     } catch (error: any) {
       console.error('[TradeTracker] Erro ao enviar notificação de cancelamento:', error.message);
     }
