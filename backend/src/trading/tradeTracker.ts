@@ -269,10 +269,24 @@ export class TradeTracker {
       // Primeira vez que bate qualquer TP = WIN
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
       
-      // Atualiza o histórico
-      db.tradeSignal.update({ where: { id: signal.id }, data: { status: 'CLOSED_TP' } }).catch(({ error }: any) => {
-        if (error) console.error('[TradeTracker] Error CLOSED_TP:', error.message);
-      });
+      // Upsert no histórico (upsert garante que funciona mesmo se o registro não existia)
+      db.tradeSignal.upsert({
+        where: { id: signal.id },
+        update: { status: 'CLOSED_TP' },
+        create: {
+          id: signal.id,
+          pair: signal.pair,
+          type: signal.type.toLowerCase(),
+          trade_type: signal.trade_type || 'Scalping',
+          entry_range_low: signal.entry_range_low,
+          entry_range_high: signal.entry_range_high,
+          stop_loss: signal.stop_loss,
+          initial_stop_loss: signal.initial_stop_loss,
+          take_profits: JSON.stringify(signal.take_profits || []),
+          status: 'CLOSED_TP',
+          confidence: signal.score ?? null,
+        }
+      }).catch((e: Error) => console.error('[TradeTracker] Error upsert CLOSED_TP:', e.message));
     }
 
     // Is it fully closed?
@@ -321,11 +335,25 @@ export class TradeTracker {
     // ML Feedback Loop
     this.submitFeedbackToML(signal, outcomeLabel, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
 
-    // Atualiza o histórico para o robô treinar
+    // Upsert no histórico (upsert garante que funciona mesmo se o registro não existia)
     const dbStatus = isWin ? 'CLOSED_TP' : 'CLOSED_SL';
-    db.tradeSignal.update({ where: { id: signal.id }, data: { status: dbStatus } }).catch(({ error }: any) => {
-      if (error) console.error('[TradeTracker] Error updating status:', error.message);
-    });
+    db.tradeSignal.upsert({
+      where: { id: signal.id },
+      update: { status: dbStatus },
+      create: {
+        id: signal.id,
+        pair: signal.pair,
+        type: signal.type.toLowerCase(),
+        trade_type: signal.trade_type || 'Scalping',
+        entry_range_low: signal.entry_range_low,
+        entry_range_high: signal.entry_range_high,
+        stop_loss: signal.stop_loss,
+        initial_stop_loss: signal.initial_stop_loss,
+        take_profits: JSON.stringify(signal.take_profits || []),
+        status: dbStatus,
+        confidence: signal.score ?? null,
+      }
+    }).catch((e: Error) => console.error('[TradeTracker] Error upsert SL status:', e.message));
 
     try {
         await db.activeSignal.update({
