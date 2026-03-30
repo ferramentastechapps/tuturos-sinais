@@ -160,8 +160,11 @@ router.get('/signals/pair-stats', async (req: Request, res: Response) => {
     try {
         const tradeType = getStringParam(req.query.trade_type);
         const dateRange = getStringParam(req.query.date_range);
+        const type = getStringParam(req.query.type);
 
         const filter: any = { status: { in: ['CLOSED_TP', 'CLOSED_SL'] } };
+
+        if (type && type !== 'ALL') filter.type = type;
 
         if (tradeType && tradeType !== 'ALL') {
             if (tradeType === 'Scalping') filter.trade_type = 'Scalping';

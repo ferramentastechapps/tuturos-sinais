@@ -50,7 +50,7 @@ export default function SignalsGallery() {
     });
 
     const { data: symbols = [], isLoading: loadingSymbols } = useSymbols();
-    const { data: pairStats, isLoading: loadingPairStats } = usePairStats({ tradeType, dateRange });
+    const { data: pairStats, isLoading: loadingPairStats } = usePairStats({ tradeType, dateRange, type });
 
     const getRR = (signal: TradeSignal) => {
         const risk = Math.abs(signal.entry - signal.stopLoss);
