@@ -9,6 +9,8 @@ import { ExecuteTradeModal } from '@/components/trading/ExecuteTradeModal';
 import { Target, ChevronLeft, ChevronRight, LayoutGrid, CalendarDays, Clock, Calendar, RefreshCw } from 'lucide-react';
 import { useSignalHistory } from '@/hooks/useSignalHistory';
 import { useSymbols } from '@/hooks/useSymbols';
+import { usePairStats } from '@/hooks/usePairStats';
+import { PairRanking } from '@/components/dashboard/PairRanking';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatCurrency, formatPercentage } from '@/utils/formatters';
@@ -48,6 +50,7 @@ export default function SignalsGallery() {
     });
 
     const { data: symbols = [], isLoading: loadingSymbols } = useSymbols();
+    const { data: pairStats, isLoading: loadingPairStats } = usePairStats({ tradeType, dateRange });
 
     const getRR = (signal: TradeSignal) => {
         const risk = Math.abs(signal.entry - signal.stopLoss);
@@ -224,6 +227,13 @@ export default function SignalsGallery() {
                     </Card>
                 </div>
             )}
+
+            {/* Pair Rankings */}
+            <PairRanking
+                topWinners={pairStats?.topWinners || []}
+                topLosers={pairStats?.topLosers || []}
+                isLoading={loadingPairStats}
+            />
 
             {/* Grid of Cards */}
             {isLoading ? (
