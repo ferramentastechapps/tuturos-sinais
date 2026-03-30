@@ -2,6 +2,7 @@
 
 import { logger } from '../lib/logger.js';
 import { config } from '../lib/config.js';
+import { getPairStatsRanking } from '../lib/statsService.js';
 import type {
     TelegramSendResult,
     TelegramNotificationType,
@@ -419,9 +420,22 @@ class TelegramService {
 
         const confluenceStr = (signal.indicators || []).slice(0, 4).join(' • ');
 
+        let rankBadge = null;
+        try {
+            const stats = await getPairStatsRanking({ tradeType: 'Scalping', type: signal.type, dateRange: 'ALL' });
+            const winRank = stats.topWinners.findIndex(p => p.pair === signal.pair);
+            if (winRank >= 0 && winRank <= 2) {
+                const icons = ['🥇', '🥈', '🥉'];
+                rankBadge = `${icons[winRank]} <b>Top ${winRank + 1} em ${dir} no Scalping</b>`;
+            }
+        } catch (e: unknown) {
+            logger.warn('Error fetching rank for telegram', (e as Error).message);
+        }
+
         const lines = [
             `⚡ <b>SCALPING ${dir} — ${signal.pair}</b>`,
             `📊 Score: ${signal.confidence}/100 | TF: 5m | Aprox. 15–60 min`,
+            rankBadge ? `${rankBadge}` : null,
             ``,
             `💰 Entrada: <b>$${fmt(signal.entry)}</b>`,
             `❌ Stop Loss: $${fmt(signal.stopLoss)} (<b>-${slPct.toFixed(2)}%</b>)`,
