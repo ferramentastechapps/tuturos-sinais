@@ -26,6 +26,7 @@ export const config = {
     telegram: {
         botToken: process.env.TELEGRAM_BOT_TOKEN || '',
         chatId: process.env.TELEGRAM_CHAT_ID || '',
+        scalpingChatId: process.env.TELEGRAM_SCALPING_CHAT_ID || '',
         enabled: process.env.TELEGRAM_ENABLED === 'true',
         minScore: parseInt(process.env.TELEGRAM_MIN_SCORE || '70', 10),
     },
@@ -52,6 +53,16 @@ export const config = {
         signalIntervalMs: parseInt(process.env.SIGNAL_INTERVAL_MS || '300000', 10), // 5 min
         priceUpdateMs: parseInt(process.env.PRICE_UPDATE_MS || '5000', 10), // 5 sec
         healthCheckMs: parseInt(process.env.HEALTH_CHECK_MS || '60000', 10), // 1 min
+    },
+
+    // Scalping Bot — second signal mode (5m timeframe, separate Telegram channel)
+    scalpingBot: {
+        enabled: process.env.SCALPING_BOT_ENABLED === 'true',
+        chatId: process.env.TELEGRAM_SCALPING_CHAT_ID || '',
+        intervalMs: parseInt(process.env.SCALPING_INTERVAL_MS || '60000', 10), // 1 min
+        minScore: parseInt(process.env.SCALPING_MIN_SCORE || '65', 10),
+        mlMinProb: parseFloat(process.env.SCALPING_ML_MIN_PROB || '0.55'),
+        cooldownMs: parseInt(process.env.SCALPING_COOLDOWN_MS || '1800000', 10), // 30 min
     },
 
     // Monitored symbols for Bybit (Matched with Frontend Dashboard)

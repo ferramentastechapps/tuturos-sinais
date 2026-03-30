@@ -14,6 +14,7 @@ import { apiRouter } from './server/api.js';
 import { initWebSocketServer, broadcastPrices, broadcastPositions, broadcastPortfolio } from './server/wsServer.js';
 import { bybitConnector } from './exchange/bybitConnector.js';
 import { startEngine, stopEngine } from './engine/signalEngine.js';
+import { startScalpingEngine, stopScalpingEngine } from './engine/scalpingEngine.js';
 import { paperTradingEngine } from './trading/paperTradingEngine.js';
 import { loadModel } from './ml/mlPredictionService.js';
 import { telegramService } from './notifications/telegramService.js';
@@ -140,6 +141,10 @@ async function bootstrap(): Promise<void> {
     startEngine();
     logger.info('📊 Signal engine started');
 
+    // 3.5. Start scalping engine (5m — canal Telegram separado)
+    startScalpingEngine();
+    logger.info('⚡ Scalping engine started (5m mode)');
+
     // 4. Start system monitor
     startSystemMonitor(config.engine.healthCheckMs);
     logger.info('🔍 System monitor started');
@@ -174,6 +179,7 @@ async function bootstrap(): Promise<void> {
 function shutdown(signal: string): void {
     logger.info(`Received ${signal}. Shutting down gracefully...`);
     stopEngine();
+    stopScalpingEngine();
     bybitConnector.disconnect();
     server.close(() => {
         logger.info('Server closed');

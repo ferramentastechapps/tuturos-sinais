@@ -7,6 +7,7 @@ import { botLogger as logger } from './lib/logger.js';
 // Import shared modules for data access
 import { bybitConnector } from './exchange/bybitConnector.js';
 import { getActiveSignals, getEngineStats, calculateRSI, calculateEMA, calculateMACD, calculateATR, calculateADX } from './engine/signalEngine.js';
+import { getActiveScalpingSignals, getScalpingStats } from './engine/scalpingEngine.js';
 import { paperTradingEngine } from './trading/paperTradingEngine.js';
 import { isModelLoaded } from './ml/mlPredictionService.js';
 import { getUptime } from './notifications/systemAlerts.js';
@@ -282,6 +283,39 @@ bot.onText(/\/mercado/, (msg) => {
         '',
         ...lines,
     ].join('\n');
+
+    bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+});
+
+// ──── /scalping ────
+
+bot.onText(/\/scalping/, (msg) => {
+    const chatId = msg.chat.id;
+    const signals = getActiveScalpingSignals();
+    const stats = getScalpingStats();
+
+    if (signals.length === 0) {
+        bot.sendMessage(chatId, `⚡ <b>Scalping Bot</b>\n\nNenhum sinal de scalping ativo no momento.\n📊 Hoje: ${stats.signalsToday} sinais | ✅ Enviados: ${stats.signalsSent}`, { parse_mode: 'HTML' });
+        return;
+    }
+
+    const signalTexts = signals.slice(0, 5).map(s => {
+        const emoji = s.type === 'long' ? '🟢' : '🔴';
+        return [
+            `${emoji} <b>${s.type.toUpperCase()} ${s.pair}</b> (5m)`,
+            `  Score: ${s.confidence}/100`,
+            `  Entry: $${s.entry.toFixed(4)}`,
+            `  TP1: $${(s.takeProfit1 || s.takeProfit).toFixed(4)} | SL: $${s.stopLoss.toFixed(4)}`,
+            `  R:R: 1:${s.riskReward}`,
+        ].join('\n');
+    });
+
+    const text = [
+        `⚡ <b>Scalping Ativos (${signals.length})</b>`,
+        `📅 Hoje: ${stats.signalsToday} | ✅ Enviados: ${stats.signalsSent}`,
+        '',
+        ...signalTexts,
+    ].join('\n\n');
 
     bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
 });

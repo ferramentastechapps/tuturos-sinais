@@ -395,6 +395,48 @@ class TelegramService {
 
         return this.send(text, 'new_signal', signal.pair);
     }
+    async sendScalpingSignal(signal: any): Promise<TelegramSendResult> {
+        const scalpingChatId = config.telegram.scalpingChatId;
+        if (!scalpingChatId || !this.token) {
+            return { success: false, error: 'Scalping channel not configured' };
+        }
+
+        const emoji = signal.type === 'long' ? '🟢' : '🔴';
+        const dir = signal.type.toUpperCase();
+        const fmt = (p: number) => p < 0.01 ? p.toFixed(6) : p < 1 ? p.toFixed(4) : p < 100 ? p.toFixed(3) : p.toFixed(2);
+
+        const slPct = Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100;
+        const tp1Pct = Math.abs(signal.takeProfit1 - signal.entry) / signal.entry * 100;
+        const tp2Pct = signal.takeProfit2 ? Math.abs(signal.takeProfit2 - signal.entry) / signal.entry * 100 : null;
+
+        const confluenceStr = (signal.indicators || []).slice(0, 4).join(' • ');
+
+        const lines = [
+            `⚡ <b>SCALPING ${dir} — ${signal.pair}</b>`,
+            `📊 Score: ${signal.confidence}/100 | TF: 5m | Aprox. 15–60 min`,
+            ``,
+            `💰 Entrada: <b>$${fmt(signal.entry)}</b>`,
+            `❌ Stop Loss: $${fmt(signal.stopLoss)} (<b>-${slPct.toFixed(2)}%</b>)`,
+            ``,
+            `🎯 <b>Take Profits:</b>`,
+            `  TP1: $${fmt(signal.takeProfit1)} (+${tp1Pct.toFixed(2)}%)`,
+            tp2Pct ? `  TP2: $${fmt(signal.takeProfit2)} (+${tp2Pct.toFixed(2)}%)` : null,
+            ``,
+            `📈 R:R 1:${signal.riskReward} | ⚡ ${signal.dynamicLeverage}x alavancagem`,
+            ``,
+            `🔍 <i>${confluenceStr}</i>`,
+            ``,
+            `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+        ].filter(l => l !== null).join('\n');
+
+        return this.enqueueMessage(scalpingChatId, lines, 'new_signal', signal.pair);
+    }
+
+    async sendToScalpingChannel(text: string): Promise<TelegramSendResult> {
+        const scalpingChatId = config.telegram.scalpingChatId;
+        if (!scalpingChatId) return { success: false, error: 'Scalping chat ID not set' };
+        return this.enqueueMessage(scalpingChatId, text, 'new_signal');
+    }
 }
 
 export const telegramService = new TelegramService();
@@ -403,3 +445,4 @@ export const sendTPNotification = (signal: any, tp: any, currentPrice: number) =
 export const sendSLNotification = (signal: any, currentPrice: number) => telegramService.sendStopLossNotification(signal, currentPrice);
 export const sendTrailingStopUpdate = (signal: any, currentPrice: number, oldSl: number, newSl: number) => telegramService.sendTrailingStopUpdate(signal, currentPrice, oldSl, newSl);
 export const sendActivationNotification = (signal: any, currentPrice: number) => telegramService.sendActivationNotification(signal, currentPrice);
+
