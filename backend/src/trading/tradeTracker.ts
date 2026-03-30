@@ -70,6 +70,18 @@ export class TradeTracker {
     priceStream.subscribe(signal.pair);
   }
 
+  public getAllActiveSignals(): ActiveSignal[] {
+    const allSignals: ActiveSignal[] = [];
+    for (const signals of this.activeSignals.values()) {
+        allSignals.push(...signals);
+    }
+    // Retorna ordenado pelo mais recente
+    return allSignals.sort((a, b) => {
+        // Usa o timestamp no ID se existir, ou data de criação do banco
+        return b.id.localeCompare(a.id); 
+    });
+  }
+
   public async registerNewSignal(signal: Partial<ActiveSignal>) {
     console.log(`[TradeTracker] Registering new signal for ${signal.pair}...`);
     let fullSignal = signal as ActiveSignal;

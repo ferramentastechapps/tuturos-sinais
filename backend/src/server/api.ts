@@ -106,13 +106,45 @@ router.get('/status', (_req: Request, res: Response) => {
 
 // ──── Signals ────
 
+import { tradeTracker } from '../trading/tradeTracker.js';
+
 router.get('/signals', (req: Request, res: Response) => {
     const limit = parseInt(getStringParam(req.query.limit)) || 20;
     const minScore = parseInt(getStringParam(req.query.minScore)) || 0;
-    let signals = getActiveSignals();
+    const tradeType = getStringParam(req.query.trade_type);
+
+    let active = tradeTracker.getAllActiveSignals();
+    
+    // Convert to frontend compatible format
+    let signals = active.map(s => ({
+        id: s.id,
+        pair: s.pair,
+        type: s.type,
+        trade_type: s.trade_type,
+        entry: (s.entry_range_low + s.entry_range_high) / 2,
+        entry_range_low: s.entry_range_low,
+        entry_range_high: s.entry_range_high,
+        takeProfit: s.take_profits[0]?.price,
+        takeProfits: s.take_profits,
+        takeProfit1: s.take_profits.find((t: any) => t.level === 1)?.price,
+        takeProfit2: s.take_profits.find((t: any) => t.level === 2)?.price,
+        takeProfit3: s.take_profits.find((t: any) => t.level === 3)?.price,
+        stopLoss: s.stop_loss,
+        initial_stop_loss: s.initial_stop_loss,
+        status: s.status,
+        createdAt: (s as any).created_at || new Date().toISOString(),
+        score: s.score,
+        quality: { score: s.score || 0 }
+    }));
+
     if (minScore > 0) {
-        signals = signals.filter(s => (s.quality?.score ?? s.confidence) >= minScore);
+        signals = signals.filter(s => s.score && s.score >= minScore);
     }
+    
+    if (tradeType && tradeType !== 'ALL') {
+        signals = signals.filter(s => s.trade_type === tradeType);
+    }
+
     res.json(signals.slice(0, limit));
 });
 
@@ -125,11 +157,22 @@ router.get('/signals/history', async (req: Request, res: Response) => {
         const symbol = getStringParam(req.query.symbol);
         const type = getStringParam(req.query.type);
         const status = getStringParam(req.query.status);
+        const tradeType = getStringParam(req.query.trade_type);
 
         const filter: any = {};
-        if (symbol) filter.pair = symbol;
-        if (type) filter.type = type;
-        if (status) filter.status = status;
+        if (symbol && symbol !== 'ALL') filter.pair = symbol;
+        if (type && type !== 'ALL') filter.type = type;
+        if (status && status !== 'ALL') filter.status = status;
+        
+        if (tradeType && tradeType !== 'ALL') {
+            if (tradeType === 'Scalping') {
+                filter.trade_type = 'Scalping';
+            } else if (tradeType === 'Main') {
+                filter.trade_type = { not: 'Scalping' }; // Qualquer coisa que não seja scalping é principal
+            } else {
+                filter.trade_type = tradeType;
+            }
+        }
 
         const from = (page - 1) * limit;
 

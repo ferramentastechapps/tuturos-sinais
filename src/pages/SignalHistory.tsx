@@ -16,13 +16,15 @@ const SignalHistory = () => {
   const [symbol, setSymbol] = useState<string>('ALL');
   const [type, setType] = useState<string>('ALL');
   const [status, setStatus] = useState<string>('ALL');
+  const [tradeType, setTradeType] = useState<string>('ALL');
 
   const { data, isLoading, error } = useSignalHistory({
     page,
     limit,
     symbol,
     type,
-    status
+    status,
+    tradeType
   });
 
   const getStatusBadge = (s: string) => {
@@ -39,6 +41,7 @@ const SignalHistory = () => {
     setSymbol('ALL');
     setType('ALL');
     setStatus('ALL');
+    setTradeType('ALL');
     setPage(1);
   };
 
@@ -67,7 +70,7 @@ const SignalHistory = () => {
               <BarChart2 className="w-5 h-5 text-primary" />
               Filtros Avançados
             </div>
-            {(symbol !== 'ALL' || type !== 'ALL' || status !== 'ALL') && (
+            {(symbol !== 'ALL' || type !== 'ALL' || status !== 'ALL' || tradeType !== 'ALL') && (
               <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground h-8 text-xs">
                 Limpar Filtros
               </Button>
@@ -124,6 +127,20 @@ const SignalHistory = () => {
                   <SelectItem value="CLOSED_TP">Fechado - TP Hit</SelectItem>
                   <SelectItem value="CLOSED_SL">Fechado - SL Hit</SelectItem>
                   <SelectItem value="CANCELED">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5 w-[160px]">
+              <label className="text-xs font-semibold text-muted-foreground">Robô (Estratégia)</label>
+              <Select value={tradeType} onValueChange={(v) => { setTradeType(v); setPage(1); }}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Dashboard Geral</SelectItem>
+                  <SelectItem value="Main">Motor (Swing 4H)</SelectItem>
+                  <SelectItem value="Scalping">Robô (Scalp 5m)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

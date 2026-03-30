@@ -25,10 +25,18 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
     const [selectedSignal, setSelectedSignal] = useState<TradeSignal | null>(null);
     const [executeSignal, setExecuteSignal] = useState<TradeSignal | null>(null);
     const [executeModalOpen, setExecuteModalOpen] = useState(false);
+    const [robotFilter, setRobotFilter] = useState<'ALL' | 'Main' | 'Scalping'>('ALL');
 
     const isActive = (status: string) => status === 'active' || status === 'pending';
-    const activeSignals = signals.filter(s => isActive(s.status));
-    const closedSignals = signals.filter(s => !isActive(s.status));
+    
+    const filteredByRobot = signals.filter(s => {
+        if (robotFilter === 'ALL') return true;
+        if (robotFilter === 'Scalping') return s.tradeType === 'Scalping';
+        return s.tradeType !== 'Scalping'; // Tratamos tudo que não for Scalping como Principal
+    });
+
+    const activeSignals = filteredByRobot.filter(s => isActive(s.status));
+    const closedSignals = filteredByRobot.filter(s => !isActive(s.status));
 
     const getRelativeTime = (timestamp: number) => {
         const diff = Date.now() - timestamp;
@@ -214,8 +222,30 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
                     Sinais Ativos
                 </h3>
                 <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] px-1.5">
-                    {signals.length} Sinais
+                    {filteredByRobot.length} Sinais
                 </Badge>
+            </div>
+
+            {/* Robot Filter Switcher */}
+            <div className="flex gap-2 mb-4">
+                <Button 
+                    variant={robotFilter === 'ALL' ? 'default' : 'outline'} 
+                    size="sm" 
+                    className="flex-1 h-7 text-[11px]" 
+                    onClick={() => setRobotFilter('ALL')}
+                >Mesa Geral</Button>
+                <Button 
+                    variant={robotFilter === 'Main' ? 'default' : 'outline'} 
+                    size="sm" 
+                    className="flex-1 h-7 text-[11px]" 
+                    onClick={() => setRobotFilter('Main')}
+                >Swing (4H)</Button>
+                <Button 
+                    variant={robotFilter === 'Scalping' ? 'default' : 'outline'} 
+                    size="sm" 
+                    className="flex-1 h-7 text-[11px]" 
+                    onClick={() => setRobotFilter('Scalping')}
+                >Scalping (5m)</Button>
             </div>
 
             <Tabs defaultValue="active" className="w-full">

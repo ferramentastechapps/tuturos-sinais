@@ -8,6 +8,7 @@ interface UseSignalHistoryOptions {
   symbol?: string;
   type?: string;
   status?: string;
+  tradeType?: string;
 }
 
 interface PaginatedResponse {
@@ -38,14 +39,15 @@ const mapBackendSignal = (raw: any): TradeSignal => ({
   indicators: Array.isArray(raw.indicators) ? raw.indicators : (typeof raw.indicators === 'string' ? JSON.parse(raw.indicators) : []),
   quality: raw.quality ?? undefined,
   mlData: raw.mlData ?? raw.ml_data ?? undefined,
+  tradeType: raw.tradeType ?? raw.trade_type,
   createdAt: new Date(raw.createdAt ?? raw.created_at),
 });
 
 export const useSignalHistory = (options: UseSignalHistoryOptions) => {
-  const { page, limit = 50, symbol, type, status } = options;
+  const { page, limit = 50, symbol, type, status, tradeType } = options;
 
   return useQuery<{ signals: TradeSignal[], totalPages: number, total: number }, Error>({
-    queryKey: ['signal-history', page, limit, symbol, type, status],
+    queryKey: ['signal-history', page, limit, symbol, type, status, tradeType],
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams();
       params.append('page', page.toString());
@@ -53,6 +55,7 @@ export const useSignalHistory = (options: UseSignalHistoryOptions) => {
       if (symbol && symbol !== 'ALL') params.append('symbol', symbol);
       if (type && type !== 'ALL') params.append('type', type);
       if (status && status !== 'ALL') params.append('status', status);
+      if (tradeType && tradeType !== 'ALL') params.append('trade_type', tradeType);
 
       const { data } = await apiClient.get<PaginatedResponse>(`/signals/history?${params.toString()}`, {
         signal,
