@@ -89,6 +89,7 @@ export class TradeTracker {
         fullSignal.id = `${signal.pair}-${Date.now()}`;
     }
 
+    // 1. Save to activeSignal (monitoring/RAM table)
     try {
         const inputData = { 
             ...fullSignal, 
@@ -103,7 +104,30 @@ export class TradeTracker {
             } as any as ActiveSignal;
         }
     } catch (e: any) {
-        console.warn('[TradeTracker] DB Exception. Tracking in RAM only.', e);
+        console.warn('[TradeTracker] DB Exception on activeSignal. Tracking in RAM only.', e.message);
+    }
+
+    // 2. Also upsert into tradeSignal (history/analytics table) so it shows in the gallery/filters
+    try {
+        await db.tradeSignal.upsert({
+            where: { id: fullSignal.id },
+            update: { status: fullSignal.status },
+            create: {
+                id: fullSignal.id,
+                pair: fullSignal.pair,
+                type: fullSignal.type.toLowerCase(),
+                trade_type: fullSignal.trade_type || 'Scalping',
+                entry_range_low: fullSignal.entry_range_low,
+                entry_range_high: fullSignal.entry_range_high,
+                stop_loss: fullSignal.stop_loss,
+                initial_stop_loss: fullSignal.initial_stop_loss,
+                take_profits: JSON.stringify(fullSignal.take_profits || []),
+                status: fullSignal.status || 'PENDING',
+                confidence: fullSignal.score ?? null,
+            }
+        });
+    } catch (e: any) {
+        console.warn('[TradeTracker] DB Exception on tradeSignal upsert.', e.message);
     }
 
     this.addSignalToMemory(fullSignal);

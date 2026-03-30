@@ -30,7 +30,10 @@ export const ActiveSignals = ({ signals, onSelectSignal }: ActiveSignalsProps) =
     const [robotFilter, setRobotFilter] = useState<'ALL' | 'Main' | 'Scalping'>('ALL');
     const navigate = useNavigate();
 
-    const isActive = (status: string) => status === 'active' || status === 'pending';
+    const isActive = (status: string) => {
+        const s = (status || '').toLowerCase();
+        return s === 'active' || s === 'pending';
+    };
     
     const filteredByRobot = signals.filter(s => {
         if (robotFilter === 'ALL') return true;
