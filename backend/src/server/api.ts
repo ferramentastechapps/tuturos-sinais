@@ -150,6 +150,11 @@ router.get('/signals', (req: Request, res: Response) => {
 
 import { db } from '../lib/dbClient.js';
 
+// ──── Symbols list ────
+router.get('/symbols', (_req: Request, res: Response) => {
+    res.json({ symbols: config.monitoredSymbols });
+});
+
 router.get('/signals/history', async (req: Request, res: Response) => {
     try {
         const page = parseInt(getStringParam(req.query.page)) || 1;
@@ -158,6 +163,7 @@ router.get('/signals/history', async (req: Request, res: Response) => {
         const type = getStringParam(req.query.type);
         const status = getStringParam(req.query.status);
         const tradeType = getStringParam(req.query.trade_type);
+        const dateRange = getStringParam(req.query.date_range); // 'day' | 'week' | 'month'
 
         const filter: any = {};
         if (symbol && symbol !== 'ALL') filter.pair = symbol;
@@ -168,14 +174,33 @@ router.get('/signals/history', async (req: Request, res: Response) => {
             if (tradeType === 'Scalping') {
                 filter.trade_type = 'Scalping';
             } else if (tradeType === 'Main') {
-                filter.trade_type = { not: 'Scalping' }; // Qualquer coisa que não seja scalping é principal
+                filter.trade_type = { not: 'Scalping' };
             } else {
                 filter.trade_type = tradeType;
             }
         }
 
-        const from = (page - 1) * limit;
+        // Date range filter
+        if (dateRange && dateRange !== 'ALL') {
+            const now = new Date();
+            let fromDate: Date;
+            if (dateRange === 'day') {
+                fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+            } else if (dateRange === 'week') {
+                const day = now.getDay();
+                fromDate = new Date(now);
+                fromDate.setDate(now.getDate() - day);
+                fromDate.setHours(0, 0, 0, 0);
+            } else if (dateRange === 'month') {
+                fromDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+            } else {
+                fromDate = new Date(0); // 'all'
+            }
+            filter.created_at = { gte: fromDate };
+        }
 
+        // Fetch paginated data
+        const from = (page - 1) * limit;
         const [data, count] = await Promise.all([
             db.tradeSignal.findMany({
                 where: filter,
@@ -186,8 +211,49 @@ router.get('/signals/history', async (req: Request, res: Response) => {
             db.tradeSignal.count({ where: filter })
         ]);
 
+        // Fetch all matching to calculate precise stats
+        const allStatsRaw = await db.tradeSignal.findMany({
+            where: filter,
+            select: { status: true, entry_range_low: true, entry_range_high: true, stop_loss: true, take_profits: true }
+        });
+
+        let wins = 0;
+        let losses = 0;
+        let active = 0;
+        let totalPnl = 0;
+
+        for (const s of allStatsRaw) {
+            if (s.status === 'ACTIVE' || s.status === 'PENDING') active++;
+            else if (s.status === 'CLOSED_TP') {
+                wins++;
+                const entry = (s.entry_range_low + s.entry_range_high) / 2;
+                let tpPrice = entry;
+                try {
+                    const tpList = JSON.parse(s.take_profits);
+                    if (tpList && tpList.length > 0) tpPrice = tpList[0].price;
+                } catch(e) {}
+                const gain = Math.abs((tpPrice - entry) / entry) * 100;
+                totalPnl += gain;
+            }
+            else if (s.status === 'CLOSED_SL') {
+                losses++;
+                const entry = (s.entry_range_low + s.entry_range_high) / 2;
+                const loss = Math.abs((entry - s.stop_loss) / entry) * 100;
+                totalPnl -= loss; // Subtrai a % de loss do PNL
+            }
+        }
+
+        const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
+
         res.json({
             data,
+            stats: {
+                wins,
+                losses,
+                active,
+                winRate,
+                totalPnl
+            },
             pagination: {
                 page,
                 limit,

@@ -9,10 +9,18 @@ interface UseSignalHistoryOptions {
   type?: string;
   status?: string;
   tradeType?: string;
+  dateRange?: string;
 }
 
 interface PaginatedResponse {
   data: any[];
+  stats?: {
+    wins: number;
+    losses: number;
+    active: number;
+    winRate: number;
+    totalPnl: number;
+  };
   pagination: {
     page: number;
     limit: number;
@@ -44,10 +52,10 @@ const mapBackendSignal = (raw: any): TradeSignal => ({
 });
 
 export const useSignalHistory = (options: UseSignalHistoryOptions) => {
-  const { page, limit = 50, symbol, type, status, tradeType } = options;
+  const { page, limit = 50, symbol, type, status, tradeType, dateRange } = options;
 
-  return useQuery<{ signals: TradeSignal[], totalPages: number, total: number }, Error>({
-    queryKey: ['signal-history', page, limit, symbol, type, status, tradeType],
+  return useQuery<{ signals: TradeSignal[], totalPages: number, total: number, stats?: PaginatedResponse['stats'] }, Error>({
+    queryKey: ['signal-history', page, limit, symbol, type, status, tradeType, dateRange],
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams();
       params.append('page', page.toString());
@@ -56,6 +64,7 @@ export const useSignalHistory = (options: UseSignalHistoryOptions) => {
       if (type && type !== 'ALL') params.append('type', type);
       if (status && status !== 'ALL') params.append('status', status);
       if (tradeType && tradeType !== 'ALL') params.append('trade_type', tradeType);
+      if (dateRange && dateRange !== 'ALL') params.append('date_range', dateRange);
 
       const { data } = await apiClient.get<PaginatedResponse>(`/signals/history?${params.toString()}`, {
         signal,
@@ -65,6 +74,7 @@ export const useSignalHistory = (options: UseSignalHistoryOptions) => {
         signals: Array.isArray(data?.data) ? data.data.map(mapBackendSignal) : [],
         totalPages: data?.pagination?.totalPages || 1,
         total: data?.pagination?.total || 0,
+        stats: data?.stats,
       };
     },
     staleTime: 60_000,

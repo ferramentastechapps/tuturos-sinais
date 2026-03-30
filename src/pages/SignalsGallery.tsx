@@ -6,11 +6,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TradeSignal } from '@/types/trading';
 import { SignalCard } from '@/components/dashboard/SignalCard';
 import { ExecuteTradeModal } from '@/components/trading/ExecuteTradeModal';
-import { Target, BarChart2, ChevronLeft, ChevronRight, LayoutGrid } from 'lucide-react';
+import { Target, ChevronLeft, ChevronRight, LayoutGrid, CalendarDays, Clock, Calendar, RefreshCw } from 'lucide-react';
 import { useSignalHistory } from '@/hooks/useSignalHistory';
+import { useSymbols } from '@/hooks/useSymbols';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatCurrency, formatPercentage } from '@/utils/formatters';
+
+type DateRange = 'ALL' | 'day' | 'week' | 'month';
+
+const DATE_RANGE_OPTIONS: { value: DateRange; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { value: 'ALL', label: 'Tudo', icon: RefreshCw },
+    { value: 'day', label: 'Hoje', icon: Clock },
+    { value: 'week', label: 'Semana', icon: CalendarDays },
+    { value: 'month', label: 'Mês', icon: Calendar },
+];
 
 export default function SignalsGallery() {
     // Modal states
@@ -20,11 +30,12 @@ export default function SignalsGallery() {
 
     // Filter states
     const [page, setPage] = useState(1);
-    const limit = 24; // Show more cards in gallery
+    const limit = 24;
     const [symbol, setSymbol] = useState<string>('ALL');
     const [type, setType] = useState<string>('ALL');
     const [status, setStatus] = useState<string>('ALL');
     const [tradeType, setTradeType] = useState<string>('ALL');
+    const [dateRange, setDateRange] = useState<DateRange>('ALL');
 
     const { data, isLoading } = useSignalHistory({
         page,
@@ -32,8 +43,11 @@ export default function SignalsGallery() {
         symbol,
         type,
         status,
-        tradeType
+        tradeType,
+        dateRange,
     });
+
+    const { data: symbols = [], isLoading: loadingSymbols } = useSymbols();
 
     const getRR = (signal: TradeSignal) => {
         const risk = Math.abs(signal.entry - signal.stopLoss);
@@ -41,8 +55,19 @@ export default function SignalsGallery() {
         return risk > 0 ? (reward / risk).toFixed(2) : '0';
     };
 
+    const hasActiveFilters = symbol !== 'ALL' || type !== 'ALL' || status !== 'ALL' || tradeType !== 'ALL' || dateRange !== 'ALL';
+
+    const clearFilters = () => {
+        setSymbol('ALL');
+        setType('ALL');
+        setStatus('ALL');
+        setTradeType('ALL');
+        setDateRange('ALL');
+        setPage(1);
+    };
+
     return (
-        <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-6 max-w-[1600px] pb-32">
+        <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-5 max-w-[1600px] pb-32">
             {/* Header & Title */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
@@ -52,25 +77,59 @@ export default function SignalsGallery() {
                     </h1>
                     <p className="text-muted-foreground mt-1">Explore, filtre e acompanhe cards de trades mapeados.</p>
                 </div>
+                {hasActiveFilters && (
+                    <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1.5 text-muted-foreground">
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Limpar Filtros
+                    </Button>
+                )}
+            </div>
+
+            {/* Period Quick Filter */}
+            <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Período:</span>
+                {DATE_RANGE_OPTIONS.map(opt => {
+                    const Icon = opt.icon;
+                    return (
+                        <Button
+                            key={opt.value}
+                            variant={dateRange === opt.value ? 'default' : 'outline'}
+                            size="sm"
+                            className={cn(
+                                "h-8 gap-1.5 text-xs font-medium transition-all",
+                                dateRange === opt.value ? "shadow-md" : "text-muted-foreground"
+                            )}
+                            onClick={() => { setDateRange(opt.value); setPage(1); }}
+                        >
+                            <Icon className="w-3.5 h-3.5" />
+                            {opt.label}
+                        </Button>
+                    );
+                })}
             </div>
 
             {/* Filter Bar */}
             <Card className="border border-border/50 bg-card/60 backdrop-blur-sm sticky top-4 z-10 shadow-lg shadow-black/5">
                 <CardContent className="p-4 flex flex-wrap gap-4 items-end">
-                    <div className="space-y-1.5 min-w-[140px] flex-1">
+
+                    {/* Symbol with all pairs */}
+                    <div className="space-y-1.5 min-w-[160px] flex-1">
                         <label className="text-xs font-semibold text-muted-foreground">Ativo / Par</label>
                         <Select value={symbol} onValueChange={(v) => { setSymbol(v); setPage(1); }}>
                             <SelectTrigger className="h-9">
                                 <SelectValue placeholder="Todas as Moedas" />
                             </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ALL">Todas as Moedas</SelectItem>
-                                <SelectItem value="BTCUSDT">BTC/USDT</SelectItem>
-                                <SelectItem value="ETHUSDT">ETH/USDT</SelectItem>
-                                <SelectItem value="SOLUSDT">SOL/USDT</SelectItem>
-                                <SelectItem value="BNBUSDT">BNB/USDT</SelectItem>
-                                <SelectItem value="ADAUSDT">ADA/USDT</SelectItem>
-                                <SelectItem value="XRPUSDT">XRP/USDT</SelectItem>
+                            <SelectContent className="max-h-[280px]">
+                                <SelectItem value="ALL">🌐 Todas as Moedas</SelectItem>
+                                {loadingSymbols ? (
+                                    <SelectItem value="loading" disabled>Carregando...</SelectItem>
+                                ) : (
+                                    symbols.map(s => (
+                                        <SelectItem key={s} value={s}>
+                                            {s.replace('USDT', '/USDT')}
+                                        </SelectItem>
+                                    ))
+                                )}
                             </SelectContent>
                         </Select>
                     </div>
@@ -89,7 +148,7 @@ export default function SignalsGallery() {
                         </Select>
                     </div>
 
-                    <div className="space-y-1.5 min-w-[140px] flex-1">
+                    <div className="space-y-1.5 min-w-[160px] flex-1">
                         <label className="text-xs font-semibold text-muted-foreground">Status / Resultado</label>
                         <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
                             <SelectTrigger className="h-9">
@@ -97,7 +156,7 @@ export default function SignalsGallery() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ALL">Todo Histórico</SelectItem>
-                                <SelectItem value="ACTIVE">Ativo / Pendente</SelectItem>
+                                <SelectItem value="ACTIVE">⚡ Ativo / Pendente</SelectItem>
                                 <SelectItem value="CLOSED_TP">🟢 Fechado - TP (Win)</SelectItem>
                                 <SelectItem value="CLOSED_SL">🔴 Fechado - SL (Loss)</SelectItem>
                                 <SelectItem value="CANCELED">⚪ Cancelado</SelectItem>
@@ -113,26 +172,58 @@ export default function SignalsGallery() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="ALL">Mesa (Ambos)</SelectItem>
-                                <SelectItem value="Main">Motor (Swing 4H)</SelectItem>
-                                <SelectItem value="Scalping">Robô (Scalp 5m)</SelectItem>
+                                <SelectItem value="Main">🤖 Motor (Swing 4H)</SelectItem>
+                                <SelectItem value="Scalping">⚡ Robô (Scalp 5m)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
-
-                    {(symbol !== 'ALL' || type !== 'ALL' || status !== 'ALL' || tradeType !== 'ALL') && (
-                        <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-muted-foreground h-9"
-                            onClick={() => {
-                                setSymbol('ALL'); setType('ALL'); setStatus('ALL'); setTradeType('ALL'); setPage(1);
-                            }}
-                        >
-                            Limpar Filtros
-                        </Button>
-                    )}
                 </CardContent>
             </Card>
+
+            {/* Stats Overview */}
+            {data?.stats && (data.total > 0 || data.stats.active > 0) && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
+                    <Card className="bg-card border-border/50 shadow-sm">
+                        <CardContent className="p-4 flex flex-col justify-center">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Trades Analisados</p>
+                            <div className="flex items-end gap-2">
+                                <span className="text-2xl font-bold leading-none">{data.total}</span>
+                                <span className="text-sm text-muted-foreground leading-none mb-0.5">({data.stats.active} ativos)</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card className="bg-card border-border/50 shadow-sm relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-signal-buy/10 blur-2xl -z-10 rounded-full" />
+                        <CardContent className="p-4 flex flex-col justify-center">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Win Rate</p>
+                            <p className="text-2xl font-bold text-signal-buy leading-none">{data.stats.winRate.toFixed(1)}%</p>
+                        </CardContent>
+                    </Card>
+                    <Card className="bg-card border-border/50 shadow-sm">
+                        <CardContent className="p-4 flex flex-col justify-center">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Wins / Losses</p>
+                            <p className="text-2xl font-bold flex gap-2 leading-none items-center">
+                                <span className="text-signal-buy">{data.stats.wins}W</span>
+                                <span className="text-muted-foreground/30 text-lg">/</span>
+                                <span className="text-signal-sell">{data.stats.losses}L</span>
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card className="bg-card border-border/50 shadow-sm relative overflow-hidden">
+                        <div className={cn("absolute top-0 right-0 w-24 h-24 blur-2xl -z-10 rounded-full",
+                            data.stats.totalPnl > 0 ? "bg-signal-buy/10" : "bg-signal-sell/10"
+                        )} />
+                        <CardContent className="p-4 flex flex-col justify-center">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">PNL Líquido</p>
+                            <p className={cn("text-2xl font-bold leading-none",
+                                data.stats.totalPnl > 0 ? "text-signal-buy" : data.stats.totalPnl < 0 ? "text-signal-sell" : "text-muted-foreground"
+                            )}>
+                                {data.stats.totalPnl > 0 ? '+' : ''}{data.stats.totalPnl.toFixed(2)}%
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {/* Grid of Cards */}
             {isLoading ? (
@@ -143,10 +234,15 @@ export default function SignalsGallery() {
             ) : data?.signals.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-24 text-muted-foreground border border-dashed rounded-xl bg-muted/20">
                     <Target className="w-12 h-12 mb-4 opacity-20" />
-                    <p>Nenhum sinal corresponde aos filtros.</p>
+                    <p className="font-medium">Nenhum sinal corresponde aos filtros.</p>
+                    {hasActiveFilters && (
+                        <Button variant="link" onClick={clearFilters} className="mt-2 text-muted-foreground">
+                            Limpar filtros
+                        </Button>
+                    )}
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 animate-fade-in">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 animate-fade-in">
                     {data?.signals.map((signal) => (
                         <div key={signal.id} className="min-h-[220px]">
                             <SignalCard
@@ -208,7 +304,6 @@ export default function SignalsGallery() {
 
                     {selectedSignal && (
                         <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
-                            {/* Entry / TPs / SL */}
                             <div className="space-y-2 p-4 rounded-lg bg-muted/20 border border-border">
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm text-muted-foreground">Entrada</span>
@@ -239,7 +334,6 @@ export default function SignalsGallery() {
                                     </div>
                                 </div>
                             </div>
-                            
                             <div className="flex justify-end gap-3 mt-2">
                                 <Button variant="outline" onClick={() => setSelectedSignal(null)}>Fechar Visualização</Button>
                             </div>
