@@ -60,7 +60,7 @@ export const config = {
         enabled: process.env.SCALPING_BOT_ENABLED === 'true',
         chatId: process.env.TELEGRAM_SCALPING_CHAT_ID || '',
         intervalMs: parseInt(process.env.SCALPING_INTERVAL_MS || '60000', 10), // 1 min
-        minScore: parseInt(process.env.SCALPING_MIN_SCORE || '65', 10),
+        minScore: parseInt(process.env.SCALPING_MIN_SCORE || '100', 10),
         mlMinProb: parseFloat(process.env.SCALPING_ML_MIN_PROB || '0.55'),
         cooldownMs: parseInt(process.env.SCALPING_COOLDOWN_MS || '1800000', 10), // 30 min
     },
