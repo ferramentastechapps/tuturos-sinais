@@ -27,6 +27,7 @@ const PaperTrading = lazy(() => import("./pages/PaperTrading"));
 const StrategyConfig = lazy(() => import("./pages/StrategyConfig")); // Heavy (31KB)
 const SymbolAnalysis = lazy(() => import("./pages/SymbolAnalysis"));
 const SignalHistory = lazy(() => import("./pages/SignalHistory"));
+const SignalsGallery = lazy(() => import("./pages/SignalsGallery"));
 
 import { BottomNav } from "@/components/layout/BottomNav";
 import { useEffect } from "react";
@@ -86,6 +87,8 @@ const App = () => (
               <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />
               <Route path="/tax-report" element={<PrivateRoute><TaxReport /></PrivateRoute>} />
               <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+              <Route path="/sinais" element={<PrivateRoute><SignalHistory /></PrivateRoute>} />
+              <Route path="/signals-gallery" element={<PrivateRoute><SignalsGallery /></PrivateRoute>} />
               <Route path="/risk-management" element={<PrivateRoute><RiskManagement /></PrivateRoute>} />
               <Route path="/backtesting" element={<PrivateRoute><Backtesting /></PrivateRoute>} />
               <Route path="/ml-analytics" element={<PrivateRoute><MLAnalytics /></PrivateRoute>} />
