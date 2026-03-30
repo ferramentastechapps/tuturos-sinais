@@ -176,9 +176,23 @@ class TelegramService {
         const hasSweep = indNames.some(n => n?.includes('Liquidity Sweep'));
         const hasAnchoredVWAP = indNames.some(n => n?.includes('Anchored VWAP'));
 
+        let rankBadge = null;
+        try {
+            const stats = await getPairStatsRanking({ tradeType: 'Main', type: data.type, dateRange: 'ALL' });
+            const winRank = stats.topWinners.findIndex(p => p.pair === data.symbol);
+            if (winRank >= 0 && winRank <= 2) {
+                const icons = ['🥇', '🥈', '🥉'];
+                const timeType = data.tradeType ? ` no ${data.tradeType}` : '';
+                rankBadge = `${icons[winRank]} <b>Top ${winRank + 1} em ${dir}${timeType}</b>`;
+            }
+        } catch (e: unknown) {
+            logger.warn('Error fetching rank for telegram', (e as Error).message);
+        }
+
         const textLines = [
             `${emoji} <b>ORDEM PENDENTE ${dir} — ${data.symbol}</b>`,
             `⚠️ <i>Aguardando entrada na zona...</i>`,
+            rankBadge ? `${rankBadge}` : null,
             data.tradeType ? `⏱️ Estilo: ${data.tradeType} (Aprox. ${data.expectedDuration})` : null,
             `🎯 Score: ${data.score}/100 (${data.scoreLabel})`,
             data.mtfContext ? `` : null,
