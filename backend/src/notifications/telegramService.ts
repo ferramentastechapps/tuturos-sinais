@@ -21,11 +21,11 @@ const formatPrice = (rawPrice: number | string): string => {
     const price = typeof rawPrice === 'string' ? parseFloat(rawPrice) : rawPrice;
     if (isNaN(price)) return '0.00';
     
-    // Formato simplificado: máximo 3 casas decimais
-    if (price >= 1) return price.toFixed(3);         // $1+ → 3 casas
-    if (price >= 0.01) return price.toFixed(4);      // $0.01-0.99 → 4 casas
-    if (price >= 0.001) return price.toFixed(5);     // $0.001-0.009 → 5 casas
-    return price.toFixed(6);                         // < $0.001 → 6 casas
+    // Usa o JS nativo para calcular até 8 casas decimais,
+    // mas removendo os zeros à direita usando toString() do Float.
+    // Assim, uma moeda cara (66000.50) e uma barata (0.0045)
+    // exibirão a exata quantidade de casas matematicamente importantes.
+    return parseFloat(price.toFixed(8)).toString();
 };
 
 interface QueueItem {
@@ -379,9 +379,9 @@ class TelegramService {
         const emoji = dir === 'LONG' ? '🟢' : '🔴';
         let tpText = '';
         if (signal.take_profits && Array.isArray(signal.take_profits)) {
-            tpText = '\\n🎯 Take Profits:\\n' + signal.take_profits.map((tp: any) => 
+            tpText = '\n🎯 Take Profits:\n' + signal.take_profits.map((tp: any) => 
                 `  TP${tp.level}: $${formatPrice(tp.price)}`
-            ).join('\\n');
+            ).join('\n');
         }
 
         const text = [
@@ -393,7 +393,7 @@ class TelegramService {
             tpText ? tpText : `🎯 Alvos e Stop Loss sendo rastreados.`,
             ``,
             `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
-        ].filter(Boolean).join('\\n');
+        ].filter(Boolean).join('\n');
         
         broadcastPushNotification({
             title: `Ordem Ativada — ${signal.pair}`,
