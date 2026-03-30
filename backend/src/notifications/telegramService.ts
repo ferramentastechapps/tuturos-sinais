@@ -155,11 +155,12 @@ class TelegramService {
 
     // ──── Public API ────
 
-    async send(text: string, type: TelegramNotificationType = 'new_signal', symbol?: string): Promise<TelegramSendResult> {
+    async send(text: string, type: TelegramNotificationType = 'new_signal', symbol?: string, customChatId?: number | string): Promise<TelegramSendResult> {
         if (!this.isEnabled) {
             return { success: false, error: 'Telegram not enabled' };
         }
-        return this.enqueueMessage(this.chatId, text, type, symbol);
+        const targetChatId = customChatId ? customChatId.toString() : this.chatId;
+        return this.enqueueMessage(targetChatId, text, type, symbol);
     }
 
     async sendNewSignal(data: SignalNotificationData): Promise<TelegramSendResult> {
@@ -339,7 +340,9 @@ class TelegramService {
             ``,
             `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].filter(line => line !== null).join('\n');
-        return this.send(text, 'take_profit', signal.pair);
+        
+        const targetChatId = signal.trade_type === 'Scalping' && config.scalpingBot.chatId ? config.scalpingBot.chatId : undefined;
+        return this.send(text, 'take_profit', signal.pair, targetChatId);
     }
 
     async sendStopLossNotification(signal: any, currentPrice: number): Promise<TelegramSendResult> {
@@ -351,7 +354,9 @@ class TelegramService {
             ``,
             `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].join('\n');
-        return this.send(text, 'stop_loss', signal.pair);
+        
+        const targetChatId = signal.trade_type === 'Scalping' && config.scalpingBot.chatId ? config.scalpingBot.chatId : undefined;
+        return this.send(text, 'stop_loss', signal.pair, targetChatId);
     }
 
     async sendTrailingStopUpdate(signal: any, currentPrice: number, oldSl: number, newSl: number): Promise<TelegramSendResult> {
@@ -364,7 +369,9 @@ class TelegramService {
             ``,
             `🕐 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
         ].join('\n');
-        return this.send(text, 'take_profit', signal.pair);
+        
+        const targetChatId = signal.trade_type === 'Scalping' && config.scalpingBot.chatId ? config.scalpingBot.chatId : undefined;
+        return this.send(text, 'take_profit', signal.pair, targetChatId);
     }
 
     async sendActivationNotification(signal: any, currentPrice: number): Promise<TelegramSendResult> {
@@ -393,7 +400,8 @@ class TelegramService {
             body: `Entrada acionada em $${formatPrice(currentPrice)}`,
         }).catch(err => logger.error('Web Push failed to broadcast', { error: err.message }));
 
-        return this.send(text, 'new_signal', signal.pair);
+        const targetChatId = signal.trade_type === 'Scalping' && config.scalpingBot.chatId ? config.scalpingBot.chatId : undefined;
+        return this.send(text, 'new_signal', signal.pair, targetChatId);
     }
     async sendScalpingSignal(signal: any): Promise<TelegramSendResult> {
         const scalpingChatId = config.telegram.scalpingChatId;

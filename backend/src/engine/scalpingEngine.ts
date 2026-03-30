@@ -431,6 +431,32 @@ async function runScalpingCycle(): Promise<void> {
                     await telegramService.sendScalpingSignal(signal);
                     scalpingSignalsSent++;
                     logger.info(`[Scalping] Sinal enviado: ${signal.type.toUpperCase()} ${symbol} | score=${signal.confidence}`);
+                    
+                    try {
+                        const { tradeTracker } = await import('../trading/tradeTracker.js');
+                        // Converter metas (scalping usa 1 a 3 TPs)
+                        const tps: { level: number, price: number, hit: boolean }[] = [];
+                        if (signal.takeProfit1) tps.push({ level: 1, price: signal.takeProfit1, hit: false });
+                        if (signal.takeProfit2) tps.push({ level: 2, price: signal.takeProfit2, hit: false });
+                        if (signal.takeProfit3) tps.push({ level: 3, price: signal.takeProfit3, hit: false });
+
+                        tradeTracker.registerNewSignal({
+                            id: signal.id,
+                            pair: signal.pair,
+                            type: signal.type.toUpperCase() as 'LONG' | 'SHORT',
+                            trade_type: 'Scalping',
+                            entry_range_low: signal.type === 'long' ? signal.entry * 0.999 : signal.entry * 1.001,
+                            entry_range_high: signal.type === 'long' ? signal.entry * 1.001 : signal.entry * 0.999,
+                            stop_loss: signal.stopLoss,
+                            initial_stop_loss: signal.stopLoss,
+                            take_profits: tps,
+                            status: 'PENDING',
+                            expected_duration: signal.expectedDuration,
+                            score: signal.confidence,
+                        }).catch((e: any) => logger.warn(`[Scalping/TradeTracker] Erro ao registrar: ${e.message}`));
+                    } catch (trackError) {
+                        logger.warn(`[Scalping] Falha ao injetar no TradeTracker para ${symbol}`, { error: trackError });
+                    }
                 } catch (tgError) {
                     logger.warn(`[Scalping] Falha ao enviar Telegram para ${symbol}`, { error: tgError });
                 }

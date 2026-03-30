@@ -383,7 +383,7 @@ export class TradeTracker {
         symbol: activeSignal.pair,
         outcome_label: outcomeLabel,
         outcome_pnl: pnl,
-        entry_time: originalSignal.created_at || new Date().toISOString(),
+        entry_time: (originalSignal.created_at ? new Date(originalSignal.created_at) : new Date()).toISOString(),
         features: features
       };
 
