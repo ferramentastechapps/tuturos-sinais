@@ -324,7 +324,7 @@ function generateScalpingSignal(
         positionSizePercent: marginPercent,
         riskPercent,
         timeframe: '5m',
-        status: 'pending',
+        status: 'PENDING' as const,
         confidence: score,
         createdAt: new Date(),
         indicators: confluences,
