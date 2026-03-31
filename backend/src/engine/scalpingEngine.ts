@@ -276,13 +276,34 @@ function generateScalpingSignal(
         const highestWick = ohlc5m[ohlc5m.length - 1].high;
         stopLossDistance = Math.max(((highestWick - currentPrice) / currentPrice * 100) * 1.05, 0.3);
     } else {
-        stopLossDistance = Math.max(atrPercent * 1.0, 0.3); // 1x ATR para scalping
+        // Ajuste dinâmico baseado na volatilidade do ativo
+        // Scalping usa 0.8x ATR (mais apertado que o principal)
+        const volatilityMultiplier = rvol > 1.5 ? 0.9 : 0.8; // Mais espaço se volume alto
+        stopLossDistance = Math.max(atrPercent * volatilityMultiplier, 0.3);
     }
 
-    // TPs escalados para scalping: alvos menores e mais realistas
-    const tp1Distance = stopLossDistance * 1.2;  // 1.2:1 mínimo
-    const tp2Distance = stopLossDistance * 2.0;  // 2:1
-    const tp3Distance = stopLossDistance * 3.0;  // 3:1 (alvo máximo)
+    // TPs escalados para scalping: alvos dinâmicos baseados na estrutura
+    // Se tiver Order Block ou Liquidity Sweep, usa Fibonacci extensions
+    // Caso contrário, usa ratios mais conservadores
+    let tp1Distance: number, tp2Distance: number, tp3Distance: number;
+    
+    if (usingStructuralStop) {
+        // ICT Fibonacci projections (igual ao robô principal)
+        tp1Distance = stopLossDistance * 1.5;   // 1.5:1 mínimo
+        tp2Distance = stopLossDistance * 2.0;   // Golden ratio
+        tp3Distance = stopLossDistance * 3.0;   // Major liquidity target
+    } else if (isSweepLow || isSweepHigh) {
+        // Liquidity Sweep = movimento forte, alvos mais ambiciosos
+        tp1Distance = stopLossDistance * 1.8;
+        tp2Distance = stopLossDistance * 2.5;
+        tp3Distance = stopLossDistance * 3.5;
+    } else {
+        // Scalping padrão: alvos mais conservadores
+        const tpScale = bb.isSqueeze ? 1.2 : 1.0; // Squeeze = mais explosivo
+        tp1Distance = stopLossDistance * 1.3 * tpScale;  // 1.3:1 base
+        tp2Distance = stopLossDistance * 2.0 * tpScale;  // 2:1
+        tp3Distance = stopLossDistance * 3.0 * tpScale;  // 3:1
+    }
 
     let entry: number, stopLoss: number, tp1: number, tp2: number, tp3: number;
     if (type === 'long') {
@@ -302,12 +323,31 @@ function generateScalpingSignal(
     const riskReward = tp1Distance / stopLossDistance;
     if (riskReward < 1.0) return null;
 
-    // Alavancagem dinâmica (mais conservadora que o robô principal)
-    const riskPercent = config.riskManagement.riskPercent;
+    // ── ALAVANCAGEM DINÂMICA (igual ao robô principal, mas com cap menor) ──
+    const accountRiskLevel = config.riskManagement.riskPercent;
     const marginPercent = config.riskManagement.marginPercent;
-    let dynamicLeverage = Math.round((riskPercent / stopLossDistance) / (marginPercent / 100));
-    if (dynamicLeverage < 2) dynamicLeverage = 2;
-    if (dynamicLeverage > 20) dynamicLeverage = 20; // Cap menor para scalping: max 20x
+    
+    // Fórmula Mágica: (Risk% / StopLoss%) / (Margin% / 100)
+    let dynamicLeverage = Math.round((accountRiskLevel / stopLossDistance) / (marginPercent / 100));
+    
+    // Ajuste baseado na qualidade do sinal
+    if (score >= 85) {
+        // Sinal de alta qualidade: permite alavancagem maior
+        dynamicLeverage = Math.round(dynamicLeverage * 1.2);
+    } else if (score < 70) {
+        // Sinal mais fraco: reduz alavancagem
+        dynamicLeverage = Math.round(dynamicLeverage * 0.8);
+    }
+    
+    // Ajuste baseado na volatilidade
+    if (rvol > 2.0) {
+        // Volume muito alto = mais risco, reduz alavancagem
+        dynamicLeverage = Math.round(dynamicLeverage * 0.85);
+    }
+    
+    // Limites de Segurança para Scalping
+    if (dynamicLeverage < 3) dynamicLeverage = 3;   // Mínimo 3x (scalping precisa de margem)
+    if (dynamicLeverage > 25) dynamicLeverage = 25; // Cap menor que o principal (max 25x)
 
     return {
         id: `SCALP-${symbol}-${Date.now()}`,
