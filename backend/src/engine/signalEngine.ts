@@ -641,7 +641,7 @@ export function generateSignalFromData(
     score = Math.min(score, 100);
 
     // Minimum score filter — 75 (reduzido de 80 + ICT veto agora exige só 1 confirmação)
-    const finalMinScore = customMinScore !== undefined ? customMinScore : 75;
+    const finalMinScore = customMinScore !== undefined ? customMinScore : 85;
     logger.debug(`[SIGNAL-DIAG] ${symbol} score=${score} | minScore=${finalMinScore} | ${score >= finalMinScore ? '✅ PASSOU' : '❌ VETADO'}`);
     if (score < finalMinScore) return null;
 
@@ -828,7 +828,7 @@ async function runSignalCycle(): Promise<void> {
                 const existingRecent = activeSignals.find(s => 
                     s.pair === symbol && 
                     s.type === signal.type && 
-                    (Date.now() - new Date(s.createdAt).getTime()) < 4 * 60 * 60 * 1000 // 4 hours cooldown
+                    (Date.now() - new Date(s.createdAt).getTime()) < 12 * 60 * 60 * 1000 // 12 hours cooldown
                 );
 
                 if (existingRecent) {
