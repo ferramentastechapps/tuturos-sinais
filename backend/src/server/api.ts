@@ -265,8 +265,27 @@ router.get('/signals/history', async (req: Request, res: Response) => {
 
         const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
 
+        const formattedData = data.map(s => {
+            let tps: any[] = [];
+            try { tps = s.take_profits ? JSON.parse(s.take_profits) : []; } catch(e) {}
+            return {
+                ...s,
+                entry: (s.entry_range_low + s.entry_range_high) / 2,
+                takeProfit: tps[0]?.price,
+                takeProfits: tps,
+                takeProfit1: tps.find((t: any) => t.level === 1)?.price,
+                takeProfit2: tps.find((t: any) => t.level === 2)?.price,
+                takeProfit3: tps.find((t: any) => t.level === 3)?.price,
+                stopLoss: s.stop_loss,
+                initial_stop_loss: s.initial_stop_loss,
+                score: s.confidence,
+                quality: { score: s.confidence || 0 },
+                indicators: typeof s.indicators === 'string' ? JSON.parse(s.indicators) : (s.indicators || []),
+            };
+        });
+
         res.json({
-            data,
+            data: formattedData,
             stats: {
                 wins,
                 losses,
