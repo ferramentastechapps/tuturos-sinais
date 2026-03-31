@@ -103,7 +103,7 @@ export const AddAssetDialog = ({ onAdd }: AddAssetDialogProps) => {
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="symbol">Par</Label>
+            <Label htmlFor="symbol">Ativo/Par</Label>
             <Select value={symbol} onValueChange={handleSelectPair}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione um par" />

@@ -117,7 +117,7 @@ export default function SignalsGallery() {
 
                     {/* Symbol with all pairs */}
                     <div className="space-y-1.5 min-w-[160px] flex-1">
-                        <label className="text-xs font-semibold text-muted-foreground">Ativo / Par</label>
+                        <label className="text-xs font-semibold text-muted-foreground">Ativo/Par</label>
                         <Select value={symbol} onValueChange={(v) => { setSymbol(v); setPage(1); }}>
                             <SelectTrigger className="h-9">
                                 <SelectValue placeholder="Todas as Moedas" />

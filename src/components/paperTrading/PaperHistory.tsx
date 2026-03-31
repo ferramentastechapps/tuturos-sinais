@@ -116,7 +116,7 @@ export const PaperHistory = ({ history }: PaperHistoryProps) => {
                             <TableHeader>
                                 <TableRow className="text-[10px] uppercase">
                                     <TableHead className="h-8">Data</TableHead>
-                                    <TableHead className="h-8">Par</TableHead>
+                                    <TableHead className="h-8">Ativo/Par</TableHead>
                                     <TableHead className="h-8">Dir.</TableHead>
                                     <TableHead className="h-8 text-right">Entrada</TableHead>
                                     <TableHead className="h-8 text-right">Saída</TableHead>
