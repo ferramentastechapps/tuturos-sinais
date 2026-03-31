@@ -272,7 +272,7 @@ const SymbolAnalysis = () => {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50 hover:bg-muted/50">
-                            <TableHead>Par</TableHead>
+                            <TableHead>Ativo/Par</TableHead>
                             <TableHead className="text-right">Win Rate</TableHead>
                             <TableHead className="text-right">Melhor Ind.</TableHead>
                           </TableRow>

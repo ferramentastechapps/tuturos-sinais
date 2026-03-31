@@ -162,10 +162,10 @@ const TaxReport = () => {
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Ativo</TableHead>
-                    <TableHead>Tipo</TableHead>
+          <TableRow>
+            <TableHead>Data</TableHead>
+            <TableHead>Ativo</TableHead>
+            <TableHead>Tipo</TableHead>
                     <TableHead className="text-right">Custo Base</TableHead>
                     <TableHead className="text-right">Valor Venda</TableHead>
                     <TableHead className="text-right">Ganho/Perda</TableHead>
