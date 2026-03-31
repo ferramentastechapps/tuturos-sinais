@@ -89,6 +89,9 @@ export class TradeTracker {
         fullSignal.id = `${signal.pair}-${Date.now()}`;
     }
 
+    // 0. CANCELAR SINAIS ANTIGOS DA MESMA MOEDA
+    await this.cancelOldSignalsForPair(signal.pair!);
+
     // 1. Save to activeSignal (monitoring/RAM table)
     try {
         const inputData = { 
@@ -389,6 +392,48 @@ export class TradeTracker {
       priceStream.unsubscribe(pair);
     } else {
       this.activeSignals.set(pair, signals);
+    }
+  }
+
+  /**
+   * Cancela todos os sinais ativos/pendentes da mesma moeda antes de registrar um novo
+   * Isso evita múltiplos sinais duplicados para a mesma moeda
+   */
+  private async cancelOldSignalsForPair(pair: string) {
+    const existingSignals = this.activeSignals.get(pair) || [];
+    
+    if (existingSignals.length === 0) {
+      return; // Nenhum sinal antigo para cancelar
+    }
+
+    console.log(`[TradeTracker] Cancelando ${existingSignals.length} sinal(is) antigo(s) para ${pair}...`);
+
+    for (const oldSignal of existingSignals) {
+      // Atualizar status para CANCELLED
+      oldSignal.status = 'CANCELLED';
+      
+      // Atualizar no banco de dados
+      try {
+        await db.activeSignal.update({
+          where: { id: oldSignal.id },
+          data: { status: 'CANCELLED' }
+        });
+        
+        // Também atualizar na tabela de histórico
+        await db.tradeSignal.update({
+          where: { id: oldSignal.id },
+          data: { status: 'CANCELLED' }
+        }).catch(() => {}); // Ignora se não existir no histórico
+        
+        this.logEvent(oldSignal.id, 'CANCELLED', `Sinal cancelado automaticamente - novo sinal gerado para ${pair}`, 0).catch(() => {});
+        
+        console.log(`[TradeTracker] ✅ Sinal ${oldSignal.id} cancelado`);
+      } catch (e: any) {
+        console.warn(`[TradeTracker] Erro ao cancelar sinal ${oldSignal.id}:`, e.message);
+      }
+      
+      // Remover da memória
+      this.removeSignalFromMemory(oldSignal.id, pair);
     }
   }
 
