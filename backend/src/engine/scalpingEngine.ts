@@ -172,30 +172,34 @@ function generateScalpingSignal(
 
     logger.debug(`[SCALPING-DIAG] ${symbol} | bull:${bullishCount} bear:${bearishCount} | RSI:${rsi.toFixed(1)} RVOL:${rvol.toFixed(2)} StochK:${stochRsi.k.toFixed(1)}`);
 
-    // Scalping precisa de mínimo 4/7 confluências (menos restrito que 4/8 do principal)
+    // Scalping agora exige no mínimo 5/7 confluências para aumentar a assertividade
     let type: 'long' | 'short';
     let score: number;
     const confluences: string[] = [];
 
-    if (bullishCount >= 4) {
+    if (bullishCount >= 5) {
         type = 'long';
 
         // Vetos absolutos de qualidade para scalping
-        if (rsi > 72) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RSI=${rsi.toFixed(1)} sobrecomprado`); return null; }
-        if (rvol < 0.6) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RVOL baixo`); return null; }
+        if (rsi > 70) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RSI=${rsi.toFixed(1)} sobrecomprado`); return null; }
+        if (rvol < 0.8) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RVOL baixo (< 0.8)`); return null; }
         if (rsi15 > 70) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RSI15m sobrecomprado`); return null; }
+        if (stochRsi.k > 80) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: StochRSI sobrecomprado`); return null; }
+        if (currentPrice < lastEma50) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: Preço abaixo da EMA 50`); return null; }
 
-        score = 55 + bullishCount * 4;
+        score = 40 + bullishCount * 5; // Base menor (máx 75) para exigir múltiplos bônus de SMC/Squeeze
         confluences.push(`${bullishCount}/7 ind. bullish (5m)`);
 
-    } else if (bearishCount >= 4) {
+    } else if (bearishCount >= 5) {
         type = 'short';
 
-        if (rsi < 28) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RSI=${rsi.toFixed(1)} sobrevendido`); return null; }
-        if (rvol < 0.6) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RVOL baixo`); return null; }
+        if (rsi < 30) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RSI=${rsi.toFixed(1)} sobrevendido`); return null; }
+        if (rvol < 0.8) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RVOL baixo (< 0.8)`); return null; }
         if (rsi15 < 30) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RSI15m sobrevendido`); return null; }
+        if (stochRsi.k < 20) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: StochRSI sobrevendido`); return null; }
+        if (currentPrice > lastEma50) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: Preço acima da EMA 50`); return null; }
 
-        score = 55 + bearishCount * 4;
+        score = 40 + bearishCount * 5; // Base menor (máx 75) para exigir múltiplos bônus
         confluences.push(`${bearishCount}/7 ind. bearish (5m)`);
 
     } else {
@@ -215,34 +219,30 @@ function generateScalpingSignal(
 
     // MACD
     if ((type === 'long' && macd.isBullishCross) || (type === 'short' && macd.isBearishCross)) {
-        score += 12; confluences.push('MACD Cross 5m');
+        score += 15; confluences.push('MACD Cross 5m');
     } else if ((type === 'long' && macd.histogram > 0) || (type === 'short' && macd.histogram < 0)) {
-        score += 4; confluences.push('MACD aligned');
+        score += 5; confluences.push('MACD aligned');
     }
 
     // Bollinger Bands — peso DOBRADO em scalping (sinal explosivo de TF curto)
-    if (bb.isSqueeze) { score += 15; confluences.push('BB Squeeze ⚡'); }
-    if (type === 'long' && bb.percentB < 0.25) { score += 8; confluences.push('BB Suporte'); }
-    if (type === 'short' && bb.percentB > 0.75) { score += 8; confluences.push('BB Resistência'); }
+    if (bb.isSqueeze) { score += 20; confluences.push('BB Squeeze ⚡'); }
+    if (type === 'long' && bb.percentB < 0.25) { score += 10; confluences.push('BB Suporte'); }
+    if (type === 'short' && bb.percentB > 0.75) { score += 10; confluences.push('BB Resistência'); }
 
     // Confirmação 15m (alinha o scalping com o momentum médio)
-    if (type === 'long' && macd15Bullish) { score += 6; confluences.push('MACD 15m bullish'); }
-    if (type === 'short' && !macd15Bullish) { score += 6; confluences.push('MACD 15m bearish'); }
-
-    // EMA 50 como filtro macro de scalping
-    if (type === 'long' && currentPrice > lastEma50) { score += 5; confluences.push('Acima EMA 50'); }
-    if (type === 'short' && currentPrice < lastEma50) { score += 5; confluences.push('Abaixo EMA 50'); }
+    if (type === 'long' && macd15Bullish) { score += 8; confluences.push('MACD 15m bullish'); }
+    if (type === 'short' && !macd15Bullish) { score += 8; confluences.push('MACD 15m bearish'); }
 
     // Smart Money (5m)
-    if (type === 'long' && isSweepLow) { score += 15; confluences.push('Liquidity Sweep (5m)'); }
-    if (type === 'short' && isSweepHigh) { score += 15; confluences.push('Liquidity Sweep (5m)'); }
-    if (type === 'long' && priceInBullishOB && bullishOB) { score += 12; confluences.push('Order Block Bullish (5m)'); }
-    if (type === 'short' && priceInBearishOB && bearishOB) { score += 12; confluences.push('Order Block Bearish (5m)'); }
-    if (type === 'long' && isBullishFvg) { score += 8; confluences.push('FVG Bullish (5m)'); }
-    if (type === 'short' && isBearishFvg) { score += 8; confluences.push('FVG Bearish (5m)'); }
+    if (type === 'long' && isSweepLow) { score += 20; confluences.push('Liquidity Sweep (5m)'); }
+    if (type === 'short' && isSweepHigh) { score += 20; confluences.push('Liquidity Sweep (5m)'); }
+    if (type === 'long' && priceInBullishOB && bullishOB) { score += 15; confluences.push('Order Block Bullish (5m)'); }
+    if (type === 'short' && priceInBearishOB && bearishOB) { score += 15; confluences.push('Order Block Bearish (5m)'); }
+    if (type === 'long' && isBullishFvg) { score += 10; confluences.push('FVG Bullish (5m)'); }
+    if (type === 'short' && isBearishFvg) { score += 10; confluences.push('FVG Bearish (5m)'); }
 
     // RVOL confirma força do movimento
-    if (rvol > 1.5) { score += 7; confluences.push('RVOL Alto (>1.5x)'); }
+    if (rvol > 1.5) { score += 10; confluences.push('RVOL Alto (>1.5x)'); }
 
     score = Math.min(score, 100);
 
