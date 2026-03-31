@@ -362,7 +362,7 @@ function generateScalpingSignal(
         riskReward: Math.round(riskReward * 10) / 10,
         dynamicLeverage,
         positionSizePercent: marginPercent,
-        riskPercent,
+        riskPercent: accountRiskLevel,
         timeframe: '5m',
         status: 'PENDING' as const,
         confidence: score,
