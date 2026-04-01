@@ -60,10 +60,18 @@ export const config = {
         enabled: process.env.SCALPING_BOT_ENABLED === 'true',
         chatId: process.env.TELEGRAM_SCALPING_CHAT_ID || '',
         intervalMs: parseInt(process.env.SCALPING_INTERVAL_MS || '60000', 10), // 1 min
-        minScore: parseInt(process.env.SCALPING_MIN_SCORE || '100', 10),
-        mlMinProb: parseFloat(process.env.SCALPING_ML_MIN_PROB || '0.55'),
+        // Score 80 = permite sinais bons sem exigir perfeição impossível (era 100)
+        minScore: parseInt(process.env.SCALPING_MIN_SCORE || '80', 10),
+        // 62% = vantagem real sobre o random. Era 55% (quase inútil)
+        mlMinProb: parseFloat(process.env.SCALPING_ML_MIN_PROB || '0.62'),
         cooldownMs: parseInt(process.env.SCALPING_COOLDOWN_MS || '1800000', 10), // 30 min
     },
+
+    // Pares dedicados ao scalping — apenas alta liquidez (5m funciona mal em altcoins spot)
+    // Foram removidos: API3, UMA, GMT, ZEC, DASH, THETA, KAVA, etc (Top 10 Losses no dashboard)
+    scalpingSymbols: (process.env.SCALPING_SYMBOLS ||
+        'BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT,ADAUSDT,AVAXUSDT,DOGEUSDT,LINKUSDT,DOTUSDT,LTCUSDT,ATOMUSDT,NEARUSDT,APTUSDT,SUIUSDT,ARBUSDT,OPUSDT,INJUSDT,UNIUSDT,AAVEUSDT,MATICUSDT,TONUSDT,FTMUSDT,RUNEUSDT,SHIB1000USDT,1000PEPEUSDT'
+    ).split(','),
 
     // Monitored symbols for Bybit (Matched with Frontend Dashboard)
     monitoredSymbols: (process.env.MONITORED_SYMBOLS || 

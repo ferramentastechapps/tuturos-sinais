@@ -11,6 +11,7 @@ import {
     calculateMACD,
     calculateBollingerBands,
     calculateATR,
+    calculateADX,
     calculateRVOL,
     calculateVWAP,
     detectFVG,
@@ -33,22 +34,30 @@ let lastScalpingSignalAt: string | null = null;
 const scalpingCooldowns = new Map<string, number>();
 
 // ──── Filtro de Horário para Scalping ────
-// Bloqueia nos primeiros 15 min de cada sessão principal (abertura volátil)
-// 00:00–00:15 UTC, 08:00–08:15 UTC, 16:00–16:15 UTC
+// Foca nas sessões de maior liquidez: London (08–12 UTC) e Nova York (13–20 UTC).
+// O overlap London-NY (13–16 UTC) é o melhor momento para scalping de cripto.
+// Fora dessas janelas, spreads ficam maiores e fake-outs são mais frequentes.
 
 function isScalpingTradingWindow(): boolean {
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
 
-    // Dead zone noturna (00:00-06:00 UTC)
-    if (utcHour < 6) return false;
+    // Sessão London: 08:00–12:59 UTC
+    const isLondon = utcHour >= 8 && utcHour < 13;
+    // Sessão NY: 13:00–19:59 UTC
+    const isNewYork = utcHour >= 13 && utcHour < 20;
+    // Abertura Asia (00–02 UTC): alta volatilidade de cripto também
+    const isAsiaOpen = utcHour >= 0 && utcHour < 2;
 
-    // Bloqueia primeiros 15 min de cada sessão principal
+    // Dentro de uma sessão líquida
+    if (!isLondon && !isNewYork && !isAsiaOpen) return false;
+
+    // Bloqueia primeiros 10 min de cada sessão (spike de abertura não é sinal)
     const isSessionOpen =
-        (utcHour === 0 && utcMinute < 15) ||  // Abertura Ásia
-        (utcHour === 8 && utcMinute < 15) ||  // Abertura Europa
-        (utcHour === 16 && utcMinute < 15);   // Abertura EUA
+        (utcHour === 8 && utcMinute < 10) ||   // Abertura London
+        (utcHour === 13 && utcMinute < 10) ||  // Abertura NY
+        (utcHour === 0 && utcMinute < 10);     // Abertura Ásia
 
     return !isSessionOpen;
 }
@@ -122,6 +131,7 @@ function generateScalpingSignal(
     const ema21 = calculateEMA(closes5m, 21);
     const ema50 = calculateEMA(closes5m, 50);
     const atr = calculateATR(ohlc5m, 14);
+    const adx = calculateADX(ohlc5m, 14); // Calculado com dados reais (era fixo em 25)
     const rvol = calculateRVOL(ohlc5m, 20);
     const vwap = calculateVWAP(ohlc5m.slice(-50)); // VWAP da sessão recente
     const stochRsi = calculateStochRSI(closes5m);
@@ -146,25 +156,27 @@ function generateScalpingSignal(
     const { bullishOB, bearishOB, priceInBullishOB, priceInBearishOB } = detectOrderBlock(ohlc5m, atr);
     const { swingLow, swingHigh } = detectSwingStructure(ohlc5m, 10);
 
-    // ── Score de confluências (limiar mais baixo para scalping) ──
+    // ── Score de confluências ──
+    // CORRIGIDO: faixas RSI e StochRSI não se sobrepõem mais (zona cinzenta entre 45–55 era ambígua).
+    // Bullish exige RSI claramente abaixo da zona neutra (< 48), bearish acima (> 52).
     const bullishIndicators = [
         currentPrice > lastEma9,
         currentPrice > lastEma21,
         macd.histogram > 0,
-        rsi < 55 && rsi > 25,
+        rsi < 48 && rsi > 25,   // Abaixo da linha neutra (sem sobreposição com bearish)
         currentPrice > vwap,
         rvol > 1.1,
-        stochRsi.k < 50 && stochRsi.k > 20,
+        stochRsi.k < 45 && stochRsi.k > 15,  // Zona claramente comprada (sem sobreposição)
     ];
 
     const bearishIndicators = [
         currentPrice < lastEma9,
         currentPrice < lastEma21,
         macd.histogram < 0,
-        rsi > 45 && rsi < 75,
+        rsi > 52 && rsi < 75,   // Acima da linha neutra (sem sobreposição com bullish)
         currentPrice < vwap,
         rvol > 1.1,
-        stochRsi.k > 50 && stochRsi.k < 80,
+        stochRsi.k > 55 && stochRsi.k < 85,  // Zona claramente sobrecomprada (sem sobreposição)
     ];
 
     const bullishCount = bullishIndicators.filter(Boolean).length;
@@ -276,33 +288,35 @@ function generateScalpingSignal(
         const highestWick = ohlc5m[ohlc5m.length - 1].high;
         stopLossDistance = Math.max(((highestWick - currentPrice) / currentPrice * 100) * 1.05, 0.3);
     } else {
-        // Ajuste dinâmico baseado na volatilidade do ativo
-        // Scalping usa 0.8x ATR (mais apertado que o principal)
-        const volatilityMultiplier = rvol > 1.5 ? 0.9 : 0.8; // Mais espaço se volume alto
-        stopLossDistance = Math.max(atrPercent * volatilityMultiplier, 0.3);
+        // Ajuste dinâmico baseado na volatilidade do ativo.
+        // Usa 1.0x ATR (era 0.8x) — SL mais apertado causava stops por ruído de mercado.
+        // Mínimo 0.5% (era 0.3%) — altcoins têm noise natural acima de 0.3% no 5m.
+        const volatilityMultiplier = rvol > 1.5 ? 1.1 : 1.0;
+        stopLossDistance = Math.max(atrPercent * volatilityMultiplier, 0.5);
     }
 
-    // TPs escalados para scalping: alvos dinâmicos baseados na estrutura
-    // Se tiver Order Block ou Liquidity Sweep, usa Fibonacci extensions
-    // Caso contrário, usa ratios mais conservadores
+    // TPs escalados para scalping: alvos dinâmicos baseados na estrutura.
+    // CORRIGIDO: TP1 mínimo agora é 2.0:1 (era 1.3:1).
+    // Com win rate de ~35%, precisamos de R:R mínimo 2:1 para expectativa positiva.
+    // E = (0.35 × 2.0) - (0.65 × 1.0) = 0.70 - 0.65 = +0.05 ✅
     let tp1Distance: number, tp2Distance: number, tp3Distance: number;
-    
+
     if (usingStructuralStop) {
-        // ICT Fibonacci projections (igual ao robô principal)
-        tp1Distance = stopLossDistance * 1.5;   // 1.5:1 mínimo
-        tp2Distance = stopLossDistance * 2.0;   // Golden ratio
-        tp3Distance = stopLossDistance * 3.0;   // Major liquidity target
+        // ICT Fibonacci projections — mantém as metas estruturais
+        tp1Distance = stopLossDistance * 2.0;   // 2:1 mínimo garantido
+        tp2Distance = stopLossDistance * 3.0;   // 3:1 extensão
+        tp3Distance = stopLossDistance * 4.5;   // Major liquidity target
     } else if (isSweepLow || isSweepHigh) {
-        // Liquidity Sweep = movimento forte, alvos mais ambiciosos
-        tp1Distance = stopLossDistance * 1.8;
-        tp2Distance = stopLossDistance * 2.5;
-        tp3Distance = stopLossDistance * 3.5;
+        // Liquidity Sweep = reversão forte, alvos mais ambiciosos
+        tp1Distance = stopLossDistance * 2.0;
+        tp2Distance = stopLossDistance * 3.0;
+        tp3Distance = stopLossDistance * 4.0;
     } else {
-        // Scalping padrão: alvos mais conservadores
-        const tpScale = bb.isSqueeze ? 1.2 : 1.0; // Squeeze = mais explosivo
-        tp1Distance = stopLossDistance * 1.3 * tpScale;  // 1.3:1 base
-        tp2Distance = stopLossDistance * 2.0 * tpScale;  // 2:1
-        tp3Distance = stopLossDistance * 3.0 * tpScale;  // 3:1
+        // Scalping padrão: BB Squeeze permite TP mais ambicioso
+        const tpScale = bb.isSqueeze ? 1.3 : 1.0;
+        tp1Distance = stopLossDistance * 2.0 * tpScale;  // 2:1 base (era 1.3:1!)
+        tp2Distance = stopLossDistance * 3.0 * tpScale;  // 3:1
+        tp3Distance = stopLossDistance * 4.5 * tpScale;  // 4.5:1
     }
 
     let entry: number, stopLoss: number, tp1: number, tp2: number, tp3: number;
@@ -389,11 +403,11 @@ function generateScalpingSignal(
         mlData: {
             symbol_id: getSymbolId(symbol),
             rsi,
-            adx: 25, // ADX não é calculado no 5m por performance
+            adx, // ADX calculado com dados 5m reais (era fixo em 25 — dado inválido para o ML)
             atr_rel: atr / currentPrice,
             dist_ema20: (currentPrice - lastEma21) / currentPrice,
             dist_ema50: (currentPrice - lastEma50) / currentPrice,
-            dist_ema200: 0,
+            dist_ema200: 0, // EMA200 no 5m requer 1000 candles — omitido intencionalmente
             dist_vwap: (currentPrice - vwap) / currentPrice,
             volume_rel: rvol,
         },
@@ -404,7 +418,10 @@ function generateScalpingSignal(
 
 async function runScalpingCycle(): Promise<void> {
     logger.info('[Scalping] Running scalping signal cycle...');
-    const symbols = config.monitoredSymbols;
+    // Usa lista dedicada de pares líquidos (scalpingSymbols), não a lista geral.
+    // A lista geral (monitoredSymbols) inclui 86 pares com altcoins de baixa liquidez
+    // que causam losses no 5m (API3, UMA, GMT etc foram os maiores perdedores).
+    const symbols = config.scalpingSymbols;
     const now = Date.now();
 
     for (const symbol of symbols) {
@@ -437,7 +454,7 @@ async function runScalpingCycle(): Promise<void> {
             // ML enrichment (reutiliza o modelo existente com limiar mais permissivo)
             if (isModelLoaded() && signal.mlData) {
                 try {
-                    const prediction = await predictSignal(signal.mlData as any);
+                    const prediction = await predictSignal(signal.mlData as unknown as Parameters<typeof predictSignal>[0]);
                     if (prediction) {
                         signal.mlData = { ...signal.mlData, probability: prediction.probability, predictedClass: prediction.predictedClass };
                         if (prediction.probability < config.scalpingBot.mlMinProb) {
@@ -493,7 +510,7 @@ async function runScalpingCycle(): Promise<void> {
                             status: 'PENDING',
                             expected_duration: signal.expectedDuration,
                             score: signal.confidence,
-                        }).catch((e: any) => logger.warn(`[Scalping/TradeTracker] Erro ao registrar: ${e.message}`));
+                        }).catch((e: unknown) => logger.warn(`[Scalping/TradeTracker] Erro ao registrar: ${e instanceof Error ? e.message : String(e)}`));
                     } catch (trackError) {
                         logger.warn(`[Scalping] Falha ao injetar no TradeTracker para ${symbol}`, { error: trackError });
                     }
