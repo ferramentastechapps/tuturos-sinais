@@ -28,7 +28,7 @@ export const config = {
         chatId: process.env.TELEGRAM_CHAT_ID || '',
         scalpingChatId: process.env.TELEGRAM_SCALPING_CHAT_ID || '',
         enabled: process.env.TELEGRAM_ENABLED === 'true',
-        minScore: parseInt(process.env.TELEGRAM_MIN_SCORE || '70', 10),
+        minScore: parseInt(process.env.TELEGRAM_MIN_SCORE || '85', 10),
     },
 
     // System
@@ -53,6 +53,7 @@ export const config = {
         signalIntervalMs: parseInt(process.env.SIGNAL_INTERVAL_MS || '300000', 10), // 5 min
         priceUpdateMs: parseInt(process.env.PRICE_UPDATE_MS || '5000', 10), // 5 sec
         healthCheckMs: parseInt(process.env.HEALTH_CHECK_MS || '60000', 10), // 1 min
+        maxSignalsPerDay: parseInt(process.env.MAX_SIGNALS_PER_DAY || '5', 10), // max 5 high-quality signals/day
     },
 
     // Scalping Bot — second signal mode (5m timeframe, separate Telegram channel)

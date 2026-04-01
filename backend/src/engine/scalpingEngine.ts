@@ -131,10 +131,23 @@ function generateScalpingSignal(
     const ema21 = calculateEMA(closes5m, 21);
     const ema50 = calculateEMA(closes5m, 50);
     const atr = calculateATR(ohlc5m, 14);
-    const adx = calculateADX(ohlc5m, 14); // Calculado com dados reais (era fixo em 25)
+    const adx = calculateADX(ohlc5m, 14);
     const rvol = calculateRVOL(ohlc5m, 20);
-    const vwap = calculateVWAP(ohlc5m.slice(-50)); // VWAP da sessão recente
+    const vwap = calculateVWAP(ohlc5m.slice(-50));
     const stochRsi = calculateStochRSI(closes5m);
+
+    // ── VETO PRECOCE SCALPING: ADX fraco = mercado lateral, scalping falha ──
+    if (adx < 15) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO ADX: ${adx.toFixed(1)} < 15 (mercado sem tendência para scalping)`);
+        return null;
+    }
+
+    // ── VETO PRECOCE SCALPING: Volatilidade 5m muito baixa (spread vai comer o lucro) ──
+    const atrPct = currentPrice > 0 ? (atr / currentPrice) * 100 : 0;
+    if (atrPct < 0.5) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO ATR: ${atrPct.toFixed(2)}% < 0.5% (volatilidade 5m insuficiente)`);
+        return null;
+    }
 
     const lastEma9 = ema9[ema9.length - 1] || currentPrice;
     const lastEma21 = ema21[ema21.length - 1] || currentPrice;
@@ -418,9 +431,13 @@ function generateScalpingSignal(
 
 async function runScalpingCycle(): Promise<void> {
     logger.info('[Scalping] Running scalping signal cycle...');
-    // Usa lista dedicada de pares líquidos (scalpingSymbols), não a lista geral.
-    // A lista geral (monitoredSymbols) inclui 86 pares com altcoins de baixa liquidez
-    // que causam losses no 5m (API3, UMA, GMT etc foram os maiores perdedores).
+
+    // Limite diário de scalping: evita excesso de sinais (8 = máximo razoável para 5m)
+    if (scalpingSignalsToday >= 8) {
+        logger.info('[Scalping] Limite diário de 8 sinais atingido. Aguardando próximo dia.');
+        return;
+    }
+
     const symbols = config.scalpingSymbols;
     const now = Date.now();
 

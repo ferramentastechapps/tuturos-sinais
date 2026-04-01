@@ -20,6 +20,31 @@ let lastSignalAt: string | null = null;
 let engineRunning = false;
 let engineInterval: NodeJS.Timeout | null = null;
 
+// Rastreia quais moedas já geraram sinal hoje (evita repetição e força diversificação)
+const symbolsSignaledToday = new Set<string>();
+let lastDayReset = new Date().toDateString();
+
+function checkAndResetDailyCounters(): void {
+    const today = new Date().toDateString();
+    if (today !== lastDayReset) {
+        signalsToday = 0;
+        symbolsSignaledToday.clear();
+        lastDayReset = today;
+        logger.info('[Engine] Contadores diários resetados (novo dia)');
+    }
+}
+
+// Fisher-Yates shuffle — embaralha a lista de símbolos a cada ciclo
+// para garantir rotação justa entre os 86+ pares (não favorece BTC/ETH/SOL)
+function shuffleArray<T>(arr: T[]): T[] {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+}
+
 // ──── Simplified Technical Indicators (server-side) ────
 
 export function calculateRSI(closes: number[], period = 14): number {
@@ -416,6 +441,20 @@ export function generateSignalFromData(
     const vwap = calculateVWAP(ohlc);
     const rvol = calculateRVOL(ohlc);
 
+    // ── VETO PRECOCE: Mercado lateral (ADX fraco = tendência inexistente) ──
+    if (adx < 22) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ADX: ${adx.toFixed(1)} < 22 (mercado lateral sem tendência)`);
+        return null;
+    }
+
+    // ── VETO PRECOCE: Volatilidade insuficiente (ATR < 0.8% = não há movimento real) ──
+    const currentPriceForVeto = ohlc[ohlc.length - 1].close;
+    const atrPercentForVeto = currentPriceForVeto > 0 ? (atr / currentPriceForVeto) * 100 : 0;
+    if (atrPercentForVeto < 0.8) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ATR: ${atrPercentForVeto.toFixed(2)}% < 0.8% (volatilidade insuficiente)`);
+        return null;
+    }
+
     const lastEma20 = ema20[ema20.length - 1] || currentPrice;
     const lastEma50 = ema50[ema50.length - 1] || currentPrice;
     const lastEma200 = ema200[ema200.length - 1] || currentPrice;
@@ -445,20 +484,36 @@ export function generateSignalFromData(
     const mtfContext = { macro: [] as string[], medium: [] as string[], micro: [] as string[] };
     let macroTrend: 'long' | 'short' | 'neutral' = 'neutral';
     
+    let trend4h: 'long' | 'short' | 'neutral' = 'neutral';
+    let trend1h: 'long' | 'short' | 'neutral' = 'neutral';
+    let trend15m: 'long' | 'short' | 'neutral' = 'neutral';
+
     if (ohlc4h && ohlc4h.length >= 50) {
         const closes4h = ohlc4h.map(c => c.close);
         const ema200_4h = calculateEMA(closes4h, 200).pop() || currentPrice;
-        if (currentPrice > ema200_4h) {
-            macroTrend = 'long';
-        } else {
-            macroTrend = 'short';
-        }
+        const ema50_4h  = calculateEMA(closes4h,  50).pop() || currentPrice;
+        trend4h = (currentPrice > ema200_4h && currentPrice > ema50_4h) ? 'long'
+                : (currentPrice < ema200_4h && currentPrice < ema50_4h) ? 'short'
+                : 'neutral';
+        macroTrend = trend4h === 'neutral' ? (currentPrice > ema200_4h ? 'long' : 'short') : trend4h;
     }
-    
+
+    // 1H trend (usa os dados já carregados — ohlc é 1H)
+    const ema50_1h  = calculateEMA(closes, 50).pop()  || currentPrice;
+    const ema200_1h = calculateEMA(closes, 200).pop() || currentPrice;
+    trend1h = (currentPrice > ema200_1h && currentPrice > ema50_1h) ? 'long'
+            : (currentPrice < ema200_1h && currentPrice < ema50_1h) ? 'short'
+            : 'neutral';
+
     let rsi15 = 50;
     if (ohlc15m && ohlc15m.length >= 20) {
         const closes15m = ohlc15m.map(c => c.close);
         rsi15 = calculateRSI(closes15m);
+        const ema20_15m = calculateEMA(closes15m, 20).pop() || currentPrice;
+        const ema50_15m = calculateEMA(closes15m, 50).pop() || currentPrice;
+        trend15m = (currentPrice > ema20_15m && currentPrice > ema50_15m) ? 'long'
+                 : (currentPrice < ema20_15m && currentPrice < ema50_15m) ? 'short'
+                 : 'neutral';
     }
     // --- SMART MONEY CONCEPTS (ICT) ---
     const { isBullishFvg, isBearishFvg } = detectFVG(ohlc);
@@ -475,16 +530,28 @@ export function generateSignalFromData(
         if (rsi > 65) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: RSI=${rsi.toFixed(1)} > 65 (topo saturado)`); return null; }
         if (rvol < 0.70) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: RVOL=${rvol.toFixed(2)} < 0.70 (sem volume)`); return null; }
         if (macroTrend === 'short') { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: Macro tendência SHORT (EMA200 4H)`); return null; }
+
+        // ── VETO MTF: 1H e 15M devem CONFIRMAR (não basta 4H sozinho) ──
+        const mtfLongAlignment = (
+            (trend4h === 'long' || trend4h === 'neutral') &&
+            (trend1h === 'long') &&
+            (trend15m === 'long' || trend15m === 'neutral')
+        );
+        if (!mtfLongAlignment) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: MTF não alinhado (4H:${trend4h} 1H:${trend1h} 15M:${trend15m})`);
+            return null;
+        }
         
         // Formata MTF para LONG
-        mtfContext.macro.push(macroTrend === 'long' ? 'Preço acima da EMA 200 (4H) ✅' : 'Preço abaixo da EMA 200 (4H) ❌');
+        mtfContext.macro.push(trend4h === 'long' ? 'Tendência 4H bullish ✅' : 'Tendência 4H neutro ⚠️');
+        mtfContext.medium.push(trend1h === 'long' ? 'Tendência 1H bullish ✅' : 'Tendência 1H neutro ⚠️');
         if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ✅');
         else if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ❌');
 
         if (rsi15 < 35) mtfContext.micro.push('Reversão de curto prazo (RSI 15m oversold) ✅');
         else if (rsi15 > 65) mtfContext.micro.push('Recuo de curto prazo (RSI 15m overbought) ❌');
 
-        score = 60 + bullishCount * 5; // Start higher
+        score = 60 + bullishCount * 5;
         confluences.push(`${bullishCount} ind. bullish`);
     } else if (bearishCount >= 4) {
         type = 'short';
@@ -492,9 +559,21 @@ export function generateSignalFromData(
         if (rsi < 35) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: RSI=${rsi.toFixed(1)} < 35 (fundo saturado)`); return null; }
         if (rvol < 0.70) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: RVOL=${rvol.toFixed(2)} < 0.70 (sem volume)`); return null; }
         if (macroTrend === 'long') { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: Macro tendência LONG (EMA200 4H)`); return null; }
+
+        // ── VETO MTF: 1H e 15M devem CONFIRMAR (não basta 4H sozinho) ──
+        const mtfShortAlignment = (
+            (trend4h === 'short' || trend4h === 'neutral') &&
+            (trend1h === 'short') &&
+            (trend15m === 'short' || trend15m === 'neutral')
+        );
+        if (!mtfShortAlignment) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: MTF não alinhado (4H:${trend4h} 1H:${trend1h} 15M:${trend15m})`);
+            return null;
+        }
         
         // Formata MTF para SHORT
-        mtfContext.macro.push(macroTrend === 'short' ? 'Preço abaixo da EMA 200 (4H) ✅' : 'Preço acima da EMA 200 (4H) ❌');
+        mtfContext.macro.push(trend4h === 'short' ? 'Tendência 4H bearish ✅' : 'Tendência 4H neutro ⚠️');
+        mtfContext.medium.push(trend1h === 'short' ? 'Tendência 1H bearish ✅' : 'Tendência 1H neutro ⚠️');
         if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ✅');
         else if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ❌');
 
@@ -524,8 +603,10 @@ export function generateSignalFromData(
 
     const ictConfirmationCount = type === 'long' ? ictLongConfirmations : ictShortConfirmations;
     logger.debug(`[SIGNAL-DIAG] ${symbol} ICT check (${type}): FVG=${type==='long'?isBullishFvg:isBearishFvg} Sweep=${type==='long'?isSweepLow:isSweepHigh} OB=${type==='long'?priceInBullishOB:priceInBearishOB} → confirmações=${ictConfirmationCount}`);
-    if (ictConfirmationCount < 1) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ICT: ${ictConfirmationCount} confirmações (precisa ≥1)`);
+    // Exige mínimo 2 confirmações ICT (FVG + Sweep, OB + Sweep, ou OB + FVG)
+    // Uma única confirmação é ruído — ICT sem contexto é falso sinal.
+    if (ictConfirmationCount < 2) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ICT: ${ictConfirmationCount} confirmações (precisa ≥2: FVG+Sweep, OB+Sweep, ou OB+FVG)`);
         return null;
     }
 
@@ -709,8 +790,13 @@ export function generateSignalFromData(
 
     const riskReward = tp1Distance / stopLossDistance;
 
-    // --- VETO: Recusa sinais com R:R menor que 1:1 ---
-    if (riskReward < 1.0) return null;
+    // --- VETO: R:R mínimo 1.5:1 (expectativa matemática positiva com 40% WR) ---
+    // E = (0.40 × 1.5) - (0.60 × 1.0) = 0.60 - 0.60 = 0 [breakeven mínimo]
+    // Para R:R 2.0: E = (0.40 × 2.0) - (0.60 × 1.0) = 0.80 - 0.60 = +0.20 ✅
+    if (riskReward < 1.5) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO R:R: ${riskReward.toFixed(2)} < 1.5 (expectativa negativa)`);
+        return null;
+    }
 
     // --- GERENCIAMENTO DE RISCO DINÂMICO (SMART SIZING) ---
     const accountRiskLevel = config.riskManagement.riskPercent;
@@ -793,11 +879,21 @@ export function generateSignalFromData(
 async function runSignalCycle(): Promise<void> {
     logger.info('Running signal generation cycle...');
 
+    // Reseta contadores diários se mudou o dia
+    checkAndResetDailyCounters();
+
+    // Limite diário: qualidade > quantidade
+    if (signalsToday >= config.engine.maxSignalsPerDay) {
+        logger.info(`[Engine] Limite diário de ${config.engine.maxSignalsPerDay} sinais atingido. Próximo ciclo amanhã.`);
+        return;
+    }
+
     // Fetch global macro context once per cycle (results are cached internally)
     const globalCtx = await marketContextService.getGlobalContext();
     logger.debug('[Engine] Global context', globalCtx);
 
-    const symbols = config.monitoredSymbols;
+    // Embaralha símbolos para rotação justa (evita sempre analisar BTC/ETH/SOL primeiro)
+    const symbols = shuffleArray([...config.monitoredSymbols]);
     const newSignals: TradeSignal[] = [];
 
     for (const symbol of symbols) {
@@ -823,7 +919,13 @@ async function runSignalCycle(): Promise<void> {
                 symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h
             );
 
-            if (signal && signal.quality && signal.quality.score >= 75) {
+            if (signal && signal.quality && signal.quality.score >= 85) {
+                // Não gerar segundo sinal da mesma moeda no mesmo dia
+                if (symbolsSignaledToday.has(symbol)) {
+                    logger.debug(`[Engine] ${symbol} já gerou sinal hoje — rotação de moedas ativa`);
+                    continue;
+                }
+
                 // Prevent duplicate spam: check if we already have a recent signal for this same pair and direction
                 const existingRecent = activeSignals.find(s => 
                     s.pair === symbol && 
@@ -899,7 +1001,14 @@ async function runSignalCycle(): Promise<void> {
 
                 newSignals.push(signal);
                 signalsToday++;
+                symbolsSignaledToday.add(symbol); // Bloquear segunda análise desta moeda hoje
                 lastSignalAt = new Date().toISOString();
+
+                // Verificar limite diário após cada novo sinal
+                if (signalsToday >= config.engine.maxSignalsPerDay) {
+                    logger.info(`[Engine] Limite diário de ${config.engine.maxSignalsPerDay} atingido durante o ciclo. Abortando análise restante.`);
+                    break;
+                }
 
                 // Send Telegram notification
                 if (telegramService.isEnabled && signal.quality.score >= config.telegram.minScore) {
