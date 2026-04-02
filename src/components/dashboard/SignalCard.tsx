@@ -71,12 +71,12 @@ export function SignalCard({ signal, onAnalyze, onExecute }: SignalCardProps) {
                 <span className="font-medium text-foreground/80">{signal.tradeType || 'Day Trade'}</span>
                 <span>•</span>
                 <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {signal.expectedDuration || signal.timeframe || '1h'}</span>
-                {signal.status !== 'active' && signal.status !== 'pending' && (
-                    <Badge className={cn("ml-1 h-4 text-[9px] px-1 shadow-none",
-                        signal.status === 'hit_tp' ? 'bg-signal-buy hover:bg-signal-buy' : 
-                        signal.status === 'hit_sl' ? 'bg-signal-sell hover:bg-signal-sell' : 'bg-muted text-muted-foreground'
+                {!['active', 'ACTIVE', 'pending', 'PENDING'].includes(signal.status) && (
+                    <Badge className={cn("ml-1 h-4 text-[9px] px-1 shadow-none text-white",
+                        ['hit_tp', 'CLOSED_TP'].includes(signal.status) ? 'bg-signal-buy hover:bg-signal-buy' : 
+                        ['hit_sl', 'CLOSED_SL'].includes(signal.status) ? 'bg-signal-sell hover:bg-signal-sell' : 'bg-muted text-muted-foreground'
                     )}>
-                        {signal.status}
+                        {['hit_tp', 'CLOSED_TP'].includes(signal.status) ? 'WIN' : ['hit_sl', 'CLOSED_SL'].includes(signal.status) ? 'LOSS' : signal.status}
                     </Badge>
                 )}
                 <span className="ml-auto text-[9px] bg-muted/60 px-1.5 py-0.5 rounded-sm whitespace-nowrap">
@@ -94,7 +94,7 @@ export function SignalCard({ signal, onAnalyze, onExecute }: SignalCardProps) {
                 </div>
                 {/* Target Progress */}
                 <div className="space-y-0.5 text-right">
-                    <p className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider">{signal.status === 'active' ? 'Alvo TP1' : 'Alvo Final'}</p>
+                    <p className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider">{['active', 'ACTIVE', 'pending', 'PENDING'].includes(signal.status) ? 'Alvo TP1' : 'Alvo Final'}</p>
                     <p className={cn(
                         "text-xs font-mono font-bold leading-none",
                         isLong ? "text-signal-buy" : "text-signal-sell"

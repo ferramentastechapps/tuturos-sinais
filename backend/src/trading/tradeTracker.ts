@@ -275,7 +275,11 @@ export class TradeTracker {
       // Upsert no histórico (upsert garante que funciona mesmo se o registro não existia)
       db.tradeSignal.upsert({
         where: { id: signal.id },
-        update: { status: 'CLOSED_TP' },
+        update: { 
+        status: 'CLOSED_TP',
+        take_profits: JSON.stringify(signal.take_profits || []),
+        stop_loss: signal.stop_loss
+      },
         create: {
           id: signal.id,
           pair: signal.pair,
@@ -342,7 +346,11 @@ export class TradeTracker {
     const dbStatus = isWin ? 'CLOSED_TP' : 'CLOSED_SL';
     db.tradeSignal.upsert({
       where: { id: signal.id },
-      update: { status: dbStatus },
+      update: { 
+        status: dbStatus,
+        stop_loss: signal.stop_loss,
+        take_profits: JSON.stringify(signal.take_profits || [])
+      },
       create: {
         id: signal.id,
         pair: signal.pair,

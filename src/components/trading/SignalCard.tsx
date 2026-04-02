@@ -17,13 +17,22 @@ export const SignalCard = ({ signal }: SignalCardProps) => {
   const getStatusBadge = () => {
     switch (signal.status) {
       case 'active':
+      case 'ACTIVE':
+      case 'PENDING':
+      case 'pending':
         return <Badge className="bg-primary/20 text-primary border-primary/30">Ativo</Badge>;
       case 'hit_tp':
+      case 'CLOSED_TP':
         return <Badge className="bg-success/20 text-success border-success/30">TP Atingido</Badge>;
       case 'hit_sl':
+      case 'CLOSED_SL':
         return <Badge className="bg-destructive/20 text-destructive border-destructive/30">SL Atingido</Badge>;
       case 'cancelled':
+      case 'CANCELLED':
+      case 'CANCELED':
         return <Badge variant="secondary">Cancelado</Badge>;
+      default:
+        return <Badge variant="secondary">{signal.status}</Badge>;
     }
   };
 
