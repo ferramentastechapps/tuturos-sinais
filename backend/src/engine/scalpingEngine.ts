@@ -137,8 +137,8 @@ function generateScalpingSignal(
     const stochRsi = calculateStochRSI(closes5m);
 
     // ── VETO PRECOCE SCALPING: ADX fraco = mercado lateral, scalping falha ──
-    if (adx < 15) {
-        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO ADX: ${adx.toFixed(1)} < 15 (mercado sem tendência para scalping)`);
+    if (adx < 12) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO ADX: ${adx.toFixed(1)} < 12 (mercado sem tendência para scalping)`);
         return null;
     }
 
@@ -170,26 +170,26 @@ function generateScalpingSignal(
     const { swingLow, swingHigh } = detectSwingStructure(ohlc5m, 10);
 
     // ── Score de confluências ──
-    // CORRIGIDO: faixas RSI e StochRSI não se sobrepõem mais (zona cinzenta entre 45–55 era ambígua).
-    // Bullish exige RSI claramente abaixo da zona neutra (< 48), bearish acima (> 52).
+    // Bearish bands alargadas para capturar momentum de queda:
+    // RSI 45–80 e StochRSI 45–92 permitem sinais em downtrends antes do território extremamente sobrevendido.
     const bullishIndicators = [
         currentPrice > lastEma9,
         currentPrice > lastEma21,
         macd.histogram > 0,
-        rsi < 48 && rsi > 25,   // Abaixo da linha neutra (sem sobreposição com bearish)
+        rsi < 50 && rsi > 25,   // Abaixo da zona neutra
         currentPrice > vwap,
         rvol > 1.1,
-        stochRsi.k < 45 && stochRsi.k > 15,  // Zona claramente comprada (sem sobreposição)
+        stochRsi.k < 48 && stochRsi.k > 15,  // Zona de retorno bullish
     ];
 
     const bearishIndicators = [
         currentPrice < lastEma9,
         currentPrice < lastEma21,
         macd.histogram < 0,
-        rsi > 52 && rsi < 75,   // Acima da linha neutra (sem sobreposição com bullish)
+        rsi > 45 && rsi < 80,   // Alargado: captura momentum de queda mesmo em RSI médio
         currentPrice < vwap,
         rvol > 1.1,
-        stochRsi.k > 55 && stochRsi.k < 85,  // Zona claramente sobrecomprada (sem sobreposição)
+        stochRsi.k > 45 && stochRsi.k < 92,  // Alargado: captura tendência antes do extremo sobrevendido
     ];
 
     const bullishCount = bullishIndicators.filter(Boolean).length;
@@ -205,26 +205,28 @@ function generateScalpingSignal(
     if (bullishCount >= 5) {
         type = 'long';
 
-        // Vetos absolutos de qualidade para scalping
+        // Vetos absolutos de qualidade para scalping LONG
         if (rsi > 70) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RSI=${rsi.toFixed(1)} sobrecomprado`); return null; }
         if (rvol < 0.8) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RVOL baixo (< 0.8)`); return null; }
         if (rsi15 > 70) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RSI15m sobrecomprado`); return null; }
         if (stochRsi.k > 80) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: StochRSI sobrecomprado`); return null; }
         if (currentPrice < lastEma50) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: Preço abaixo da EMA 50`); return null; }
 
-        score = 40 + bullishCount * 5; // Base menor (máx 75) para exigir múltiplos bônus de SMC/Squeeze
+        score = 40 + bullishCount * 5;
         confluences.push(`${bullishCount}/7 ind. bullish (5m)`);
 
     } else if (bearishCount >= 5) {
         type = 'short';
 
-        if (rsi < 30) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RSI=${rsi.toFixed(1)} sobrevendido`); return null; }
+        // SHORT: vetos mais permissivos em downtrends — RSI/StochRSI podem estar baixos durante crashes
+        // CORRIGIDO: limiar baixado para 22/10 (era 30/20) para não bloquear shorts em colapsos de mercado
+        if (rsi < 22) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RSI=${rsi.toFixed(1)} extremamente sobrevendido (< 22)`); return null; }
         if (rvol < 0.8) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RVOL baixo (< 0.8)`); return null; }
-        if (rsi15 < 30) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RSI15m sobrevendido`); return null; }
-        if (stochRsi.k < 20) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: StochRSI sobrevendido`); return null; }
-        if (currentPrice > lastEma50) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: Preço acima da EMA 50`); return null; }
+        if (rsi15 < 22) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RSI15m extremamente sobrevendido`); return null; }
+        if (stochRsi.k < 10) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: StochRSI extremamente sobrevendido (< 10)`); return null; }
+        // CORRIGIDO: EMA50 removida do veto de SHORT — preço abaixo da EMA50 é exatamente o contexto de downtrend onde shorts são válidos
 
-        score = 40 + bearishCount * 5; // Base menor (máx 75) para exigir múltiplos bônus
+        score = 40 + bearishCount * 5;
         confluences.push(`${bearishCount}/7 ind. bearish (5m)`);
 
     } else {
