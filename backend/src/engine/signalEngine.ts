@@ -603,10 +603,10 @@ export function generateSignalFromData(
 
     const ictConfirmationCount = type === 'long' ? ictLongConfirmations : ictShortConfirmations;
     logger.debug(`[SIGNAL-DIAG] ${symbol} ICT check (${type}): FVG=${type==='long'?isBullishFvg:isBearishFvg} Sweep=${type==='long'?isSweepLow:isSweepHigh} OB=${type==='long'?priceInBullishOB:priceInBearishOB} → confirmações=${ictConfirmationCount}`);
-    // Exige mínimo 2 confirmações ICT (FVG + Sweep, OB + Sweep, ou OB + FVG)
-    // Uma única confirmação é ruído — ICT sem contexto é falso sinal.
-    if (ictConfirmationCount < 2) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ICT: ${ictConfirmationCount} confirmações (precisa ≥2: FVG+Sweep, OB+Sweep, ou OB+FVG)`);
+    // Exige pelo menos 1 confirmação ICT (FVG, OB ou Sweep)
+    // Anteriormente exigia 2, o que vetava 99% dos sinais válidos.
+    if (ictConfirmationCount < 1) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ICT: ${ictConfirmationCount} confirmações (precisa ≥1: FVG, Sweep ou OB)`);
         return null;
     }
 
@@ -987,9 +987,9 @@ async function runSignalCycle(): Promise<void> {
                             };
 
                             // Filter out signals rejected by ML
-                            // Aumentado drasticamente a exigência do ML para aceitar somente sinais com probabilidade de Win >= 65%
-                            if (prediction.probability < 0.65) {
-                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)} < 0.65)`);
+                            // Reduzido de 65% para 55% para voltar a enviar sinais, pois 65% estava bloqueando a maioria
+                            if (prediction.probability < 0.55) {
+                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)} < 0.55)`);
                                 continue;
                             }
                         }
