@@ -999,6 +999,32 @@ async function runSignalCycle(): Promise<void> {
                 }
 
 
+                // Populate definitive entry ranges and take profits
+                const anySignal = signal as any; // Para usar os paramétros suplementares MTF
+                const isOB = anySignal.smartMoney?.isOrderBlock;
+                const isSweep = anySignal.smartMoney?.isLiquiditySweep;
+                const obZone = anySignal.obEntryZone;
+                
+                let entryZone;
+                if (obZone && signal.type === 'long' && signal.entry > obZone.high) {
+                    entryZone = { min: obZone.low, max: obZone.high };
+                } else if (obZone && signal.type === 'short' && signal.entry < obZone.low) {
+                    entryZone = { min: obZone.low, max: obZone.high };
+                } else {
+                    const pullback = 0.002;
+                    entryZone = signal.type === 'long'
+                        ? { min: signal.entry * (1 - pullback - 0.002), max: signal.entry * (1 - pullback) }
+                        : { min: signal.entry * (1 + pullback), max: signal.entry * (1 + pullback + 0.002) };
+                }
+                
+                signal.entry_range_low = entryZone.min;
+                signal.entry_range_high = entryZone.max;
+                signal.take_profits = [
+                    { level: 1, price: signal.takeProfit1 || signal.takeProfit, percentage: 100, hit: false },
+                    ...(signal.takeProfit2 ? [{ level: 2, price: signal.takeProfit2, percentage: 50, hit: false }] : []),
+                    ...(signal.takeProfit3 ? [{ level: 3, price: signal.takeProfit3, percentage: 33, hit: false }] : []),
+                ];
+
                 newSignals.push(signal);
                 signalsToday++;
                 symbolsSignaledToday.add(symbol); // Bloquear segunda análise desta moeda hoje
@@ -1013,26 +1039,6 @@ async function runSignalCycle(): Promise<void> {
                 // Send Telegram notification
                 if (telegramService.isEnabled && signal.quality.score >= config.telegram.minScore) {
                     try {
-                        const anySignal = signal as any; // Para usar os paramétros suplementares MTF
-                        const isOB = anySignal.smartMoney?.isOrderBlock;
-                        const isSweep = anySignal.smartMoney?.isLiquiditySweep;
-                        const obZone = anySignal.obEntryZone;
-
-                        // BUG FIX: Calcular entryZone com recuo (pullback) para criar uma verdadeira ORDEM PENDENTE limit.
-                        // Isso dá tempo para o usuário reagir antes do preço ativar a ordem.
-                        let entryZone;
-                        if (obZone && signal.type === 'long' && signal.entry > obZone.high) {
-                            entryZone = { min: obZone.low, max: obZone.high };
-                        } else if (obZone && signal.type === 'short' && signal.entry < obZone.low) {
-                            entryZone = { min: obZone.low, max: obZone.high };
-                        } else {
-                            // Se já estiver dentro ou for outro indicador, forçamos um recuo de 0.2%
-                            const pullback = 0.002;
-                            entryZone = signal.type === 'long'
-                                ? { min: signal.entry * (1 - pullback - 0.002), max: signal.entry * (1 - pullback) }
-                                : { min: signal.entry * (1 + pullback), max: signal.entry * (1 + pullback + 0.002) };
-                        }
-
                         const tgResult = await telegramService.sendNewSignal({
                             type: signal.type,
                             symbol: signal.pair,
@@ -1069,15 +1075,11 @@ async function runSignalCycle(): Promise<void> {
                             pair: signal.pair,
                             type: signal.type.toUpperCase() as 'LONG' | 'SHORT',
                             trade_type: anySignal.tradeType,
-                            entry_range_low: entryZone.min,
-                            entry_range_high: entryZone.max,
+                            entry_range_low: signal.entry_range_low,
+                            entry_range_high: signal.entry_range_high,
                             stop_loss: signal.stopLoss,
                             initial_stop_loss: signal.stopLoss,
-                            take_profits: [
-                                { level: 1, price: signal.takeProfit1 || signal.takeProfit, hit: false },
-                                ...(signal.takeProfit2 ? [{ level: 2, price: signal.takeProfit2, hit: false }] : []),
-                                ...(signal.takeProfit3 ? [{ level: 3, price: signal.takeProfit3, hit: false }] : []),
-                            ],
+                            take_profits: signal.take_profits,
                             status: 'PENDING',
                             telegram_message_id: tgResult.messageId?.toString(),
                             expected_duration: anySignal.expectedDuration,
