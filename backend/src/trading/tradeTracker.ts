@@ -218,6 +218,8 @@ export class TradeTracker {
   private async processTrailingStop(signal: ActiveSignal, currentPrice: number) {
     const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
     const trailDistance = Math.abs(signal.take_profits[0].price - entryAvg); // e.g. 1R step
+    // minimum step to update SL to avoid spamming DB and Telegram (20% of trail distance or 0.2% price movement)
+    const minStep = Math.max(trailDistance * 0.2, entryAvg * 0.002);
     
     let newSl = signal.stop_loss;
     const tradeDir = signal.type.toUpperCase();
@@ -225,12 +227,16 @@ export class TradeTracker {
       const pendingSl = currentPrice - trailDistance;
       if (pendingSl > signal.stop_loss && currentPrice > signal.take_profits[0].price) {
           // SL lags behind the current price by the trailDistance
-          newSl = pendingSl;
+          if ((pendingSl - signal.stop_loss) >= minStep) {
+              newSl = pendingSl;
+          }
       }
     } else {
       const pendingSl = currentPrice + trailDistance;
       if (pendingSl < signal.stop_loss && currentPrice < signal.take_profits[0].price) {
-          newSl = pendingSl;
+          if ((signal.stop_loss - pendingSl) >= minStep) {
+              newSl = pendingSl;
+          }
       }
     }
 
