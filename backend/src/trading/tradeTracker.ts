@@ -480,21 +480,19 @@ export class TradeTracker {
       // (However, we should still save it using whatever features we generated at entry if possible).
       let features: Record<string, any> = {};
       
-      // Since ml_data in standard DB schema might only hold predictions, 
-      // we could store the actual metrics generated at predictSignal.
-      // But for now, we pass score and basic metrics as feature placeholders if missing.
-      // E.g., The best place to save full feature vectors is during Signal generation, 
-      // but if we store them in `ml_data` we grab them here.
       if (originalSignal.ml_data && typeof originalSignal.ml_data === 'string') {
           try {
-            features = JSON.parse(originalSignal.ml_data);
+            const parsed = JSON.parse(originalSignal.ml_data);
+            // ml_data contém o vetor completo de features + campos de predição
+            // Remover campos de predição — manter só as features de entrada
+            const { probability, predictedClass, isFiltered, ...featureFields } = parsed;
+            features = featureFields;
           } catch(e){}
       }
 
-      // Merge base signal info into features 
-      features.confidence = originalSignal.confidence;
-      features.risk_reward = originalSignal.risk_reward;
-      // You can add more features mapped from the original signal here (like indicators)
+      // Garantir campos essenciais sempre presentes
+      if (!features.confidence) features.confidence = originalSignal.confidence ?? 0.5;
+      if (!features.risk_reward) features.risk_reward = originalSignal.risk_reward ?? 1.5;
       
       const entryPrice = (activeSignal.entry_range_low + activeSignal.entry_range_high) / 2;
       const pnl = activeSignal.type === 'LONG' 

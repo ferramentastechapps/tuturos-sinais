@@ -35,40 +35,50 @@ export function startMLRetrainJob() {
  */
 export function executeRetrain(): Promise<boolean> {
     return new Promise((resolve) => {
-        // Encontrar o caminho do script ml_engine
-        const rootDir = path.resolve(__dirname, '../../../../');
-        const mlEngineDir = path.join(rootDir, 'ml_engine');
-        const trainScriptPath = path.join(mlEngineDir, 'train_model.py');
+        const backendDir = path.resolve(__dirname, '../../../');
+        const scriptsDir = path.join(backendDir, 'scripts');
 
-        if (!fs.existsSync(trainScriptPath)) {
-            logger.warn(`Script de treino não encontrado em ${trainScriptPath}`);
+        // Preferir retrain_from_sqlite.py (lê do SQLite local, sem depender do Supabase)
+        // Fallback para retrain_model.py (lê do Supabase)
+        const sqliteScript = path.join(scriptsDir, 'retrain_from_sqlite.py');
+        const supabaseScript = path.join(scriptsDir, 'retrain_model.py');
+        const trainScript = fs.existsSync(sqliteScript) ? sqliteScript : supabaseScript;
+
+        if (!fs.existsSync(trainScript)) {
+            logger.warn(`Script de treino não encontrado. Procurado em: ${sqliteScript}`);
             return resolve(false);
         }
 
-        // Tenta usar Python ou Python3 dependendo do OS
-        const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+        // Usar venv Python se disponível (tem todas as dependências instaladas)
+        const venvPython = path.join(backendDir, '.venv_ml', 'bin', 'python3');
+        const pythonCmd = fs.existsSync(venvPython) ? venvPython
+            : process.platform === 'win32' ? 'python' : 'python3';
 
-        logger.info(`Executando ${pythonCmd} ${trainScriptPath}...`);
-        
-        exec(`${pythonCmd} train_model.py`, { cwd: mlEngineDir }, async (error, stdout, stderr) => {
+        const outputPath = path.join(backendDir, 'current_model.onnx');
+        const cmd = `"${pythonCmd}" "${trainScript}" --min-samples 30 --output "${outputPath}"`;
+
+        logger.info(`[MLRetrain] Executando: ${cmd}`);
+
+        exec(cmd, { cwd: backendDir }, async (error, stdout, stderr) => {
+            if (stdout) logger.info('[MLRetrain] stdout:\n' + stdout);
+            if (stderr) logger.warn('[MLRetrain] stderr:\n' + stderr);
+
             if (error) {
-                logger.error('Falha no retreinamento do modelo', { error: error.message, stderr });
+                logger.error('[MLRetrain] Falha no retreinamento', { code: error.code, message: error.message });
                 return resolve(false);
             }
 
-            logger.info('Retreinamento concluído com sucesso.', { stdout });
+            logger.info('[MLRetrain] Retreinamento concluído. Recarregando modelo...');
 
-            // Após o sucesso do Python, a nova current_model.onnx foi gerada na pasta ml_engine
-            // Ou nós forçamos o PredictionService a tentar se recarregar com o path configurado.
             try {
                 const reloadSuccess = await loadModel();
                 if (reloadSuccess) {
-                    logger.info('Modelo recarregado em memória (Online Learning Aplicado).');
+                    logger.info('[MLRetrain] ✅ Novo modelo carregado em memória.');
                 } else {
-                    logger.warn('Retreinamento terminou, mas falhou ao recarregar o novo modelo ONNX.');
+                    logger.warn('[MLRetrain] ⚠️  Retreinamento OK mas falhou ao recarregar ONNX.');
                 }
             } catch (reloadErr) {
-                logger.error('Erro forçando recarregamento do modelo ONNX.', { error: reloadErr });
+                logger.error('[MLRetrain] Erro ao recarregar modelo', { error: reloadErr });
             }
 
             resolve(true);
