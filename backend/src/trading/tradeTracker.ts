@@ -29,6 +29,8 @@ export interface ActiveSignal {
   expected_duration?: string;
   context?: string;
   score?: number;
+  indicators?: string[];
+  mlData?: any;
 }
 
 export class TradeTracker {
@@ -127,6 +129,8 @@ export class TradeTracker {
                 take_profits: JSON.stringify(fullSignal.take_profits || []),
                 status: fullSignal.status || 'PENDING',
                 confidence: fullSignal.score ?? null,
+                indicators: fullSignal.indicators ? JSON.stringify(fullSignal.indicators) : null,
+                ml_data: fullSignal.mlData ? JSON.stringify(fullSignal.mlData) : null,
             }
         });
     } catch (e: any) {
@@ -166,6 +170,7 @@ export class TradeTracker {
              
              try {
                 await db.activeSignal.update({ where: { id: signal.id }, data: { status: 'ACTIVE' } });
+                await db.tradeSignal.update({ where: { id: signal.id }, data: { entry_time: new Date() } }); // SALVAR ENTRY_TIME
                 this.logEvent(signal.id, 'ACTIVATED', `Order activated at ${update.price}`, update.price).catch(()=>{});
              } catch (e) { /* ignore pg error */ }
              
@@ -278,14 +283,21 @@ export class TradeTracker {
       // Primeira vez que bate qualquer TP = WIN
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
       
+      const pnl = signal.type === 'LONG' 
+        ? ((currentPrice - entryAvg) / entryAvg) * 100 
+        : ((entryAvg - currentPrice) / entryAvg) * 100;
+
       // Upsert no histórico (upsert garante que funciona mesmo se o registro não existia)
       db.tradeSignal.upsert({
         where: { id: signal.id },
         update: { 
-        status: 'CLOSED_TP',
-        take_profits: JSON.stringify(signal.take_profits || []),
-        stop_loss: signal.stop_loss
-      },
+          status: 'CLOSED_TP',
+          take_profits: JSON.stringify(signal.take_profits || []),
+          stop_loss: signal.stop_loss,
+          pnl: pnl,
+          outcome: 'WIN',
+          exit_time: new Date()
+        },
         create: {
           id: signal.id,
           pair: signal.pair,
@@ -298,6 +310,11 @@ export class TradeTracker {
           take_profits: JSON.stringify(signal.take_profits || []),
           status: 'CLOSED_TP',
           confidence: signal.score ?? null,
+          indicators: signal.indicators ? JSON.stringify(signal.indicators) : null,
+          ml_data: signal.mlData ? JSON.stringify(signal.mlData) : null,
+          pnl: pnl,
+          outcome: 'WIN',
+          exit_time: new Date()
         }
       }).catch((e: Error) => console.error('[TradeTracker] Error upsert CLOSED_TP:', e.message));
     }
@@ -355,7 +372,10 @@ export class TradeTracker {
       update: { 
         status: dbStatus,
         stop_loss: signal.stop_loss,
-        take_profits: JSON.stringify(signal.take_profits || [])
+        take_profits: JSON.stringify(signal.take_profits || []),
+        pnl: pnl,
+        outcome: isWin ? 'WIN' : 'LOSS',
+        exit_time: new Date()
       },
       create: {
         id: signal.id,
@@ -369,6 +389,11 @@ export class TradeTracker {
         take_profits: JSON.stringify(signal.take_profits || []),
         status: dbStatus,
         confidence: signal.score ?? null,
+        indicators: signal.indicators ? JSON.stringify(signal.indicators) : null,
+        ml_data: signal.mlData ? JSON.stringify(signal.mlData) : null,
+        pnl: pnl,
+        outcome: isWin ? 'WIN' : 'LOSS',
+        exit_time: new Date()
       }
     }).catch((e: Error) => console.error('[TradeTracker] Error upsert SL status:', e.message));
 

@@ -47,6 +47,12 @@ model TradeSignal {
   indicators          String?  // JSON string
   ml_data             String?  // JSON string
   
+  // --- Novos campos para PNL, Resultado e Timestamps ---
+  outcome             String?  // 'WIN' ou 'LOSS'
+  pnl                 Float?
+  entry_time          DateTime?
+  exit_time           DateTime?
+  
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
 }
@@ -187,4 +193,19 @@ model IndicatorAlertConfig {
   
   created_at               DateTime @default(now())
   updated_at               DateTime @default(now()) @updatedAt
+}
+
+model IndicatorPerformance {
+  id              String   @id @default(uuid())
+  pair            String
+  indicator       String
+  total_trades    Int
+  wins            Int
+  losses          Int
+  win_rate        Float
+  avg_pnl         Float?
+  
+  updated_at      DateTime @updatedAt
+  
+  @@unique([pair, indicator])
 }
