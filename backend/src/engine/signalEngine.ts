@@ -1158,7 +1158,6 @@ async function runSignalCycle(): Promise<void> {
                 risk_reward: s.riskReward,
                 status: s.status,
                 confidence: s.confidence,
-                indicators: JSON.stringify(s.indicators),
                 ml_data: s.mlData ? JSON.stringify(s.mlData) : null,
                 created_at: s.createdAt instanceof Date ? s.createdAt : new Date(s.createdAt)
             }));
