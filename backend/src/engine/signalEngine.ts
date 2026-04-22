@@ -9,6 +9,7 @@ import { db } from '../lib/dbClient.js';
 import { marketContextService } from '../lib/marketContextService.js';
 import type { TradeSignal, TechnicalIndicator, OHLCPoint, CryptoPair } from '../types/trading.js';
 import { tradeTracker } from '../trading/tradeTracker.js';
+import { indicatorLearner } from '../ml/indicatorLearner.js';
 
 // ──── State ────
 
@@ -419,7 +420,8 @@ export function generateSignalFromData(
     fundingRate: number,
     ohlc15m?: OHLCPoint[],
     ohlc4h?: OHLCPoint[],
-    customMinScore?: number
+    customMinScore?: number,
+    indicatorPerf?: Record<string, { winRate: number, avgPnl: number, totalTrades: number }>
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
@@ -729,13 +731,45 @@ export function generateSignalFromData(
     if (type === 'long' && fundingRate < -0.01) { score += 5; confluences.push('Negative funding (contrarian)'); }
     if (type === 'short' && fundingRate > 0.01) { score += 5; confluences.push('Positive funding (contrarian)'); }
 
+    // --- LÓGICA DE APRENDIZADO (INDICATOR LEARNER) ---
+    if (indicatorPerf) {
+        for (const ind of confluences) {
+            const cleanName = ind.replace(/[✅❌⚡🐋]/g, '').trim();
+            const perf = indicatorPerf[cleanName];
+            if (perf && perf.totalTrades >= 3) { // Precisa de um histórico mínimo
+                if (perf.winRate > 0.6) {
+                    score += 5;
+                    logger.debug(`[LEARNER] ${symbol} 👍 Bônus pelo indicador ${cleanName} (Win Rate ${(perf.winRate*100).toFixed(0)}%)`);
+                } else if (perf.winRate < 0.4) {
+                    score -= 10;
+                    logger.debug(`[LEARNER] ${symbol} 👎 Penalidade pelo indicador ${cleanName} (Win Rate ${(perf.winRate*100).toFixed(0)}%)`);
+                }
+            }
+        }
+    }
+
     // Cap score
     score = Math.min(score, 100);
+    score = Math.max(score, 0);
 
+<<<<<<< HEAD
     // Minimum score filter — FASE 1: Aumentado de 85 para 90 (apenas sinais excelentes)
     const finalMinScore = customMinScore !== undefined ? customMinScore : 90;
     logger.debug(`[SIGNAL-DIAG] ${symbol} score=${score} | minScore=${finalMinScore} | ${score >= finalMinScore ? '✅ PASSOU' : '❌ VETADO'}`);
     if (score < finalMinScore) return null;
+=======
+    const isBlocked = score < 55;
+
+    // Se estiver bloqueado (score<55), não descarta direto para poder salvar no DB para auditoria,
+    // mas se for entre 55 e finalMinScore, descarta?
+    // O usuário quer "Bloquear o envio se o score ficar abaixo de 55%. Registrar bloqueado para auditoria".
+    // Então se o score base já era baixo e caiu mais, nós salvamos como BLOCKED.
+    const finalMinScore = customMinScore !== undefined ? customMinScore : 85;
+    logger.debug(`[SIGNAL-DIAG] ${symbol} score=${score} | minScore=${finalMinScore} | ${score >= finalMinScore ? '✅ PASSOU' : isBlocked ? '🛑 BLOCKED' : '❌ VETADO'}`);
+    
+    // Se não está bloqueado expressamente e não atinge o score mínimo, apenas ignora como Ruído normal
+    if (!isBlocked && score < finalMinScore) return null;
+>>>>>>> 19477f8fe7e384647f5b9bd08d0c2d2979dcb4aa
 
     // --- ICT Order Block + Structural Stop + Fibonacci TPs ---
     let stopLossDistance = 0;
@@ -816,9 +850,15 @@ export function generateSignalFromData(
     // Fórmula Mágica Corrigida:
     let dynamicLeverage = Math.round((accountRiskLevel / stopLossDistance) / (marginPercent / 100));
     
-    // Limites de Segurança Institucional de Alavancagem
-    if (dynamicLeverage < 2) dynamicLeverage = 2;   // Minimo 2x
-    if (dynamicLeverage > 50) dynamicLeverage = 50; // Cap máximo institucional
+    // FASE 2: Reduzir alavancagem em sinais com score < 90
+    if (score < 90) {
+        dynamicLeverage = Math.round(dynamicLeverage * 0.6);
+        logger.debug(`[SIGNAL-DIAG] ${symbol} Alavancagem reduzida 40% (score ${score} < 90)`);
+    }
+    
+    // FASE 2: Limites de Segurança reduzidos (50x → 30x)
+    if (dynamicLeverage < 2) dynamicLeverage = 2;   // Mínimo 2x
+    if (dynamicLeverage > 30) dynamicLeverage = 30; // FASE 2: Cap reduzido de 50x para 30x
 
     // Definir tipo de trade e narrativa baseada no MTF
     let tradeType = 'Day Trade';
@@ -850,7 +890,7 @@ export function generateSignalFromData(
         positionSizePercent: marginPercent,
         riskPercent: accountRiskLevel,
         timeframe: '1h',
-        status: 'PENDING',
+        status: isBlocked ? 'BLOCKED' : ('PENDING' as any),
         confidence: score,
         createdAt: new Date(),
         indicators: confluences,
@@ -926,8 +966,10 @@ async function runSignalCycle(): Promise<void> {
             const volume24h = ticker?.turnover24h || 0;
             const fundingRate = parseFloat(ticker?.fundingRate || '0');
 
+            const perf = await indicatorLearner.getPairPerformance(symbol);
+
             const signal = generateSignalFromData(
-                symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h
+                symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, undefined, perf
             );
 
             if (signal && signal.quality && signal.quality.score >= 85) {
@@ -1048,7 +1090,7 @@ async function runSignalCycle(): Promise<void> {
                 }
 
                 // Send Telegram notification
-                if (telegramService.isEnabled && signal.quality.score >= config.telegram.minScore) {
+                if (signal.status !== 'BLOCKED' && telegramService.isEnabled && signal.quality.score >= config.telegram.minScore) {
                     try {
                         const tgResult = await telegramService.sendNewSignal({
                             type: signal.type,
@@ -1091,10 +1133,12 @@ async function runSignalCycle(): Promise<void> {
                             stop_loss: signal.stopLoss,
                             initial_stop_loss: signal.stopLoss,
                             take_profits: signal.take_profits,
-                            status: 'PENDING',
-                            telegram_message_id: tgResult.messageId?.toString(),
+                            status: signal.status as 'PENDING' | 'BLOCKED',
+                            telegram_message_id: tgResult?.messageId?.toString() || undefined,
                             expected_duration: anySignal.expectedDuration,
                             score: signal.quality.score,
+                            indicators: signal.indicators,
+                            mlData: anySignal.mlData,
                         }).catch((e: any) => logger.warn(`[TradeTracker] erro ao registrar: ${e.message}`));
 
                     } catch (telegramError) {

@@ -4,6 +4,9 @@ import { fileURLToPath } from 'url';
 import { priceStream, PriceUpdate } from './priceStream.js';
 import { db } from '../lib/dbClient.js';
 import { sendActivationNotification, sendTrailingStopUpdate, sendTPNotification, sendSLNotification } from '../notifications/telegramService.js';
+import { calculateTrailingStop, calculatePartialProfit, formatTrailingStopMessage, shouldNotifyTrailingUpdate, type TrailingStopConfig } from './trailingStopManager.js';
+import { bybitConnector } from '../exchange/bybitConnector.js';
+import { calculateATR } from '../engine/signalEngine.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +32,12 @@ export interface ActiveSignal {
   expected_duration?: string;
   context?: string;
   score?: number;
+  indicators?: string[];
+  mlData?: any;
+  // FASE 2: Campos para trailing stop
+  positionRemaining?: number; // % da posição ainda aberta (100 = total)
+  lastNotifiedSL?: number; // Último SL notificado (evita spam)
+  trailingActive?: boolean; // Se trailing stop está ativo
 }
 
 export class TradeTracker {
@@ -89,6 +98,14 @@ export class TradeTracker {
         fullSignal.id = `${signal.pair}-${Date.now()}`;
     }
 
+    // FASE 2: Inicializar campos de trailing stop
+    if (!fullSignal.positionRemaining) {
+      fullSignal.positionRemaining = 100; // 100% da posição inicialmente
+    }
+    if (fullSignal.trailingActive === undefined) {
+      fullSignal.trailingActive = false;
+    }
+
     // 0. CANCELAR SINAIS ANTIGOS DA MESMA MOEDA
     await this.cancelOldSignalsForPair(signal.pair!);
 
@@ -127,6 +144,8 @@ export class TradeTracker {
                 take_profits: JSON.stringify(fullSignal.take_profits || []),
                 status: fullSignal.status || 'PENDING',
                 confidence: fullSignal.score ?? null,
+                indicators: fullSignal.indicators ? JSON.stringify(fullSignal.indicators) : null,
+                ml_data: fullSignal.mlData ? JSON.stringify(fullSignal.mlData) : null,
             }
         });
     } catch (e: any) {
@@ -166,6 +185,7 @@ export class TradeTracker {
              
              try {
                 await db.activeSignal.update({ where: { id: signal.id }, data: { status: 'ACTIVE' } });
+                await db.tradeSignal.update({ where: { id: signal.id }, data: { entry_time: new Date() } }); // SALVAR ENTRY_TIME
                 this.logEvent(signal.id, 'ACTIVATED', `Order activated at ${update.price}`, update.price).catch(()=>{});
              } catch (e) { /* ignore pg error */ }
              
@@ -216,42 +236,156 @@ export class TradeTracker {
   }
 
   private async processTrailingStop(signal: ActiveSignal, currentPrice: number) {
-    const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
-    const trailDistance = Math.abs(signal.take_profits[0].price - entryAvg); // e.g. 1R step
-    // minimum step to update SL to avoid spamming DB and Telegram (20% of trail distance or 0.2% price movement)
-    const minStep = Math.max(trailDistance * 0.2, entryAvg * 0.002);
+    // FASE 2: Integração com trailingStopManager
     
-    let newSl = signal.stop_loss;
-    const tradeDir = signal.type.toUpperCase();
-    if (tradeDir === 'LONG') {
-      const pendingSl = currentPrice - trailDistance;
-      if (pendingSl > signal.stop_loss && currentPrice > signal.take_profits[0].price) {
-          // SL lags behind the current price by the trailDistance
-          if ((pendingSl - signal.stop_loss) >= minStep) {
-              newSl = pendingSl;
-          }
+    // Buscar ATR atual para cálculo dinâmico
+    let atr = 0;
+    try {
+      const ohlc = await bybitConnector.fetchKlines(signal.pair, signal.trade_type === 'Scalping' ? '5' : '60', 20);
+      if (ohlc.length >= 15) {
+        atr = calculateATR(ohlc, 14);
       }
-    } else {
-      const pendingSl = currentPrice + trailDistance;
-      if (pendingSl < signal.stop_loss && currentPrice < signal.take_profits[0].price) {
-          if ((signal.stop_loss - pendingSl) >= minStep) {
-              newSl = pendingSl;
-          }
-      }
+    } catch (e) {
+      console.warn(`[TradeTracker] Failed to fetch ATR for ${signal.pair}, using fallback`);
+      // Fallback: estima ATR como 1% do preço
+      atr = currentPrice * 0.01;
     }
 
-    if (newSl !== signal.stop_loss) {
-      const oldSl = signal.stop_loss;
-      signal.stop_loss = newSl;
+    // Preparar configuração para o trailing stop manager
+    const config: TrailingStopConfig = {
+      symbol: signal.pair,
+      type: signal.type.toLowerCase() as 'long' | 'short',
+      entry: (signal.entry_range_low + signal.entry_range_high) / 2,
+      currentPrice,
+      stopLoss: signal.stop_loss,
+      tp1: signal.take_profits[0]?.price || 0,
+      tp2: signal.take_profits[1]?.price || 0,
+      tp3: signal.take_profits[2]?.price || 0,
+      atr,
+      tp1Hit: signal.take_profits[0]?.hit || false,
+      tp2Hit: signal.take_profits[1]?.hit || false,
+      tp3Hit: signal.take_profits[2]?.hit || false,
+      positionRemaining: signal.positionRemaining || 100,
+    };
+
+    // Calcular trailing stop
+    const result = calculateTrailingStop(config);
+
+    // Processar ação
+    if (result.action === 'STOP_HIT') {
+      // Stop loss foi atingido
+      await this.handleStopLoss(signal, currentPrice);
+      return;
+    }
+
+    if (result.action === 'CLOSE_PARTIAL' && result.closePercent) {
+      // Fechar parcial da posição
+      const oldPosition = signal.positionRemaining || 100;
+      signal.positionRemaining = oldPosition - result.closePercent;
       
-      // Update DB safely
+      console.log(`[TradeTracker] ${signal.pair} Fechando ${result.closePercent}% da posição (restante: ${signal.positionRemaining}%)`);
+      
+      // Atualizar SL se fornecido
+      if (result.newStopLoss) {
+        const oldSL = signal.stop_loss;
+        signal.stop_loss = result.newStopLoss;
+        signal.lastNotifiedSL = result.newStopLoss;
+        
+        console.log(`[TradeTracker] ${signal.pair} SL atualizado: ${oldSL.toFixed(2)} → ${result.newStopLoss.toFixed(2)}`);
+      }
+      
+      signal.trailingActive = true;
+      
+      // Atualizar DB
       try {
-          await db.activeSignal.update({ where: { id: signal.id }, data: { stop_loss: newSl } });
-          this.logEvent(signal.id, 'TRAILING_STOP_UPDATED', `Trailing stop moved from ${oldSl} to ${newSl}`, currentPrice).catch(()=>{});
-      } catch (e) { /* ignore pg error */ }
+        await db.activeSignal.update({
+          where: { id: signal.id },
+          data: {
+            stop_loss: signal.stop_loss,
+            context: JSON.stringify({
+              ...(typeof signal.context === 'string' ? JSON.parse(signal.context) : signal.context),
+              positionRemaining: signal.positionRemaining,
+              trailingActive: true,
+            }),
+          },
+        });
+        
+        this.logEvent(signal.id, 'PARTIAL_CLOSE', `Fechado ${result.closePercent}% - ${result.reason}`, currentPrice).catch(() => {});
+      } catch (e) {
+        console.error('[TradeTracker] DB error updating partial close', e);
+      }
       
-      // Notify Telegram async
-      sendTrailingStopUpdate(signal, currentPrice, oldSl, newSl).catch(e => console.error('TG error', e));
+      // Calcular lucro parcial
+      const partialProfit = calculatePartialProfit(
+        config.entry,
+        config.tp1,
+        config.tp2,
+        currentPrice,
+        config.type,
+        config.tp1Hit,
+        config.tp2Hit
+      );
+      
+      // Notificar Telegram
+      const message = formatTrailingStopMessage(signal as any, result, currentPrice, partialProfit);
+      sendTrailingStopUpdate(signal, currentPrice, signal.stop_loss, signal.stop_loss, message).catch(e => 
+        console.error('[TradeTracker] TG error', e)
+      );
+      
+      return;
+    }
+
+    if ((result.action === 'MOVE_SL' || result.action === 'TRAILING_STOP') && result.newStopLoss) {
+      // Atualizar stop loss
+      const oldSL = signal.stop_loss;
+      
+      // Verificar se deve notificar (evita spam)
+      const shouldNotify = shouldNotifyTrailingUpdate(signal.lastNotifiedSL || null, result.newStopLoss, 0.5);
+      
+      signal.stop_loss = result.newStopLoss;
+      signal.trailingActive = true;
+      
+      if (shouldNotify) {
+        signal.lastNotifiedSL = result.newStopLoss;
+      }
+      
+      // Atualizar DB
+      try {
+        await db.activeSignal.update({
+          where: { id: signal.id },
+          data: {
+            stop_loss: result.newStopLoss,
+            context: JSON.stringify({
+              ...(typeof signal.context === 'string' ? JSON.parse(signal.context) : signal.context),
+              positionRemaining: signal.positionRemaining || 100,
+              trailingActive: true,
+              lastNotifiedSL: signal.lastNotifiedSL,
+            }),
+          },
+        });
+        
+        this.logEvent(signal.id, 'TRAILING_STOP_UPDATED', result.reason, currentPrice).catch(() => {});
+      } catch (e) {
+        console.error('[TradeTracker] DB error updating trailing stop', e);
+      }
+      
+      // Notificar Telegram apenas se mudança significativa
+      if (shouldNotify) {
+        const partialProfit = calculatePartialProfit(
+          config.entry,
+          config.tp1,
+          config.tp2,
+          currentPrice,
+          config.type,
+          config.tp1Hit,
+          config.tp2Hit
+        );
+        
+        const message = formatTrailingStopMessage(signal as any, result, currentPrice, partialProfit);
+        sendTrailingStopUpdate(signal, currentPrice, oldSL, result.newStopLoss, message).catch(e =>
+          console.error('[TradeTracker] TG error', e)
+        );
+      }
     }
   }
 
@@ -278,14 +412,21 @@ export class TradeTracker {
       // Primeira vez que bate qualquer TP = WIN
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
       
+      const pnl = signal.type === 'LONG' 
+        ? ((currentPrice - entryAvg) / entryAvg) * 100 
+        : ((entryAvg - currentPrice) / entryAvg) * 100;
+
       // Upsert no histórico (upsert garante que funciona mesmo se o registro não existia)
       db.tradeSignal.upsert({
         where: { id: signal.id },
         update: { 
-        status: 'CLOSED_TP',
-        take_profits: JSON.stringify(signal.take_profits || []),
-        stop_loss: signal.stop_loss
-      },
+          status: 'CLOSED_TP',
+          take_profits: JSON.stringify(signal.take_profits || []),
+          stop_loss: signal.stop_loss,
+          pnl: pnl,
+          outcome: 'WIN',
+          exit_time: new Date()
+        },
         create: {
           id: signal.id,
           pair: signal.pair,
@@ -298,6 +439,11 @@ export class TradeTracker {
           take_profits: JSON.stringify(signal.take_profits || []),
           status: 'CLOSED_TP',
           confidence: signal.score ?? null,
+          indicators: signal.indicators ? JSON.stringify(signal.indicators) : null,
+          ml_data: signal.mlData ? JSON.stringify(signal.mlData) : null,
+          pnl: pnl,
+          outcome: 'WIN',
+          exit_time: new Date()
         }
       }).catch((e: Error) => console.error('[TradeTracker] Error upsert CLOSED_TP:', e.message));
     }
@@ -355,7 +501,10 @@ export class TradeTracker {
       update: { 
         status: dbStatus,
         stop_loss: signal.stop_loss,
-        take_profits: JSON.stringify(signal.take_profits || [])
+        take_profits: JSON.stringify(signal.take_profits || []),
+        pnl: pnl,
+        outcome: isWin ? 'WIN' : 'LOSS',
+        exit_time: new Date()
       },
       create: {
         id: signal.id,
@@ -369,6 +518,11 @@ export class TradeTracker {
         take_profits: JSON.stringify(signal.take_profits || []),
         status: dbStatus,
         confidence: signal.score ?? null,
+        indicators: signal.indicators ? JSON.stringify(signal.indicators) : null,
+        ml_data: signal.mlData ? JSON.stringify(signal.mlData) : null,
+        pnl: pnl,
+        outcome: isWin ? 'WIN' : 'LOSS',
+        exit_time: new Date()
       }
     }).catch((e: Error) => console.error('[TradeTracker] Error upsert SL status:', e.message));
 

@@ -479,6 +479,6 @@ export const telegramService = new TelegramService();
 
 export const sendTPNotification = (signal: any, tp: any, currentPrice: number) => telegramService.sendTakeProfitNotification(signal, tp, currentPrice);
 export const sendSLNotification = (signal: any, currentPrice: number) => telegramService.sendStopLossNotification(signal, currentPrice);
-export const sendTrailingStopUpdate = (signal: any, currentPrice: number, oldSl: number, newSl: number) => telegramService.sendTrailingStopUpdate(signal, currentPrice, oldSl, newSl);
+export const sendTrailingStopUpdate = (signal: any, currentPrice: number, oldSl: number, newSl: number, customMessage?: string) => telegramService.sendTrailingStopUpdate(signal, currentPrice, oldSl, newSl, customMessage);
 export const sendActivationNotification = (signal: any, currentPrice: number) => telegramService.sendActivationNotification(signal, currentPrice);
 
