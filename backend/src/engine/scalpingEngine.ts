@@ -415,14 +415,9 @@ export function generateScalpingSignal(
 async function runScalpingCycle(): Promise<void> {
     logger.info('[Scalping] Running scalping signal cycle...');
 
-<<<<<<< HEAD
     // FASE 1: Limite diário reduzido de 8 para 5 (qualidade > quantidade)
     if (scalpingSignalsToday >= 5) {
         logger.info('[Scalping] Limite diário de 5 sinais atingido. Aguardando próximo dia.');
-=======
-    if (scalpingSignalsToday >= 8) {
-        logger.info('[Scalping] Limite diário de 8 sinais atingido. Aguardando próximo dia.');
->>>>>>> 19477f8fe7e384647f5b9bd08d0c2d2979dcb4aa
         return;
     }
 

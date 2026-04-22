@@ -752,24 +752,15 @@ export function generateSignalFromData(
     score = Math.min(score, 100);
     score = Math.max(score, 0);
 
-<<<<<<< HEAD
-    // Minimum score filter — FASE 1: Aumentado de 85 para 90 (apenas sinais excelentes)
-    const finalMinScore = customMinScore !== undefined ? customMinScore : 90;
-    logger.debug(`[SIGNAL-DIAG] ${symbol} score=${score} | minScore=${finalMinScore} | ${score >= finalMinScore ? '✅ PASSOU' : '❌ VETADO'}`);
-    if (score < finalMinScore) return null;
-=======
     const isBlocked = score < 55;
 
-    // Se estiver bloqueado (score<55), não descarta direto para poder salvar no DB para auditoria,
-    // mas se for entre 55 e finalMinScore, descarta?
-    // O usuário quer "Bloquear o envio se o score ficar abaixo de 55%. Registrar bloqueado para auditoria".
-    // Então se o score base já era baixo e caiu mais, nós salvamos como BLOCKED.
-    const finalMinScore = customMinScore !== undefined ? customMinScore : 85;
+    // FASE 1: Score mínimo aumentado de 85 para 90 (apenas sinais excelentes)
+    // Mantém lógica de auditoria para scores < 55 (BLOCKED)
+    const finalMinScore = customMinScore !== undefined ? customMinScore : 90;
     logger.debug(`[SIGNAL-DIAG] ${symbol} score=${score} | minScore=${finalMinScore} | ${score >= finalMinScore ? '✅ PASSOU' : isBlocked ? '🛑 BLOCKED' : '❌ VETADO'}`);
     
     // Se não está bloqueado expressamente e não atinge o score mínimo, apenas ignora como Ruído normal
     if (!isBlocked && score < finalMinScore) return null;
->>>>>>> 19477f8fe7e384647f5b9bd08d0c2d2979dcb4aa
 
     // --- ICT Order Block + Structural Stop + Fibonacci TPs ---
     let stopLossDistance = 0;
