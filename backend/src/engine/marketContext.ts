@@ -11,7 +11,7 @@
 
 import axios from 'axios';
 import { logger } from '../lib/logger';
-import { bybitConnector } from '../connectors/bybit';
+import { bybitConnector } from '../exchange/bybitConnector';
 
 // ────────────────────────────────────────────────────────────────────────────
 // TIPOS
@@ -89,7 +89,7 @@ async function getBTCTrend(): Promise<{ trend: BTCTrend; price: number }> {
             return { trend: 'NEUTRAL', price: ohlc4h[ohlc4h.length - 1]?.close || 0 };
         }
 
-        const closes = ohlc4h.map(c => c.close);
+        const closes = ohlc4h.map((c: any) => c.close);
         const currentPrice = closes[closes.length - 1];
         
         const ema50 = calculateEMA(closes, 50);
@@ -205,7 +205,7 @@ export async function getDailyConfirmation(symbol: string): Promise<DailyConfirm
             return { symbol, price: currentPrice, ema200Daily: currentPrice, aboveEma200: true };
         }
         
-        const closes = ohlcDaily.map(c => c.close);
+        const closes = ohlcDaily.map((c: any) => c.close);
         const currentPrice = closes[closes.length - 1];
         
         const ema200 = calculateEMA(closes, 200);
