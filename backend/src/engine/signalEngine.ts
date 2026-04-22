@@ -10,6 +10,7 @@ import { marketContextService } from '../lib/marketContextService.js';
 import type { TradeSignal, TechnicalIndicator, OHLCPoint, CryptoPair } from '../types/trading.js';
 import { tradeTracker } from '../trading/tradeTracker.js';
 import { indicatorLearner } from '../ml/indicatorLearner.js';
+import { validateSignalContext } from './marketContext.js'; // FASE 3
 
 // ──── State ────
 
@@ -425,6 +426,9 @@ export function generateSignalFromData(
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
+    // FASE 3: Validação de contexto de mercado ANTES de calcular indicadores
+    // Nota: A validação assíncrona será feita no runSignalCycle, aqui apenas calculamos
+    
     // Market hours filter: block signals during low-liquidity dead zone
     if (!isWithinTradingHours()) {
         logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ BLOQUEADO: Fora do horário de trading (Dead zone UTC)`);
@@ -952,6 +956,13 @@ async function runSignalCycle(): Promise<void> {
             );
 
             if (signal && signal.quality && signal.quality.score >= 85) {
+                // FASE 3: Validar contexto de mercado ANTES de processar o sinal
+                const contextValidation = await validateSignalContext(symbol, signal.type);
+                if (!contextValidation.allowed) {
+                    logger.debug(`[Engine] ${symbol} ${signal.type.toUpperCase()} vetado por contexto: ${contextValidation.reason}`);
+                    continue;
+                }
+                
                 // Não gerar segundo sinal da mesma moeda no mesmo dia
                 if (symbolsSignaledToday.has(symbol)) {
                     logger.debug(`[Engine] ${symbol} já gerou sinal hoje — rotação de moedas ativa`);

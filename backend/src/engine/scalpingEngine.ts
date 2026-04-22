@@ -22,6 +22,10 @@ import {
 import type { TradeSignal, OHLCPoint } from '../types/trading.js';
 import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { tradeTracker } from '../trading/tradeTracker.js';
+import { validateSignalContext } from './marketContext.js'; // FASE 3
+
+// FASE 3: Apenas pares de alta liquidez para scalping
+const SCALPING_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
 
 // ──── State isolado do robô de scalping ────
 
@@ -421,7 +425,8 @@ async function runScalpingCycle(): Promise<void> {
         return;
     }
 
-    const symbols = config.scalpingSymbols;
+    // FASE 3: Usar apenas pares de alta liquidez
+    const symbols = SCALPING_SYMBOLS;
     const now = Date.now();
 
     for (const symbol of symbols) {
@@ -450,6 +455,13 @@ async function runScalpingCycle(): Promise<void> {
             const signal = generateScalpingSignal(symbol, ohlc5m, ohlc15m, currentPrice, high24h, low24h, fundingRate, perf);
 
             if (!signal) continue;
+
+            // FASE 3: Validar contexto de mercado ANTES de processar o sinal
+            const contextValidation = await validateSignalContext(symbol, signal.type);
+            if (!contextValidation.allowed) {
+                logger.debug(`[Scalping] ${symbol} ${signal.type.toUpperCase()} vetado por contexto: ${contextValidation.reason}`);
+                continue;
+            }
 
             if (isModelLoaded() && signal.mlData) {
                 try {
