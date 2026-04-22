@@ -257,10 +257,10 @@ export function formatTrailingStopMessage(
     currentPrice: number,
     partialProfit: number
 ): string {
-    const { symbol, type } = signal;
+    const { pair, type } = signal;
     const emoji = type === 'long' ? '🟢' : '🔴';
     
-    let msg = `${emoji} <b>${type.toUpperCase()} ${symbol}</b>\n\n`;
+    let msg = `${emoji} <b>${type.toUpperCase()} ${pair}</b>\n\n`;
 
     if (result.action === 'CLOSE_PARTIAL') {
         msg += `✅ <b>${result.closePercent}% da posição fechada!</b>\n`;

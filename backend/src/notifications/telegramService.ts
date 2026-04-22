@@ -374,8 +374,9 @@ class TelegramService {
         return this.send(text, 'stop_loss', signal.pair, targetChatId);
     }
 
-    async sendTrailingStopUpdate(signal: any, currentPrice: number, oldSl: number, newSl: number): Promise<TelegramSendResult> {
-        const text = [
+    async sendTrailingStopUpdate(signal: any, currentPrice: number, oldSl: number, newSl: number, customMessage?: string): Promise<TelegramSendResult> {
+        // FASE 2: Aceita mensagem customizada do trailingStopManager
+        const text = customMessage || [
             `🛡️ <b>TRAILING STOP ATUALIZADO — ${signal.pair}</b>`,
             `O preço moveu a favor da operação.`,
             ``,

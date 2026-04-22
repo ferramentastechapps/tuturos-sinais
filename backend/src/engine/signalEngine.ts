@@ -544,7 +544,7 @@ export function generateSignalFromData(
             return null;
         }
 
-        // FASE 1: VETO ABSOLUTO - Não operar LONG contra tendência macro 4H
+        // FASE 1: VETO ABSOLUTO - Não operar LONG contra tendência macro 4H SHORT
         if (macroTrend === 'short') {
             logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: Macro tendência 4H é SHORT (contra tendência)`);
             return null;
@@ -579,7 +579,7 @@ export function generateSignalFromData(
             return null;
         }
 
-        // FASE 1: VETO ABSOLUTO - Não operar SHORT contra tendência macro 4H
+        // FASE 1: VETO ABSOLUTO - Não operar SHORT contra tendência macro 4H LONG
         if (macroTrend === 'long') {
             logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: Macro tendência 4H é LONG (contra tendência)`);
             return null;
