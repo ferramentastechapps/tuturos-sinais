@@ -434,9 +434,9 @@ function generateScalpingSignal(
 async function runScalpingCycle(): Promise<void> {
     logger.info('[Scalping] Running scalping signal cycle...');
 
-    // Limite diário de scalping: evita excesso de sinais (8 = máximo razoável para 5m)
-    if (scalpingSignalsToday >= 8) {
-        logger.info('[Scalping] Limite diário de 8 sinais atingido. Aguardando próximo dia.');
+    // FASE 1: Limite diário reduzido de 8 para 5 (qualidade > quantidade)
+    if (scalpingSignalsToday >= 5) {
+        logger.info('[Scalping] Limite diário de 5 sinais atingido. Aguardando próximo dia.');
         return;
     }
 

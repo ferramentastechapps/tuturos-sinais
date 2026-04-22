@@ -531,7 +531,7 @@ export function generateSignalFromData(
         if (rvol < 0.70) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: RVOL=${rvol.toFixed(2)} < 0.70 (sem volume)`); return null; }
         if (macroTrend === 'short') { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: Macro tendência SHORT (EMA200 4H)`); return null; }
 
-        // ── VETO MTF: 1H e 15M devem CONFIRMAR (não basta 4H sozinho) ──
+        // --- VETO MTF: 1H e 15M devem CONFIRMAR (não basta 4H sozinho) ──
         const mtfLongAlignment = (
             (trend4h === 'long' || trend4h === 'neutral') &&
             (trend1h === 'long') &&
@@ -539,6 +539,12 @@ export function generateSignalFromData(
         );
         if (!mtfLongAlignment) {
             logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: MTF não alinhado (4H:${trend4h} 1H:${trend1h} 15M:${trend15m})`);
+            return null;
+        }
+
+        // FASE 1: VETO ABSOLUTO - Não operar LONG contra tendência macro 4H
+        if (macroTrend === 'short') {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: Macro tendência 4H é SHORT (contra tendência)`);
             return null;
         }
         
@@ -570,6 +576,12 @@ export function generateSignalFromData(
             logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: MTF não alinhado (4H:${trend4h} 1H:${trend1h} 15M:${trend15m})`);
             return null;
         }
+
+        // FASE 1: VETO ABSOLUTO - Não operar SHORT contra tendência macro 4H
+        if (macroTrend === 'long') {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: Macro tendência 4H é LONG (contra tendência)`);
+            return null;
+        }
         
         // Formata MTF para SHORT
         mtfContext.macro.push(trend4h === 'short' ? 'Tendência 4H bearish ✅' : 'Tendência 4H neutro ⚠️');
@@ -588,7 +600,7 @@ export function generateSignalFromData(
     }
 
     // --- VETO SNIPER EXTREMO ---
-    // Exige MÍNIMO 2 confirmações ICT distintas (Liquidity Sweep, FVG ou Order Block)
+    // FASE 1: Exige MÍNIMO 2 confirmações ICT distintas (Liquidity Sweep, FVG ou Order Block)
     // Uma única confirmação não é suficiente — é fácil de ser um ruído de mercado.
     const ictLongConfirmations = [
         isBullishFvg,
@@ -603,10 +615,9 @@ export function generateSignalFromData(
 
     const ictConfirmationCount = type === 'long' ? ictLongConfirmations : ictShortConfirmations;
     logger.debug(`[SIGNAL-DIAG] ${symbol} ICT check (${type}): FVG=${type==='long'?isBullishFvg:isBearishFvg} Sweep=${type==='long'?isSweepLow:isSweepHigh} OB=${type==='long'?priceInBullishOB:priceInBearishOB} → confirmações=${ictConfirmationCount}`);
-    // Exige pelo menos 1 confirmação ICT (FVG, OB ou Sweep)
-    // Anteriormente exigia 2, o que vetava 99% dos sinais válidos.
-    if (ictConfirmationCount < 1) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ICT: ${ictConfirmationCount} confirmações (precisa ≥1: FVG, Sweep ou OB)`);
+    // FASE 1: Aumentado de 1 para 2 confirmações ICT (mais rigoroso)
+    if (ictConfirmationCount < 2) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ICT: ${ictConfirmationCount} confirmações (precisa ≥2: FVG, Sweep ou OB)`);
         return null;
     }
 
@@ -721,8 +732,8 @@ export function generateSignalFromData(
     // Cap score
     score = Math.min(score, 100);
 
-    // Minimum score filter — 75 (reduzido de 80 + ICT veto agora exige só 1 confirmação)
-    const finalMinScore = customMinScore !== undefined ? customMinScore : 85;
+    // Minimum score filter — FASE 1: Aumentado de 85 para 90 (apenas sinais excelentes)
+    const finalMinScore = customMinScore !== undefined ? customMinScore : 90;
     logger.debug(`[SIGNAL-DIAG] ${symbol} score=${score} | minScore=${finalMinScore} | ${score >= finalMinScore ? '✅ PASSOU' : '❌ VETADO'}`);
     if (score < finalMinScore) return null;
 
@@ -987,9 +998,9 @@ async function runSignalCycle(): Promise<void> {
                             };
 
                             // Filter out signals rejected by ML
-                            // Reduzido de 65% para 55% para voltar a enviar sinais, pois 65% estava bloqueando a maioria
-                            if (prediction.probability < 0.55) {
-                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)} < 0.55)`);
+                            // FASE 1: Aumentado de 55% para 65% (vantagem real sobre random)
+                            if (prediction.probability < 0.65) {
+                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)} < 0.65)`);
                                 continue;
                             }
                         }

@@ -53,7 +53,7 @@ export const config = {
         signalIntervalMs: parseInt(process.env.SIGNAL_INTERVAL_MS || '300000', 10), // 5 min
         priceUpdateMs: parseInt(process.env.PRICE_UPDATE_MS || '5000', 10), // 5 sec
         healthCheckMs: parseInt(process.env.HEALTH_CHECK_MS || '60000', 10), // 1 min
-        maxSignalsPerDay: parseInt(process.env.MAX_SIGNALS_PER_DAY || '5', 10), // max 5 high-quality signals/day
+        maxSignalsPerDay: parseInt(process.env.MAX_SIGNALS_PER_DAY || '3', 10), // FASE 1: Reduzido de 5 para 3 (qualidade > quantidade)
     },
 
     // Scalping Bot — second signal mode (5m timeframe, separate Telegram channel)
@@ -61,10 +61,10 @@ export const config = {
         enabled: process.env.SCALPING_BOT_ENABLED === 'true',
         chatId: process.env.TELEGRAM_SCALPING_CHAT_ID || '',
         intervalMs: parseInt(process.env.SCALPING_INTERVAL_MS || '60000', 10), // 1 min
-        // Score 80 = permite sinais bons sem exigir perfeição impossível (era 100)
-        minScore: parseInt(process.env.SCALPING_MIN_SCORE || '80', 10),
-        // 62% = vantagem real sobre o random. Era 55% (quase inútil)
-        mlMinProb: parseFloat(process.env.SCALPING_ML_MIN_PROB || '0.62'),
+        // FASE 1: Score aumentado de 80 para 85 (apenas sinais excelentes)
+        minScore: parseInt(process.env.SCALPING_MIN_SCORE || '85', 10),
+        // FASE 1: ML threshold aumentado de 62% para 65% (vantagem real)
+        mlMinProb: parseFloat(process.env.SCALPING_ML_MIN_PROB || '0.65'),
         cooldownMs: parseInt(process.env.SCALPING_COOLDOWN_MS || '1800000', 10), // 30 min
     },
 
