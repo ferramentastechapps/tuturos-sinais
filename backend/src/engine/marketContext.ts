@@ -10,8 +10,8 @@
  */
 
 import axios from 'axios';
-import { logger } from '../lib/logger';
-import { bybitConnector } from '../exchange/bybitConnector';
+import { logger } from '../lib/logger.js';
+import { bybitConnector } from '../exchange/bybitConnector.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // TIPOS
