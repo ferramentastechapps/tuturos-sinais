@@ -43,6 +43,7 @@ export interface ActiveSignal {
 export class TradeTracker {
   private activeSignals: Map<string, ActiveSignal[]> = new Map();
   private activatedSignals: Set<string> = new Set(); // Rastrear sinais já ativados
+  private sessionClosedTrades = 0; // Contador de trades finalizados na sessão
 
   constructor() {
     this.setupListeners();
@@ -112,7 +113,18 @@ export class TradeTracker {
     // 1. Save to activeSignal (monitoring/RAM table)
     try {
         const inputData = { 
-            ...fullSignal, 
+            id: fullSignal.id,
+            pair: fullSignal.pair,
+            type: fullSignal.type,
+            trade_type: fullSignal.trade_type,
+            entry_range_low: fullSignal.entry_range_low,
+            entry_range_high: fullSignal.entry_range_high,
+            stop_loss: fullSignal.stop_loss,
+            initial_stop_loss: fullSignal.initial_stop_loss,
+            status: fullSignal.status,
+            telegram_message_id: fullSignal.telegram_message_id,
+            expected_duration: fullSignal.expected_duration,
+            score: fullSignal.score,
             take_profits: JSON.stringify(fullSignal.take_profits || []),
             context: typeof fullSignal.context === 'string' ? fullSignal.context : JSON.stringify(fullSignal.context || {})
         } as any;
@@ -409,6 +421,9 @@ export class TradeTracker {
     const isFirstTP = !signal.take_profits.slice(0, signal.take_profits.indexOf(tp)).some(t => t.hit);
     
     if (isFirstTP) {
+      this.sessionClosedTrades++;
+      console.log(`[TradeTracker] Trade #${this.sessionClosedTrades} fechou com WIN (${signal.pair})`);
+      
       // Primeira vez que bate qualquer TP = WIN
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
       
@@ -488,8 +503,11 @@ export class TradeTracker {
     // LOSS: Se SL com prejuízo
     const isWin = pnl > 0;
     const outcomeLabel = isWin ? 1 : 0;
+    const outcomeText = isWin ? 'WIN' : 'LOSS';
 
-    console.log(`[TradeTracker] SL PnL: ${pnl.toFixed(2)}% - Outcome: ${isWin ? 'WIN' : 'LOSS'}`);
+    this.sessionClosedTrades++;
+    console.log(`[TradeTracker] Trade #${this.sessionClosedTrades} fechou com ${outcomeText} (${signal.pair})`);
+    console.log(`[TradeTracker] SL PnL: ${pnl.toFixed(2)}% - Outcome: ${outcomeText}`);
 
     // ML Feedback Loop
     this.submitFeedbackToML(signal, outcomeLabel, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
