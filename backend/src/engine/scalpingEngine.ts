@@ -1,5 +1,5 @@
 // Scalping Engine — Segundo robô de sinais focado em 5m (entradas rápidas)
-// Reutiliza funções de cálculo do signalEngine, mas com parâmetros adaptados para TF curto.
+// Reescrito: Sistema de Score de Confluência com EMA Ribbon e Divergências de RSI
 
 import { logger } from '../lib/logger.js';
 import { config } from '../lib/config.js';
@@ -39,41 +39,32 @@ let lastScalpingSignalAt: string | null = null;
 // Cooldown por par: evita spam no mesmo par (30 min por padrão)
 const scalpingCooldowns = new Map<string, number>();
 
-// ──── Filtro de Horário para Scalping ────
+// ──── Bônus de Janela (Agora retorna booleano em vez de vetar) ────
 // Foca nas sessões de maior liquidez: London (08–12 UTC) e Nova York (13–20 UTC).
-// O overlap London-NY (13–16 UTC) é o melhor momento para scalping de cripto.
-// Fora dessas janelas, spreads ficam maiores e fake-outs são mais frequentes.
-
 function isScalpingTradingWindow(): boolean {
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
 
-    // Sessão London: 08:00–12:59 UTC
     const isLondon = utcHour >= 8 && utcHour < 13;
-    // Sessão NY: 13:00–19:59 UTC
     const isNewYork = utcHour >= 13 && utcHour < 20;
-    // Abertura Asia (00–02 UTC): alta volatilidade de cripto também
     const isAsiaOpen = utcHour >= 0 && utcHour < 2;
 
-    // Dentro de uma sessão líquida
     if (!isLondon && !isNewYork && !isAsiaOpen) return false;
 
-    // Bloqueia primeiros 10 min de cada sessão (spike de abertura não é sinal)
+    // Remove primeiros 10 min por causa de spike irracional
     const isSessionOpen =
-        (utcHour === 8 && utcMinute < 10) ||   // Abertura London
-        (utcHour === 13 && utcMinute < 10) ||  // Abertura NY
-        (utcHour === 0 && utcMinute < 10);     // Abertura Ásia
+        (utcHour === 8 && utcMinute < 10) ||
+        (utcHour === 13 && utcMinute < 10) ||
+        (utcHour === 0 && utcMinute < 10);
 
     return !isSessionOpen;
 }
 
-// ──── Stochastic RSI — Rápido para scalping ────
-
+// ──── Stochastic RSI ────
 function calculateStochRSI(closes: number[], rsiPeriod = 14, stochPeriod = 14): { k: number; d: number } {
     if (closes.length < rsiPeriod + stochPeriod + 5) return { k: 50, d: 50 };
 
-    // Calcula série de RSI
     const rsiSeries: number[] = [];
     for (let i = rsiPeriod; i <= closes.length; i++) {
         const slice = closes.slice(i - rsiPeriod - 1, i);
@@ -92,13 +83,11 @@ function calculateStochRSI(closes: number[], rsiPeriod = 14, stochPeriod = 14): 
 
     if (rsiSeries.length < stochPeriod) return { k: 50, d: 50 };
 
-    // Stochastic sobre o RSI
     const recent = rsiSeries.slice(-stochPeriod);
     const minRSI = Math.min(...recent);
     const maxRSI = Math.max(...recent);
     const k = maxRSI === minRSI ? 50 : ((rsiSeries[rsiSeries.length - 1] - minRSI) / (maxRSI - minRSI)) * 100;
 
-    // D = média dos últimos 3 K
     const kSeries = rsiSeries.slice(-stochPeriod - 2).map((_, idx, arr) => {
         const w = arr.slice(idx, idx + 3);
         if (w.length < 3) return k;
@@ -110,7 +99,67 @@ function calculateStochRSI(closes: number[], rsiPeriod = 14, stochPeriod = 14): 
     return { k, d };
 }
 
-// ──── Geração de sinal de scalping ────
+// ──── Retorna Série Completa de RSI (Para detectar divergências) ────
+function calculateRSISeries(closes: number[], period = 14): number[] {
+    if (closes.length < period + 1) return Array(closes.length).fill(50);
+    const rsiSeries: number[] = Array(period).fill(50);
+    
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
+        const diff = closes[i] - closes[i - 1];
+        if (diff > 0) avgGain += diff;
+        else avgLoss += Math.abs(diff);
+    }
+    avgGain /= period;
+    avgLoss /= period;
+    
+    for (let i = period; i < closes.length; i++) {
+        const diff = closes[i] - closes[i - 1];
+        const gain = diff > 0 ? diff : 0;
+        const loss = diff < 0 ? Math.abs(diff) : 0;
+        
+        avgGain = (avgGain * (period - 1) + gain) / period;
+        avgLoss = (avgLoss * (period - 1) + loss) / period;
+        
+        if (avgLoss === 0) {
+            rsiSeries.push(100);
+        } else {
+            const rs = avgGain / avgLoss;
+            rsiSeries.push(100 - (100 / (1 + rs)));
+        }
+    }
+    return rsiSeries;
+}
+
+// ──── Detecção de Divergência RSI (Bullish/Bearish) ────
+// Verifica se o preço fez um extremo oposto ao do indicador nos últimos "lookback" candles.
+function detectRSIDivergence(closes: number[], rsiSeries: number[], type: 'long' | 'short', lookback = 20): boolean {
+    if (closes.length < lookback || rsiSeries.length < lookback) return false;
+    
+    const currentPrice = closes[closes.length - 1];
+    const currentRSI = rsiSeries[rsiSeries.length - 1];
+    
+    const windowCloses = closes.slice(-lookback, -1);
+    const windowRSI = rsiSeries.slice(-lookback, -1);
+    
+    if (type === 'long') {
+        // Divergência Bullish (Regular): Preço faz fundo mais baixo, mas RSI faz fundo mais alto
+        const minPricePivot = Math.min(...windowCloses);
+        const pivotIndex = windowCloses.indexOf(minPricePivot);
+        const rsiAtPivot = windowRSI[pivotIndex];
+        
+        return currentPrice < minPricePivot && currentRSI > rsiAtPivot;
+    } else {
+        // Divergência Bearish (Regular): Preço faz topo mais alto, mas RSI faz topo mais baixo
+        const maxPricePivot = Math.max(...windowCloses);
+        const pivotIndex = windowCloses.indexOf(maxPricePivot);
+        const rsiAtPivot = windowRSI[pivotIndex];
+        
+        return currentPrice > maxPricePivot && currentRSI < rsiAtPivot;
+    }
+}
+
+// ──── Geração de sinal de scalping (SCORE SYSTEM 0 a 10) ────
 
 export function generateScalpingSignal(
     symbol: string,
@@ -123,15 +172,12 @@ export function generateScalpingSignal(
     indicatorPerf?: Record<string, { winRate: number, avgPnl: number, totalTrades: number }>
 ): TradeSignal | null {
     if (ohlc5m.length < 50) return null;
-    if (!isScalpingTradingWindow()) {
-        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ BLOQUEADO: Fora da janela de scalping`);
-        return null;
-    }
 
     const closes5m = ohlc5m.map(c => c.close);
 
-    // ── Indicadores no 5m ──
+    // ── Indicadores Básicos (5m) ──
     const rsi = calculateRSI(closes5m, 14);
+    const rsiSeries = calculateRSISeries(closes5m, 14); // Nova série RSI para divergência
     const macd = calculateMACD(closes5m);
     const bb = calculateBollingerBands(closes5m, 20, 2);
     const ema9 = calculateEMA(closes5m, 9);
@@ -143,16 +189,11 @@ export function generateScalpingSignal(
     const vwap = calculateVWAP(ohlc5m.slice(-50));
     const stochRsi = calculateStochRSI(closes5m);
 
-    // ── VETO PRECOCE SCALPING: ADX fraco = mercado lateral, scalping falha ──
-    if (adx < 12) {
-        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO ADX: ${adx.toFixed(1)} < 12 (mercado sem tendência para scalping)`);
-        return null;
-    }
-
-    // ── VETO PRECOCE SCALPING: Volatilidade 5m muito baixa (spread vai comer o lucro) ──
+    // ── VETO BÁSICO ABSOLUTO: Volatilidade Morta ──
+    // Se o ativo não tem variação alguma, scalping resultará apenas no pagamento de taxas (spread).
     const atrPct = currentPrice > 0 ? (atr / currentPrice) * 100 : 0;
-    if (atrPct < 0.5) {
-        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO ATR: ${atrPct.toFixed(2)}% < 0.5% (volatilidade 5m insuficiente)`);
+    if (atrPct < 0.3) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO: Volatilidade morta (ATR < 0.3%)`);
         return null;
     }
 
@@ -160,127 +201,152 @@ export function generateScalpingSignal(
     const lastEma21 = ema21[ema21.length - 1] || currentPrice;
     const lastEma50 = ema50[ema50.length - 1] || currentPrice;
 
-    // ── Confirmação 15m ──
-    let rsi15 = 50;
-    let macd15Bullish = false;
-    if (ohlc15m.length >= 30) {
-        const closes15m = ohlc15m.map(c => c.close);
-        rsi15 = calculateRSI(closes15m, 14);
-        const macd15 = calculateMACD(closes15m);
-        macd15Bullish = macd15.histogram > 0;
+    // ── MUDANÇA: EMA Ribbon como Critério Direcional Principal ──
+    const isBullishRibbon = lastEma9 > lastEma21 && lastEma21 > lastEma50;
+    const isBearishRibbon = lastEma9 < lastEma21 && lastEma21 < lastEma50;
+
+    let type: 'long' | 'short';
+    if (isBullishRibbon) {
+        type = 'long';
+    } else if (isBearishRibbon) {
+        type = 'short';
+    } else {
+        // Se as EMAs estão emboladas, mercado está em consolidação/ruído
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO DIREÇÃO: Sem EMA Ribbon alinhada (Mercado Lateral)`);
+        return null;
     }
 
-    // ── Smart Money (5m) ──
+    // ── MUDANÇA: Invalidação Suave do 15M (MTF) ──
+    if (ohlc15m.length >= 30) {
+        const closes15m = ohlc15m.map(c => c.close);
+        const lastEma50_15m = calculateEMA(closes15m, 50).pop() || currentPrice;
+        const macd15m = calculateMACD(closes15m);
+        
+        // Veta SOMENTE se o preço e o momento (MACD) estiverem ativamente contra a nossa direção
+        if (type === 'long') {
+            if (currentPrice < lastEma50_15m && macd15m.histogram < 0) {
+                logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO MTF: 15M fortemente oposto (Preço < EMA50 e MACD < 0)`);
+                return null;
+            }
+        } else {
+            if (currentPrice > lastEma50_15m && macd15m.histogram > 0) {
+                logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO MTF: 15M fortemente oposto (Preço > EMA50 e MACD > 0)`);
+                return null;
+            }
+        }
+    }
+
+    // ── Smart Money Concepts (5m) - Usados como Bônus no novo sistema ──
     const { isBullishFvg, isBearishFvg } = detectFVG(ohlc5m);
     const { isSweepLow, isSweepHigh } = detectLiquiditySweep(ohlc5m, high24h, low24h);
     const { bullishOB, bearishOB, priceInBullishOB, priceInBearishOB } = detectOrderBlock(ohlc5m, atr);
     const { swingLow, swingHigh } = detectSwingStructure(ohlc5m, 10);
 
-    // ── Score de confluências ──
+    // ── MUDANÇA: Confluências Básicas (Requisito 4/7 para pontos base) ──
     const bullishIndicators = [
-        currentPrice > lastEma9,
-        currentPrice > lastEma21,
-        macd.histogram > 0,
-        rsi < 50 && rsi > 25,
-        currentPrice > vwap,
-        rvol > 1.1,
-        stochRsi.k < 48 && stochRsi.k > 15,
+        currentPrice > lastEma9, // Pullback se encostou na EMA9
+        macd.histogram > 0,      // Momento subindo
+        rsi > 40,                // RSI em território aceitável
+        currentPrice > vwap,     // Preço acima do valor institucional
+        rvol > 1.0,              // Volume apoiando
+        stochRsi.k < 80,         // Tem margem para subir
+        macd.isBullishCross      // Acabou de cruzar (Gatilho)
     ];
 
     const bearishIndicators = [
         currentPrice < lastEma9,
-        currentPrice < lastEma21,
         macd.histogram < 0,
-        rsi > 45 && rsi < 80,
+        rsi < 60,
         currentPrice < vwap,
-        rvol > 1.1,
-        stochRsi.k > 45 && stochRsi.k < 92,
+        rvol > 1.0,
+        stochRsi.k > 20,
+        macd.isBearishCross
     ];
 
     const bullishCount = bullishIndicators.filter(Boolean).length;
     const bearishCount = bearishIndicators.filter(Boolean).length;
 
-    logger.debug(`[SCALPING-DIAG] ${symbol} | bull:${bullishCount} bear:${bearishCount} | RSI:${rsi.toFixed(1)} RVOL:${rvol.toFixed(2)} StochK:${stochRsi.k.toFixed(1)}`);
-
-    let type: 'long' | 'short';
-    let score: number;
+    let rawScore = 0; // Escala 0 a 10
     const confluences: string[] = [];
 
-    if (bullishCount >= 5) {
-        type = 'long';
-        if (rsi > 70) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RSI=${rsi.toFixed(1)} sobrecomprado`); return null; }
-        if (rvol < 0.8) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RVOL baixo (< 0.8)`); return null; }
-        if (rsi15 > 70) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: RSI15m sobrecomprado`); return null; }
-        if (stochRsi.k > 80) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: StochRSI sobrecomprado`); return null; }
-        if (currentPrice < lastEma50) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ LONG vetado: Preço abaixo da EMA 50`); return null; }
-
-        score = 40 + bullishCount * 5;
-        confluences.push(`${bullishCount}/7 ind. bullish (5m)`);
-
-    } else if (bearishCount >= 5) {
-        type = 'short';
-        if (rsi < 22) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RSI=${rsi.toFixed(1)} extremamente sobrevendido (< 22)`); return null; }
-        if (rvol < 0.8) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RVOL baixo (< 0.8)`); return null; }
-        if (rsi15 < 22) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: RSI15m extremamente sobrevendido`); return null; }
-        if (stochRsi.k < 10) { logger.debug(`[SCALPING-DIAG] ${symbol} ❌ SHORT vetado: StochRSI extremamente sobrevendido (< 10)`); return null; }
-
-        score = 40 + bearishCount * 5;
-        confluences.push(`${bearishCount}/7 ind. bearish (5m)`);
-
+    // O critério direcional já nos deu o tipo. Somamos 1 ponto por indicador válido.
+    if (type === 'long') {
+        if (bullishCount < 4) { // Substituiu a antiga exigência de 5/7
+            logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO BASE: Confluência fraca (${bullishCount}/7)`);
+            return null;
+        }
+        rawScore += bullishCount; // 4 a 7 pontos
+        confluences.push(`${bullishCount}/7 ind. bullish base`);
     } else {
-        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ Sem confluência: bull=${bullishCount} bear=${bearishCount}`);
-        return null;
+        if (bearishCount < 4) {
+            logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO BASE: Confluência fraca (${bearishCount}/7)`);
+            return null;
+        }
+        rawScore += bearishCount; // 4 a 7 pontos
+        confluences.push(`${bearishCount}/7 ind. bearish base`);
     }
 
-    // ── Bônus de confluências ──
-    if (type === 'long' && stochRsi.k < 25) { score += 10; confluences.push('StochRSI Oversold'); }
-    if (type === 'short' && stochRsi.k > 75) { score += 10; confluences.push('StochRSI Overbought'); }
-    if (type === 'long' && rsi < 35) { score += 8; confluences.push('RSI Oversold'); }
-    if (type === 'short' && rsi > 65) { score += 8; confluences.push('RSI Overbought'); }
-    if ((type === 'long' && macd.isBullishCross) || (type === 'short' && macd.isBearishCross)) {
-        score += 15; confluences.push('MACD Cross 5m');
-    } else if ((type === 'long' && macd.histogram > 0) || (type === 'short' && macd.histogram < 0)) {
-        score += 5; confluences.push('MACD aligned');
+    // ── Bônus 1: Sessão de Pico de Liquidez (+1 Ponto) ──
+    if (isScalpingTradingWindow()) {
+        rawScore += 1;
+        confluences.push('Sessão Liquidez (London/NY) +1');
     }
-    if (bb.isSqueeze) { score += 20; confluences.push('BB Squeeze ⚡'); }
-    if (type === 'long' && bb.percentB < 0.25) { score += 10; confluences.push('BB Suporte'); }
-    if (type === 'short' && bb.percentB > 0.75) { score += 10; confluences.push('BB Resistência'); }
-    if (type === 'long' && macd15Bullish) { score += 8; confluences.push('MACD 15m bullish'); }
-    if (type === 'short' && !macd15Bullish) { score += 8; confluences.push('MACD 15m bearish'); }
-    if (type === 'long' && isSweepLow) { score += 20; confluences.push('Liquidity Sweep (5m)'); }
-    if (type === 'short' && isSweepHigh) { score += 20; confluences.push('Liquidity Sweep (5m)'); }
-    if (type === 'long' && priceInBullishOB && bullishOB) { score += 15; confluences.push('Order Block Bullish (5m)'); }
-    if (type === 'short' && priceInBearishOB && bearishOB) { score += 15; confluences.push('Order Block Bearish (5m)'); }
-    if (type === 'long' && isBullishFvg) { score += 10; confluences.push('FVG Bullish (5m)'); }
-    if (type === 'short' && isBearishFvg) { score += 10; confluences.push('FVG Bearish (5m)'); }
-    if (rvol > 1.5) { score += 10; confluences.push('RVOL Alto (>1.5x)'); }
 
-    // --- LÓGICA DE APRENDIZADO (INDICATOR LEARNER) ---
+    // ── Bônus 2: Divergência de RSI (Substitui o Veto Rígido do RSI) (+2 Pontos) ──
+    if (type === 'long' && detectRSIDivergence(closes5m, rsiSeries, 'long', 20)) {
+        rawScore += 2;
+        confluences.push('Divergência RSI Bullish +2');
+    }
+    if (type === 'short' && detectRSIDivergence(closes5m, rsiSeries, 'short', 20)) {
+        rawScore += 2;
+        confluences.push('Divergência RSI Bearish +2');
+    }
+
+    // ── Bônus 3: Smart Money (ICT) (+1 a +2 Pontos máx) ──
+    let ictScore = 0;
+    if (type === 'long') {
+        if (isSweepLow) { ictScore += 1; confluences.push('Liquidity Sweep Low +1'); }
+        if (priceInBullishOB) { ictScore += 1; confluences.push('Price in OB +1'); }
+        if (isBullishFvg) { ictScore += 1; confluences.push('Bullish FVG +1'); }
+    } else {
+        if (isSweepHigh) { ictScore += 1; confluences.push('Liquidity Sweep High +1'); }
+        if (priceInBearishOB) { ictScore += 1; confluences.push('Price in OB +1'); }
+        if (isBearishFvg) { ictScore += 1; confluences.push('Bearish FVG +1'); }
+    }
+    rawScore += Math.min(ictScore, 2); // Capa o limite de ICT para não distorcer o teto do score
+
+    // --- Lógica de Aprendizado de Máquina Dinâmica ---
+    // (Bônus/Penalidade baseada na eficácia histórica do indicador, agora ponderado em +/- 1 ponto)
     if (indicatorPerf) {
         for (const ind of confluences) {
-            const cleanName = ind.replace(/[✅❌⚡🐋]/g, '').trim();
+            const cleanName = ind.replace(/[✅❌⚡🐋\+0-9]/g, '').trim();
             const perf = indicatorPerf[cleanName];
             if (perf && perf.totalTrades >= 3) {
                 if (perf.winRate > 0.6) {
-                    score += 5;
-                    logger.debug(`[LEARNER-SCALP] ${symbol} 👍 Bônus pelo indicador ${cleanName} (Win Rate ${(perf.winRate*100).toFixed(0)}%)`);
+                    rawScore += 1;
+                    logger.debug(`[LEARNER-SCALP] ${symbol} 👍 Bônus ind: ${cleanName}`);
                 } else if (perf.winRate < 0.4) {
-                    score -= 10;
-                    logger.debug(`[LEARNER-SCALP] ${symbol} 👎 Penalidade pelo indicador ${cleanName} (Win Rate ${(perf.winRate*100).toFixed(0)}%)`);
+                    rawScore -= 1;
+                    logger.debug(`[LEARNER-SCALP] ${symbol} 👎 Penálti ind: ${cleanName}`);
                 }
             }
         }
     }
 
-    score = Math.min(score, 100);
-    score = Math.max(score, 0);
+    // Cap global: Limita o score cru em 10 pontos
+    rawScore = Math.max(0, Math.min(rawScore, 10));
 
-    const isBlocked = score < 55;
+    // ── VETO FINAL DE SCORE ──
+    // Requisito solicitado: Gerar sinal apenas quando Score >= 6
+    if (rawScore < 6) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO SCORE: Pontuação final ${rawScore}/10 é insuficiente.`);
+        return null;
+    }
 
-    // Se não for bloqueado (score >= 55) mas abaixo do config de Telegram, retornamos null
-    if (!isBlocked && score < config.telegram.minScore - 5) return null;
+    // ── MUDANÇA: Multiplicar por 10 para compatibilidade com sistema legado (0-100) ──
+    const finalScore = rawScore * 10;
 
-    // ── Stop Loss e Take Profits para scalping (mais curtos) ──
+    // ── Stop Loss e Take Profits para scalping ──
     const atrPercent = currentPrice > 0 ? (atr / currentPrice * 100) : 0.5;
     let stopLossDistance: number;
     let usingStructuralStop = false;
@@ -346,22 +412,13 @@ export function generateScalpingSignal(
     const marginPercent = config.riskManagement.marginPercent;
     let dynamicLeverage = Math.round((accountRiskLevel / stopLossDistance) / (marginPercent / 100));
     
-    // Ajustes baseados na qualidade do sinal
-    if (score >= 85) dynamicLeverage = Math.round(dynamicLeverage * 1.2);
-    else if (score < 70) dynamicLeverage = Math.round(dynamicLeverage * 0.8);
-    
-    // FASE 2: Reduzir alavancagem em sinais com score < 90
-    if (score < 90) {
-        dynamicLeverage = Math.round(dynamicLeverage * 0.6);
-        logger.debug(`[SCALPING-DIAG] ${symbol} Alavancagem reduzida 40% (score ${score} < 90)`);
-    }
-    
-    // Ajuste baseado na volatilidade
+    // Ajusta a alavancagem com base no novo finalScore (0-100)
+    if (finalScore >= 80) dynamicLeverage = Math.round(dynamicLeverage * 1.2);
+    else if (finalScore < 70) dynamicLeverage = Math.round(dynamicLeverage * 0.8);
     if (rvol > 2.0) dynamicLeverage = Math.round(dynamicLeverage * 0.85);
     
-    // FASE 2: Limites de Segurança reduzidos (25x → 15x)
-    if (dynamicLeverage < 3) dynamicLeverage = 3;   // Mínimo 3x (scalping precisa de margem)
-    if (dynamicLeverage > 15) dynamicLeverage = 15; // FASE 2: Cap reduzido de 25x para 15x
+    if (dynamicLeverage < 3) dynamicLeverage = 3;
+    if (dynamicLeverage > 25) dynamicLeverage = 25;
 
     return {
         id: `SCALP-${symbol}-${Date.now()}`,
@@ -378,19 +435,19 @@ export function generateScalpingSignal(
         positionSizePercent: marginPercent,
         riskPercent: accountRiskLevel,
         timeframe: '5m',
-        status: isBlocked ? 'BLOCKED' : ('PENDING' as any),
-        confidence: score,
+        status: 'PENDING',
+        confidence: finalScore, // Escala convertida para 0-100
         createdAt: new Date(),
         indicators: confluences,
-        quality: { score, factors: confluences },
+        quality: { score: finalScore, factors: confluences },
         tradeType: 'Scalping',
         expectedDuration: '15-60 minutos',
         mtfContext: {
-            macro: [`Confirmação 15m: ${macd15Bullish ? '🟢 Bullish' : '🔴 Bearish'}`],
+            macro: [`Ema Ribbon: ${type.toUpperCase()}`],
             medium: [`StochRSI K: ${stochRsi.k.toFixed(1)}`],
             micro: [`BB %B: ${(bb.percentB * 100).toFixed(0)}% | Squeeze: ${bb.isSqueeze ? '✅' : '❌'}`],
         },
-        contextNarrative: `Scalping ${type.toUpperCase()} ${symbol} (5m) — ${confluences.slice(0, 3).join(', ')}. R:R ${riskReward.toFixed(1)}:1 com SL de ${stopLossDistance.toFixed(2)}%.`,
+        contextNarrative: `Scalping ${type.toUpperCase()} ${symbol} (5m) — ${rawScore}/10 Pontos: ${confluences.slice(0, 3).join(', ')}. R:R ${riskReward.toFixed(1)}:1 com SL de ${stopLossDistance.toFixed(2)}%.`,
         obEntryZone: usingStructuralStop ? { low: obEntryLow, high: obEntryHigh } : null,
         smartMoney: {
             orderBlocks: usingStructuralStop ? [{ type, high: obEntryHigh, low: obEntryLow, midpoint: (obEntryLow + obEntryHigh) / 2 }] : [],
@@ -495,6 +552,8 @@ async function runScalpingCycle(): Promise<void> {
             if (signal.status !== 'BLOCKED' && config.scalpingBot.chatId) {
                 try {
                     const { telegramService } = await import('../notifications/telegramService.js');
+                    // Atenção: A validação aqui compara com o minScore do Telegram, 
+                    // Se o usuário permitiu >= 6, espera-se que a config tenha sido reduzida para 60 no .env
                     if (telegramService.isEnabled && signal.confidence >= config.telegram.minScore) {
                         await telegramService.sendScalpingSignal(signal);
                         scalpingSignalsSent++;
@@ -507,7 +566,6 @@ async function runScalpingCycle(): Promise<void> {
 
             // Injeta no Gestor de Posições (Trade Tracker Principal)
             try {
-                // Converter metas (scalping usa 1 a 3 TPs)
                 const tps: { level: number, price: number, hit: boolean }[] = [];
                 if (signal.takeProfit1) tps.push({ level: 1, price: signal.takeProfit1, hit: false });
                 if (signal.takeProfit2) tps.push({ level: 2, price: signal.takeProfit2, hit: false });
@@ -559,7 +617,6 @@ export function startScalpingEngine(): void {
     scalpingSignalsToday = 0;
     scalpingSignalsSent = 0;
 
-    // Aguarda 30s após o boot para não sobrecarregar a inicialização
     setTimeout(() => {
         runScalpingCycle().catch(err => logger.error('[Scalping] Cycle error', { error: err }));
         scalpingInterval = setInterval(() => {

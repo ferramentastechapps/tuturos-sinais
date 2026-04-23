@@ -28,7 +28,8 @@ export const config = {
         chatId: process.env.TELEGRAM_CHAT_ID || '',
         scalpingChatId: process.env.TELEGRAM_SCALPING_CHAT_ID || '',
         enabled: process.env.TELEGRAM_ENABLED === 'true',
-        minScore: parseInt(process.env.TELEGRAM_MIN_SCORE || '85', 10),
+        // AVISO: Com o novo sistema de score do scalpingEngine (0-10 convertido para 0-100), ajustar para 60 para não bloquear sinais
+        minScore: parseInt(process.env.TELEGRAM_MIN_SCORE || '60', 10),
     },
 
     // System
