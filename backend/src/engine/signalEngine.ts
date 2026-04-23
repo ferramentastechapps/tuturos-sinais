@@ -411,6 +411,52 @@ function isWithinTradingHours(): boolean {
     return utcHour >= 6 && utcHour < 23; // Block only 23:00-05:59 UTC (deepest dead zone)
 }
 
+function detectEMA21Pullback(ohlc: OHLCPoint[], ema21: number[], type: 'long' | 'short'): boolean {
+    if (ohlc.length < 2) return false;
+    const current = ohlc[ohlc.length - 1];
+    const prev = ohlc[ohlc.length - 2];
+    const ema21Curr = ema21[ema21.length - 1];
+    const ema21Prev = ema21[ema21.length - 2];
+    
+    if (type === 'long') {
+        const touched = current.low <= ema21Curr || prev.low <= ema21Prev;
+        const closedAbove = current.close > ema21Curr;
+        return touched && closedAbove && current.close > current.open; // Vela verde fechando acima
+    } else {
+        const touched = current.high >= ema21Curr || prev.high >= ema21Prev;
+        const closedBelow = current.close < ema21Curr;
+        return touched && closedBelow && current.close < current.open; // Vela vermelha fechando abaixo
+    }
+}
+
+function detectReversalCandles(ohlc: OHLCPoint[], type: 'long' | 'short'): { isEngulfing: boolean, isPinBar: boolean } {
+    if (ohlc.length < 2) return { isEngulfing: false, isPinBar: false };
+    const current = ohlc[ohlc.length - 1];
+    const prev = ohlc[ohlc.length - 2];
+    
+    const bodySize = Math.abs(current.close - current.open);
+    const upperWick = current.high - Math.max(current.open, current.close);
+    const lowerWick = Math.min(current.open, current.close) - current.low;
+    const totalSize = current.high - current.low;
+    
+    let isEngulfing = false;
+    let isPinBar = false;
+    
+    if (type === 'long') {
+        // Bullish Engulfing: Vela anterior vermelha, atual verde e engolfa o corpo
+        isEngulfing = prev.close < prev.open && current.close > current.open && current.close > prev.open && current.open < prev.close;
+        // Bullish Pinbar (Martelo): Pavio inferior 2x maior que o corpo, pavio superior pequeno
+        isPinBar = lowerWick >= 2 * bodySize && upperWick <= 0.2 * totalSize && current.close > (current.high + current.low) / 2;
+    } else {
+        // Bearish Engulfing: Vela anterior verde, atual vermelha e engolfa o corpo
+        isEngulfing = prev.close > prev.open && current.close < current.open && current.close < prev.open && current.open > prev.close;
+        // Bearish Pinbar (Estrela Cadente): Pavio superior 2x maior que o corpo, pavio inferior pequeno
+        isPinBar = upperWick >= 2 * bodySize && lowerWick <= 0.2 * totalSize && current.close < (current.high + current.low) / 2;
+    }
+    
+    return { isEngulfing, isPinBar };
+}
+
 export function generateSignalFromData(
     symbol: string,
     ohlc: OHLCPoint[], // 1h data
@@ -426,15 +472,6 @@ export function generateSignalFromData(
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
-    // FASE 3: Validação de contexto de mercado ANTES de calcular indicadores
-    // Nota: A validação assíncrona será feita no runSignalCycle, aqui apenas calculamos
-    
-    // Market hours filter: block signals during low-liquidity dead zone
-    if (!isWithinTradingHours()) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ BLOQUEADO: Fora do horário de trading (Dead zone UTC)`);
-        return null;
-    }
-
     const closes = ohlc.map(c => c.close);
     const rsi = calculateRSI(closes);
     const macd = calculateMACD(closes);
@@ -447,17 +484,15 @@ export function generateSignalFromData(
     const vwap = calculateVWAP(ohlc);
     const rvol = calculateRVOL(ohlc);
 
-    // ── VETO PRECOCE: Mercado lateral (ADX fraco = tendência inexistente) ──
-    if (adx < 22) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ADX: ${adx.toFixed(1)} < 22 (mercado lateral sem tendência)`);
+    // VETOS ABSOLUTOS (Condições extremas de morte de mercado)
+    if (adx < 15) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ADX: ${adx.toFixed(1)} < 15 (mercado lateral extremo)`);
         return null;
     }
-
-    // ── VETO PRECOCE: Volatilidade insuficiente (ATR < 0.8% = não há movimento real) ──
     const currentPriceForVeto = ohlc[ohlc.length - 1].close;
     const atrPercentForVeto = currentPriceForVeto > 0 ? (atr / currentPriceForVeto) * 100 : 0;
-    if (atrPercentForVeto < 0.8) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ATR: ${atrPercentForVeto.toFixed(2)}% < 0.8% (volatilidade insuficiente)`);
+    if (atrPercentForVeto < 0.4) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ATR: ${atrPercentForVeto.toFixed(2)}% < 0.4% (volatilidade morta)`);
         return null;
     }
 
@@ -465,294 +500,167 @@ export function generateSignalFromData(
     const lastEma50 = ema50[ema50.length - 1] || currentPrice;
     const lastEma200 = ema200[ema200.length - 1] || currentPrice;
 
-    // Build indicator list
-    const indicators: TechnicalIndicator[] = [
-        { name: 'RSI', value: rsi, signal: getIndicatorSignal('RSI', rsi) },
-        { name: 'MACD', value: macd.histogram, signal: getIndicatorSignal('MACD', macd.histogram) },
-        { name: 'EMA 20', value: lastEma20, signal: currentPrice > lastEma20 ? 'bullish' : 'bearish' },
-        { name: 'EMA 50', value: lastEma50, signal: currentPrice > lastEma50 ? 'bullish' : 'bearish' },
-        { name: 'EMA 200', value: lastEma200, signal: currentPrice > lastEma200 ? 'bullish' : 'bearish' },
-        { name: 'ADX', value: adx, signal: adx > 25 ? 'bullish' : 'neutral' },
-        { name: 'VWAP', value: vwap, signal: currentPrice > vwap ? 'bullish' : 'bearish' },
-        { name: 'RVOL', value: rvol, signal: rvol > 1.2 ? 'bullish' : 'neutral' },
-    ];
-
-    // Count confluences
-    const bullishCount = indicators.filter(i => i.signal === 'bullish').length;
-    const bearishCount = indicators.filter(i => i.signal === 'bearish').length;
-
-    // Determine direction
+    // Define a direção (Type) baseada no alinhamento das EMAs 20 e 50 no 1H
     let type: 'long' | 'short';
-    let score: number;
-    const confluences: string[] = [];
-    
-    // --- MTF LOGIC INJECTION ---
+    if (lastEma20 > lastEma50) type = 'long';
+    else type = 'short';
+
     const mtfContext = { macro: [] as string[], medium: [] as string[], micro: [] as string[] };
     let macroTrend: 'long' | 'short' | 'neutral' = 'neutral';
     
     let trend4h: 'long' | 'short' | 'neutral' = 'neutral';
-    let trend1h: 'long' | 'short' | 'neutral' = 'neutral';
+    let trend1h = type; // EMA20 > EMA50 = long
     let trend15m: 'long' | 'short' | 'neutral' = 'neutral';
 
+    let strongContradict4H = false;
+
+    // Análise MTF - 4H
     if (ohlc4h && ohlc4h.length >= 50) {
         const closes4h = ohlc4h.map(c => c.close);
-        const ema200_4h = calculateEMA(closes4h, 200).pop() || currentPrice;
+        const ema20_4h = calculateEMA(closes4h, 20).pop() || currentPrice;
         const ema50_4h  = calculateEMA(closes4h,  50).pop() || currentPrice;
-        trend4h = (currentPrice > ema200_4h && currentPrice > ema50_4h) ? 'long'
-                : (currentPrice < ema200_4h && currentPrice < ema50_4h) ? 'short'
+        const ema200_4h = calculateEMA(closes4h, 200).pop() || currentPrice;
+        const macd4h = calculateMACD(closes4h);
+
+        trend4h = (currentPrice > ema20_4h && currentPrice > ema50_4h) ? 'long'
+                : (currentPrice < ema20_4h && currentPrice < ema50_4h) ? 'short'
                 : 'neutral';
         macroTrend = trend4h === 'neutral' ? (currentPrice > ema200_4h ? 'long' : 'short') : trend4h;
+
+        // "4H não contradiz fortemente o 1H" -> Veta se preço < EMA200 e MACD cruzado para o lado oposto
+        if (type === 'long') {
+            strongContradict4H = currentPrice < ema200_4h && macd4h.histogram < 0;
+        } else {
+            strongContradict4H = currentPrice > ema200_4h && macd4h.histogram > 0;
+        }
     }
 
-    // 1H trend (usa os dados já carregados — ohlc é 1H)
-    const ema50_1h  = calculateEMA(closes, 50).pop()  || currentPrice;
-    const ema200_1h = calculateEMA(closes, 200).pop() || currentPrice;
-    trend1h = (currentPrice > ema200_1h && currentPrice > ema50_1h) ? 'long'
-            : (currentPrice < ema200_1h && currentPrice < ema50_1h) ? 'short'
-            : 'neutral';
+    if (strongContradict4H) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO MTF: 4H fortemente oposto (Preço + MACD contra)`);
+        return null;
+    }
 
-    let rsi15 = 50;
+    // Análise MTF - 15M
     if (ohlc15m && ohlc15m.length >= 20) {
         const closes15m = ohlc15m.map(c => c.close);
-        rsi15 = calculateRSI(closes15m);
         const ema20_15m = calculateEMA(closes15m, 20).pop() || currentPrice;
         const ema50_15m = calculateEMA(closes15m, 50).pop() || currentPrice;
         trend15m = (currentPrice > ema20_15m && currentPrice > ema50_15m) ? 'long'
                  : (currentPrice < ema20_15m && currentPrice < ema50_15m) ? 'short'
                  : 'neutral';
     }
+
     // --- SMART MONEY CONCEPTS (ICT) ---
     const { isBullishFvg, isBearishFvg } = detectFVG(ohlc);
     const { isSweepLow, isSweepHigh } = detectLiquiditySweep(ohlc, high24h, low24h);
-    const anchoredVwapDay = calculateAnchoredVWAP(ohlc, 'day');
     const { bullishOB, bearishOB, priceInBullishOB, priceInBearishOB } = detectOrderBlock(ohlc, atr);
     const { swingLow, swingHigh } = detectSwingStructure(ohlc, 20);
 
-    logger.debug(`[SIGNAL-DIAG] ${symbol} | bull:${bullishCount} bear:${bearishCount} | RSI:${rsi.toFixed(1)} RVOL:${rvol.toFixed(2)} macro:${macroTrend}`);
+    // --- PRICE ACTION & PATTERNS ---
+    const pullback = detectEMA21Pullback(ohlc, ema20, type); // Utiliza a EMA20 como proxy para a EMA21
+    const { isEngulfing, isPinBar } = detectReversalCandles(ohlc, type);
 
-    if (bullishCount >= 4) {
-        type = 'long';
-        // --- VETOS ABSOLUTOS (ANTI-SARDINHA) ---
-        if (rsi > 65) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: RSI=${rsi.toFixed(1)} > 65 (topo saturado)`); return null; }
-        if (rvol < 0.70) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: RVOL=${rvol.toFixed(2)} < 0.70 (sem volume)`); return null; }
-        if (macroTrend === 'short') { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: Macro tendência SHORT (EMA200 4H)`); return null; }
+    // --- SISTEMA DE PONTUAÇÃO (SCORE 0 a 10) ---
+    let rawScore = 0;
+    const confluences: string[] = [];
 
-        // --- VETO MTF: 1H e 15M devem CONFIRMAR (não basta 4H sozinho) ──
-        const mtfLongAlignment = (
-            (trend4h === 'long' || trend4h === 'neutral') &&
-            (trend1h === 'long') &&
-            (trend15m === 'long' || trend15m === 'neutral')
-        );
-        if (!mtfLongAlignment) {
-            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ LONG vetado: MTF não alinhado (4H:${trend4h} 1H:${trend1h} 15M:${trend15m})`);
-            return null;
-        }
-        
-        // Formata MTF para LONG
-        mtfContext.macro.push(trend4h === 'long' ? 'Tendência 4H bullish ✅' : 'Tendência 4H neutro ⚠️');
-        mtfContext.medium.push(trend1h === 'long' ? 'Tendência 1H bullish ✅' : 'Tendência 1H neutro ⚠️');
-        if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ✅');
-        else if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ❌');
-
-        if (rsi15 < 35) mtfContext.micro.push('Reversão de curto prazo (RSI 15m oversold) ✅');
-        else if (rsi15 > 65) mtfContext.micro.push('Recuo de curto prazo (RSI 15m overbought) ❌');
-
-        score = 60 + bullishCount * 5;
-        confluences.push(`${bullishCount} ind. bullish`);
-    } else if (bearishCount >= 4) {
-        type = 'short';
-        // --- VETOS ABSOLUTOS (ANTI-SARDINHA) ---
-        if (rsi < 35) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: RSI=${rsi.toFixed(1)} < 35 (fundo saturado)`); return null; }
-        if (rvol < 0.70) { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: RVOL=${rvol.toFixed(2)} < 0.70 (sem volume)`); return null; }
-        if (macroTrend === 'long') { logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: Macro tendência LONG (EMA200 4H)`); return null; }
-
-        // ── VETO MTF: 1H e 15M devem CONFIRMAR (não basta 4H sozinho) ──
-        const mtfShortAlignment = (
-            (trend4h === 'short' || trend4h === 'neutral') &&
-            (trend1h === 'short') &&
-            (trend15m === 'short' || trend15m === 'neutral')
-        );
-        if (!mtfShortAlignment) {
-            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ SHORT vetado: MTF não alinhado (4H:${trend4h} 1H:${trend1h} 15M:${trend15m})`);
-            return null;
-        }
-        
-        // Formata MTF para SHORT
-        mtfContext.macro.push(trend4h === 'short' ? 'Tendência 4H bearish ✅' : 'Tendência 4H neutro ⚠️');
-        mtfContext.medium.push(trend1h === 'short' ? 'Tendência 1H bearish ✅' : 'Tendência 1H neutro ⚠️');
-        if (rsi > 60) mtfContext.medium.push('RSI em região sobrecomprada ✅');
-        else if (rsi < 40) mtfContext.medium.push('RSI em região sobrevendida ❌');
-
-        if (rsi15 > 65) mtfContext.micro.push('Reversão de curto prazo (RSI 15m overbought) ✅');
-        else if (rsi15 < 35) mtfContext.micro.push('Recuo de curto prazo (RSI 15m oversold) ❌');
-
-        score = 60 + bearishCount * 5;
-        confluences.push(`${bearishCount} ind. bearish`);
+    // 1. EMA Alinhada 1H e 4H (+2)
+    if (trend4h === type) {
+        rawScore += 2;
+        confluences.push('EMA Alinhada 1H e 4H +2');
+        mtfContext.macro.push(type === 'long' ? 'Tendência 4H bullish ✅' : 'Tendência 4H bearish ✅');
     } else {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ Sem confluência: bull=${bullishCount} bear=${bearishCount} (precisa ≥4)`);
-        return null;
+        mtfContext.macro.push('Tendência 4H neutra/oposta ⚠️');
     }
 
-    // --- VETO SNIPER EXTREMO ---
-    // FASE 1: Exige MÍNIMO 2 confirmações ICT distintas (Liquidity Sweep, FVG ou Order Block)
-    // Uma única confirmação não é suficiente — é fácil de ser um ruído de mercado.
-    const ictLongConfirmations = [
-        isBullishFvg,
-        isSweepLow,
-        priceInBullishOB,
-    ].filter(Boolean).length;
-    const ictShortConfirmations = [
-        isBearishFvg,
-        isSweepHigh,
-        priceInBearishOB,
-    ].filter(Boolean).length;
-
-    const ictConfirmationCount = type === 'long' ? ictLongConfirmations : ictShortConfirmations;
-    logger.debug(`[SIGNAL-DIAG] ${symbol} ICT check (${type}): FVG=${type==='long'?isBullishFvg:isBearishFvg} Sweep=${type==='long'?isSweepLow:isSweepHigh} OB=${type==='long'?priceInBullishOB:priceInBearishOB} → confirmações=${ictConfirmationCount}`);
-    // FASE 1: Aumentado de 1 para 2 confirmações ICT (mais rigoroso)
-    if (ictConfirmationCount < 2) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ICT: ${ictConfirmationCount} confirmações (precisa ≥2: FVG, Sweep ou OB)`);
-        return null;
+    // 2. Volume RVOL > 1.0 (+2)
+    if (rvol > 1.0) {
+        rawScore += 2;
+        confluences.push('Volume RVOL > 1.0 +2');
     }
 
-    // RSI extremes bonus (Apenas a favor do recuo natural, já que os vetos acima impedem a entrada contrária)
-    if (type === 'long' && rsi < 35) { score += 10; confluences.push('RSI oversold'); }
-    if (type === 'short' && rsi > 65) { score += 10; confluences.push('RSI overbought'); }
-
-    // Trend alignment bonus
-    if (type === 'long' && currentPrice > lastEma200) { score += 5; confluences.push('Above EMA 200'); }
-    if (type === 'short' && currentPrice < lastEma200) { score += 5; confluences.push('Below EMA 200'); }
-
-    // ADX strong trend bonus
-    if (adx > 35) { score += 8; confluences.push('Strong trend (ADX)'); }
-
-    // MACD confirmation — requires crossover OR aligned histogram with above-zero momentum
-    const macdAligned = (type === 'long' && macd.histogram > 0) || (type === 'short' && macd.histogram < 0);
-    const macdCrossover = (type === 'long' && macd.isBullishCross) || (type === 'short' && macd.isBearishCross);
-    if (macdCrossover) {
-        score += 12; // Crossover recente é muito mais forte que histograma alinhado
-        confluences.push('MACD Crossover ✅');
-    } else if (macdAligned) {
-        score += 4;
-        confluences.push('MACD aligned');
+    // 3. RSI em zona favorável (40-60) (+1)
+    if (rsi >= 40 && rsi <= 60) {
+        rawScore += 1;
+        confluences.push('RSI Favorável (40-60) +1');
+        mtfContext.medium.push('RSI em zona de pullback ✅');
     }
 
-    // Bollinger Bands: squeeze = energia acumulada prestes a explodir
-    if (bb.isSqueeze) {
-        score += 8;
-        confluences.push('BB Squeeze (explosão iminente)');
+    // 4. ADX > 18 (+1)
+    if (adx > 18) {
+        rawScore += 1;
+        confluences.push('ADX > 18 (Força) +1');
     }
-    // Bollinger Band bias: preço na metade correta das bandas
-    if (type === 'long' && bb.percentB < 0.35) {
-        score += 5;
-        confluences.push('Preço no suporte da BB');
+
+    // 5. ATR > 0.5% (+1)
+    if (atrPercentForVeto > 0.5) {
+        rawScore += 1;
+        confluences.push('ATR > 0.5% (Volatilidade) +1');
     }
-    if (type === 'short' && bb.percentB > 0.65) {
-        score += 5;
-        confluences.push('Preço na resistência da BB');
+
+    // 6. Sessão London/NY (+1)
+    if (isWithinTradingHours()) {
+        rawScore += 1;
+        confluences.push('Sessão Ativa (London/NY) +1');
+    }
+
+    // 7. 4H não em tendência oposta forte (+1)
+    // Se não foi vetado antes, significa que não está "fortemente" oposto, mas só ganha ponto se estiver a favor ou neutro
+    if (trend4h === type || trend4h === 'neutral') {
+        rawScore += 1;
+        confluences.push('4H Não Oposto +1');
+    }
+
+    // 8. Bônus ICT + Candlesticks (Capped separadamente)
+    let ictScore = 0;
+    let candleScore = 0;
+    
+    if (type === 'long') {
+        if (isBullishFvg) { ictScore += 1; confluences.push('Bullish FVG +1'); }
+        if (isSweepLow) { ictScore += 1; confluences.push('Liquidity Sweep Low +1'); }
+        if (priceInBullishOB) { ictScore += 1; confluences.push('Price in OB +1'); }
+    } else {
+        if (isBearishFvg) { ictScore += 1; confluences.push('Bearish FVG +1'); }
+        if (isSweepHigh) { ictScore += 1; confluences.push('Liquidity Sweep High +1'); }
+        if (priceInBearishOB) { ictScore += 1; confluences.push('Price in OB +1'); }
     }
     
-    // Liquidity Sweeps (Highest weight out of all metrics)
-    if (type === 'long' && isSweepLow) {
-        score += 20;
-        confluences.push('Liquidity Sweep (Reversão de Fundo)');
-        mtfContext.macro.push('Tubarões ativaram Stops de Varejo na mínima do dia! FORTE SINAL LONG 🐋');
-    }
-    if (type === 'short' && isSweepHigh) {
-        score += 20;
-        confluences.push('Liquidity Sweep (Reversão de Topo)');
-        mtfContext.macro.push('Tubarões distribuíram ativando Stops de Compra no topo! FORTE SINAL SHORT 🐋');
-    }
-
-    // Order Block (ICT) bonus
-    if (type === 'long' && priceInBullishOB && bullishOB) {
-        score += 15;
-        confluences.push('Order Block Bullish (ICT)');
-        mtfContext.medium.push(`Preço retornou à zona do Order Block ($${bullishOB.low.toFixed(2)} – $${bullishOB.high.toFixed(2)}) ✅`);
-        if (isBullishFvg) { score += 5; confluences.push('OB + FVG Confluence'); }
-        if (currentPrice > anchoredVwapDay) { score += 5; confluences.push('OB + Anchored VWAP'); }
-    }
-    if (type === 'short' && priceInBearishOB && bearishOB) {
-        score += 15;
-        confluences.push('Order Block Bearish (ICT)');
-        mtfContext.medium.push(`Preço retornou à zona de distribuição ($${bearishOB.low.toFixed(2)} – $${bearishOB.high.toFixed(2)}) ✅`);
-        if (isBearishFvg) { score += 5; confluences.push('OB + FVG Confluence'); }
-        if (currentPrice < anchoredVwapDay) { score += 5; confluences.push('OB + Anchored VWAP'); }
-    }
+    if (pullback) { candleScore += 1; confluences.push('Pullback EMA20/21 +1'); }
+    if (isEngulfing) { candleScore += 1; confluences.push('Vela Engulfing +1'); }
+    if (isPinBar) { candleScore += 1; confluences.push('Pin Bar +1'); }
     
-    // Fair Value Gaps
-    if (type === 'long' && isBullishFvg) {
-        score += 10;
-        confluences.push('FVG Detectado (Gap de Valor Justo de C.)');
-        mtfContext.medium.push('Recuo respeitou um Bloco de Ordens / FVG ✅');
-    }
-    if (type === 'short' && isBearishFvg) {
-        score += 10;
-        confluences.push('FVG Detectado (Gap de Valor Justo de V.)');
-        mtfContext.medium.push('Rali esbarrou em FVG de Venda / Order Block ✅');
-    }
-    
-    // VWAP Ancorada (Daily)
-    if (type === 'long' && currentPrice > anchoredVwapDay) { 
-        score += 5; 
-        confluences.push('Acima Anchored VWAP'); 
-    }
-    if (type === 'short' && currentPrice < anchoredVwapDay) { 
-        score += 5; 
-        confluences.push('Abaixo Anchored VWAP'); 
-    }
-
-    // --- VOLUME & VWAP CONFLUENCE ---
-    // VWAP Alignment: Operating in the right direction according to Institutional Value
-    if (type === 'long' && currentPrice > vwap) { 
-        score += 5; 
-        confluences.push('Acima da VWAP'); 
-    }
-    if (type === 'short' && currentPrice < vwap) { 
-        score += 5; 
-        confluences.push('Abaixo da VWAP'); 
-    }
-    // RVOL (Relative Volume): Avoid fakeouts low-liquid entries
-    if (rvol > 1.5) {
-        score += 8;
-        confluences.push('Alto volume (+50%)');
-        mtfContext.micro.push('Rompimento suportado por alto volume Relativo (RVOL) ✅');
-    }
-
-    // Funding rate contra-trade bonus
-    if (type === 'long' && fundingRate < -0.01) { score += 5; confluences.push('Negative funding (contrarian)'); }
-    if (type === 'short' && fundingRate > 0.01) { score += 5; confluences.push('Positive funding (contrarian)'); }
+    // Limita cada categoria de bônus independentemente a +2 pontos
+    rawScore += Math.min(ictScore, 2);
+    rawScore += Math.min(candleScore, 2);
 
     // --- LÓGICA DE APRENDIZADO (INDICATOR LEARNER) ---
     if (indicatorPerf) {
         for (const ind of confluences) {
-            const cleanName = ind.replace(/[✅❌⚡🐋]/g, '').trim();
+            const cleanName = ind.replace(/[✅❌⚡🐋\+0-9]/g, '').trim();
             const perf = indicatorPerf[cleanName];
-            if (perf && perf.totalTrades >= 3) { // Precisa de um histórico mínimo
+            if (perf && perf.totalTrades >= 3) {
                 if (perf.winRate > 0.6) {
-                    score += 5;
-                    logger.debug(`[LEARNER] ${symbol} 👍 Bônus pelo indicador ${cleanName} (Win Rate ${(perf.winRate*100).toFixed(0)}%)`);
+                    rawScore += 1;
+                    logger.debug(`[LEARNER-SWING] ${symbol} 👍 Bônus pelo indicador ${cleanName}`);
                 } else if (perf.winRate < 0.4) {
-                    score -= 10;
-                    logger.debug(`[LEARNER] ${symbol} 👎 Penalidade pelo indicador ${cleanName} (Win Rate ${(perf.winRate*100).toFixed(0)}%)`);
+                    rawScore -= 1;
+                    logger.debug(`[LEARNER-SWING] ${symbol} 👎 Penalidade pelo indicador ${cleanName}`);
                 }
             }
         }
     }
 
-    // Cap score
-    score = Math.min(score, 100);
-    score = Math.max(score, 0);
+    // Cap global: Limita o score cru em 10 pontos
+    rawScore = Math.max(0, Math.min(rawScore, 10));
 
-    const isBlocked = score < 55;
+    // Regra de Aprovação: Score >= 6
+    if (rawScore < 6) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO SCORE: Pontuação ${rawScore}/10 é insuficiente.`);
+        return null;
+    }
 
-    // FASE 1: Score mínimo aumentado de 85 para 90 (apenas sinais excelentes)
-    // Mantém lógica de auditoria para scores < 55 (BLOCKED)
-    const finalMinScore = customMinScore !== undefined ? customMinScore : 90;
-    logger.debug(`[SIGNAL-DIAG] ${symbol} score=${score} | minScore=${finalMinScore} | ${score >= finalMinScore ? '✅ PASSOU' : isBlocked ? '🛑 BLOCKED' : '❌ VETADO'}`);
-    
-    // Se não está bloqueado expressamente e não atinge o score mínimo, apenas ignora como Ruído normal
-    if (!isBlocked && score < finalMinScore) return null;
+    // Multiplica por 10 para compatibilidade
+    const finalScore = rawScore * 10;
 
     // --- ICT Order Block + Structural Stop + Fibonacci TPs ---
     let stopLossDistance = 0;
@@ -762,14 +670,12 @@ export function generateSignalFromData(
     let usingStructuralStop = false;
 
     if (type === 'long' && priceInBullishOB && bullishOB) {
-        // ICT: stop below structural swing low OR the order block low, whichever is safer (lower)
         const structuralStop = Math.min(swingLow, bullishOB.low) * 0.999;
         stopLossDistance = Math.max(((currentPrice - structuralStop) / currentPrice) * 100, 0.5);
         obEntryLow = bullishOB.low;
         obEntryHigh = bullishOB.high;
         usingStructuralStop = true;
     } else if (type === 'short' && priceInBearishOB && bearishOB) {
-        // ICT: stop above structural swing high OR the order block high, whichever is safer (higher)
         const structuralStop = Math.max(swingHigh, bearishOB.high) * 1.001;
         stopLossDistance = Math.max(((structuralStop - currentPrice) / currentPrice) * 100, 0.5);
         obEntryLow = bearishOB.low;
@@ -786,17 +692,14 @@ export function generateSignalFromData(
         stopLossDistance = Math.max(atrPercent * atrMultiplier, 0.5);
     }
 
-    // Fibonacci TP extensions when structural stop is used, standard ratio otherwise
-    // TP1 MÍNIMO de 1.5:1 — garante expectativa matemática positiva mesmo com 40% win rate
     let tp1Distance: number, tp2Distance: number, tp3Distance: number;
     if (usingStructuralStop) {
-        // ICT Fibonacci projections from the Order Block midpoint
-        tp1Distance = stopLossDistance * 1.5;   // 1.5:1 mínimo — nunca aceitar 1:1 (expectativa neutra)
-        tp2Distance = stopLossDistance * 2.0;   // Golden ratio extension (TP2)
-        tp3Distance = stopLossDistance * 3.0;   // Major liquidity target (TP3)
+        tp1Distance = stopLossDistance * 1.5;
+        tp2Distance = stopLossDistance * 2.0;
+        tp3Distance = stopLossDistance * 3.0;
     } else {
-        const tpScale = type === macroTrend ? 1 : 0.7; // Suavizado: 0.6 era muito agressivo
-        tp1Distance = stopLossDistance * 1.5 * tpScale; // 1.5:1 mínimo sempre
+        const tpScale = type === macroTrend ? 1 : 0.7;
+        tp1Distance = stopLossDistance * 1.5 * tpScale;
         tp2Distance = stopLossDistance * 2.5 * tpScale;
         tp3Distance = stopLossDistance * 4.0 * tpScale;
     }
@@ -818,32 +721,23 @@ export function generateSignalFromData(
 
     const riskReward = tp1Distance / stopLossDistance;
 
-    // --- VETO: R:R mínimo 1.5:1 (expectativa matemática positiva com 40% WR) ---
-    // E = (0.40 × 1.5) - (0.60 × 1.0) = 0.60 - 0.60 = 0 [breakeven mínimo]
-    // Para R:R 2.0: E = (0.40 × 2.0) - (0.60 × 1.0) = 0.80 - 0.60 = +0.20 ✅
+    // VETO: R:R mínimo 1.5:1
     if (riskReward < 1.5) {
         logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO R:R: ${riskReward.toFixed(2)} < 1.5 (expectativa negativa)`);
         return null;
     }
 
-    // --- GERENCIAMENTO DE RISCO DINÂMICO (SMART SIZING) ---
     const accountRiskLevel = config.riskManagement.riskPercent;
     const marginPercent = config.riskManagement.marginPercent;
-    
-    // Fórmula Mágica Corrigida:
     let dynamicLeverage = Math.round((accountRiskLevel / stopLossDistance) / (marginPercent / 100));
     
-    // FASE 2: Reduzir alavancagem em sinais com score < 90
-    if (score < 90) {
-        dynamicLeverage = Math.round(dynamicLeverage * 0.6);
-        logger.debug(`[SIGNAL-DIAG] ${symbol} Alavancagem reduzida 40% (score ${score} < 90)`);
-    }
+    // Ajuste de alavancagem com base no finalScore (0-100)
+    if (finalScore >= 80) dynamicLeverage = Math.round(dynamicLeverage * 1.2);
+    else if (finalScore < 70) dynamicLeverage = Math.round(dynamicLeverage * 0.8);
     
-    // FASE 2: Limites de Segurança reduzidos (50x → 30x)
-    if (dynamicLeverage < 2) dynamicLeverage = 2;   // Mínimo 2x
-    if (dynamicLeverage > 30) dynamicLeverage = 30; // FASE 2: Cap reduzido de 50x para 30x
+    if (dynamicLeverage < 2) dynamicLeverage = 2;
+    if (dynamicLeverage > 30) dynamicLeverage = 30;
 
-    // Definir tipo de trade e narrativa baseada no MTF
     let tradeType = 'Day Trade';
     let expectedDuration = '12-24 horas';
     let contextNarrative = `${symbol} demonstra presença ${type === 'long' ? 'compradora' : 'vendedora'}. `;
@@ -851,15 +745,15 @@ export function generateSignalFromData(
     if (type === macroTrend) {
         tradeType = 'Swing Trade';
         expectedDuration = '2-5 dias';
-        contextNarrative += `O sinal está alinhado com a tendência macro (4H), proporcionando um Swing Trade com R:R de 1:${riskReward.toFixed(1)}.`;
+        contextNarrative += `Sinal alinhado com a tendência macro (4H), proporcionando um Swing Trade com R:R de 1:${riskReward.toFixed(1)}.`;
     } else {
         tradeType = 'Day Trade (Contra-tendência)';
         expectedDuration = '4-12 horas';
-        contextNarrative += `Atenção: Operação contra a tendência macro (4H). Alvos reduzidos para um Day Trade rápido com R:R de 1:${riskReward.toFixed(1)}.`;
+        contextNarrative += `Atenção: Operação contra a tendência macro (4H). Alvos reduzidos para Day Trade com R:R de 1:${riskReward.toFixed(1)}.`;
     }
 
     return {
-        id: `${symbol}-${Date.now()}`,
+        id: `SWING-${symbol}-${Date.now()}`,
         pair: symbol,
         type,
         entry,
@@ -873,11 +767,11 @@ export function generateSignalFromData(
         positionSizePercent: marginPercent,
         riskPercent: accountRiskLevel,
         timeframe: '1h',
-        status: isBlocked ? 'BLOCKED' : ('PENDING' as any),
-        confidence: score,
+        status: 'PENDING',
+        confidence: finalScore,
         createdAt: new Date(),
         indicators: confluences,
-        quality: { score, factors: confluences },
+        quality: { score: finalScore, factors: confluences },
         tradeType,
         expectedDuration,
         mtfContext,
@@ -893,8 +787,6 @@ export function generateSignalFromData(
             fvgZone: isBullishFvg || isBearishFvg,
             isOrderBlock: usingStructuralStop,
         },
-        // Pre-computed indicator values — used by runSignalCycle to build ML features
-        // without recalculating the same indicators a second time.
         mlData: {
             _rsi: rsi,
             _adx: adx,
@@ -955,7 +847,7 @@ async function runSignalCycle(): Promise<void> {
                 symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, undefined, perf
             );
 
-            if (signal && signal.quality && signal.quality.score >= 85) {
+            if (signal && signal.quality && signal.quality.score >= 60) {
                 // FASE 3: Validar contexto de mercado ANTES de processar o sinal
                 const contextValidation = await validateSignalContext(symbol, signal.type);
                 if (!contextValidation.allowed) {
