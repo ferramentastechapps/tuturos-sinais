@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Brain, ArrowUpRight, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useMLLearning, MLLearningItem } from '@/hooks/useMLLearning';
 
-function LearningItem({ learning }: { learning: MLLearningItem }) {
+function LearningItem({ learning, index }: { learning: MLLearningItem; index: number }) {
   const isWin = learning.result === 'WIN';
   const wasCorrect = learning.ml_was_correct;
   
@@ -18,6 +18,7 @@ function LearningItem({ learning }: { learning: MLLearningItem }) {
     `}>
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground/60 font-mono">#{index + 1}</span>
           <span className="font-semibold text-sm">{learning.symbol}</span>
           <span className={`
             text-[10px] px-1.5 py-0.5 rounded font-bold
@@ -90,8 +91,8 @@ export function MLLearningCard() {
         ) : (
           <>
             <div className="space-y-2.5">
-              {learnings.map(learning => (
-                <LearningItem key={learning.id} learning={learning} />
+              {learnings.map((learning, idx) => (
+                <LearningItem key={learning.id} learning={learning} index={idx} />
               ))}
             </div>
             
