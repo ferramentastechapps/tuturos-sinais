@@ -520,6 +520,7 @@ router.get('/ml/stats', async (_req: Request, res: Response) => {
     } catch (error: any) {
         logger.error('Error fetching ML stats', { error: error.message });
         res.status(500).json({ error: error.message });
+    }
 });
 
 // ──── ML Learning History ────
