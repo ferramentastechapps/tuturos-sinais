@@ -520,6 +520,73 @@ router.get('/ml/stats', async (_req: Request, res: Response) => {
     } catch (error: any) {
         logger.error('Error fetching ML stats', { error: error.message });
         res.status(500).json({ error: error.message });
+});
+
+// ──── ML Learning History ────
+
+router.get('/ml/learning-history', async (req: Request, res: Response) => {
+    try {
+        const limit = parseInt(getStringParam(req.query.limit)) || 5;
+        
+        // Fetch recently closed trades with outcomes
+        const history = await db.tradeSignal.findMany({
+            where: { outcome: { not: null } },
+            orderBy: { exit_time: 'desc' },
+            take: limit,
+            select: {
+                id: true,
+                pair: true,
+                outcome: true,
+                pnl: true,
+                exit_time: true,
+                ml_data: true,
+                indicators: true
+            }
+        });
+
+        const learnings = history.map((h: any) => {
+            let parsedML: any = {};
+            try { if (h.ml_data) parsedML = JSON.parse(h.ml_data); } catch(e){}
+            
+            let parsedInd: any[] = [];
+            try { if (h.indicators) parsedInd = JSON.parse(h.indicators); } catch(e){}
+
+            // 1 = previu WIN, 0 = previu LOSS. 
+            // Se não houver previsão salva (sinais antigos), assumimos 1 pois o bot só opera previsões positivas.
+            const predictedClass = parsedML.predictedClass ?? 1; 
+            const isWin = h.outcome === 'WIN';
+            
+            // A IA acertou se: (Previu WIN e deu WIN) OU (Previu LOSS e deu LOSS)
+            const wasCorrect = (predictedClass === 1 && isWin) || (predictedClass === 0 && !isWin);
+
+            const key_indicators = parsedInd.length > 0 ? parsedInd.slice(0, 3) : ['RSI', 'MACD', 'EMA'];
+
+            return {
+                id: h.id,
+                symbol: h.pair,
+                result: h.outcome,
+                profit_percent: h.pnl || 0,
+                ml_was_correct: wasCorrect,
+                key_indicators
+            };
+        });
+
+        // Summary stats based on MLTrainingData
+        const total = await db.mLTrainingData.count();
+        const wins = await db.mLTrainingData.count({ where: { outcome_label: 1 } });
+        const ml_accuracy = total > 0 ? wins / total : 0;
+
+        res.json({
+            success: true,
+            learnings,
+            summary: {
+                total,
+                ml_accuracy
+            }
+        });
+    } catch (error: any) {
+        logger.error('Error fetching ML learning history', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
