@@ -18,9 +18,12 @@ const RATE_LIMIT_PER_MINUTE = 20;
 const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 
-const formatPrice = (rawPrice: number | string): string => {
+const formatPrice = (rawPrice: number | string | undefined | null): string => {
+    // Proteção contra undefined/null
+    if (rawPrice === undefined || rawPrice === null) return '0.00';
+    
     const price = typeof rawPrice === 'string' ? parseFloat(rawPrice) : rawPrice;
-    if (isNaN(price)) return '0.00';
+    if (isNaN(price) || !isFinite(price)) return '0.00';
     
     // Usa o JS nativo para calcular até 8 casas decimais,
     // mas removendo os zeros à direita usando toString() do Float.

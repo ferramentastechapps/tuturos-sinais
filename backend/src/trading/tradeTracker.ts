@@ -178,7 +178,14 @@ export class TradeTracker {
     const signals = this.activeSignals.get(update.symbol);
     if (!signals || signals.length === 0) return;
 
-    for (const signal of signals) {
+    // Criar cópia do array para evitar modificação durante iteração
+    const signalsCopy = [...signals];
+
+    for (const signal of signalsCopy) {
+      // Verificar se o sinal ainda existe (pode ter sido removido por outro processo)
+      if (!this.activeSignals.get(update.symbol)?.find(s => s.id === signal.id)) {
+        continue; // Sinal já foi processado/removido
+      }
       if (signal.status === 'PENDING') {
          // Activate only when price enters the defined entry zone
          const isEntered = update.price >= signal.entry_range_low && update.price <= signal.entry_range_high;
@@ -219,6 +226,10 @@ export class TradeTracker {
         : update.price >= signal.stop_loss;
 
       if (isSLHit) {
+        // Verificar se já foi processado (proteção adicional)
+        if (signal.status === 'CLOSED_SL') {
+          continue;
+        }
         await this.handleStopLoss(signal, update.price);
         continue; // Processed
       }
@@ -489,8 +500,9 @@ export class TradeTracker {
 
   private async handleStopLoss(signal: ActiveSignal, currentPrice: number) {
     console.log(`[TradeTracker] SL hit for ${signal.pair} at ${currentPrice}`);
-    signal.status = 'CLOSED_SL';
     
+    // CRÍTICO: Remover da memória PRIMEIRO para evitar múltiplos triggers
+    signal.status = 'CLOSED_SL';
     this.removeSignalFromMemory(signal.id, signal.pair);
 
     // Calcular se o SL foi com lucro ou prejuízo

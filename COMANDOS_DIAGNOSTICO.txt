@@ -1,0 +1,64 @@
+# ═══════════════════════════════════════════════════════════════
+# 🔍 COMANDOS PARA DIAGNOSTICAR DASHBOARD VAZIO
+# ═══════════════════════════════════════════════════════════════
+#
+# COPIE E COLE ESTES COMANDOS NO SEU TERMINAL (um por vez):
+#
+
+# 1. Conectar na VPS
+ssh root@212.85.10.239
+
+# 2. Verificar se PM2 está rodando
+pm2 list
+
+# 3. Ver últimas 50 linhas do log do signal-engine
+pm2 logs signal-engine --lines 50 --nostream
+
+# 4. Ver APENAS os vetos (por que não gera sinais)
+pm2 logs signal-engine --lines 200 --nostream | grep -i "vetado\|veto\|blocked"
+
+# 5. Ver contexto de mercado (BTC trend, Fear & Greed)
+pm2 logs signal-engine --lines 100 --nostream | grep "MarketContext"
+
+# 6. Ver se algum sinal foi gerado hoje
+pm2 logs signal-engine --lines 100 --nostream | grep "Signal generated"
+
+# 7. Verificar quantos sinais existem no banco
+cd /var/www/signal-dashboard/backend
+sqlite3 prisma/data/trading.db "SELECT COUNT(*) FROM TradeSignal;"
+
+# 8. Ver últimos 5 sinais no banco
+sqlite3 -header -column prisma/data/trading.db "SELECT pair, type, status, confidence, created_at FROM TradeSignal ORDER BY created_at DESC LIMIT 5;"
+
+# 9. Verificar se API está respondendo
+curl http://localhost:3001/api/signals/history | head -100
+
+# ═══════════════════════════════════════════════════════════════
+# 📊 O QUE ESPERAR:
+# ═══════════════════════════════════════════════════════════════
+#
+# CENÁRIO 1: Filtros muito rigorosos (MAIS PROVÁVEL)
+# - Você verá MUITAS mensagens de "vetado por contexto"
+# - Exemplos:
+#   "ETHUSDT LONG vetado por contexto: BTC em queda forte"
+#   "SOLUSDT SHORT vetado por contexto: Fear & Greed 85 > 80"
+#   "ADAUSDT LONG vetado: Preço abaixo da EMA200 Daily"
+#
+# SOLUÇÃO: Aguardar mercado se alinhar OU afrouxar filtros
+#
+# ───────────────────────────────────────────────────────────────
+#
+# CENÁRIO 2: Erro no código
+# - Você verá mensagens de erro no log
+# - Exemplo: "Error processing BTCUSDT"
+#
+# SOLUÇÃO: Compartilhar o erro para correção
+#
+# ───────────────────────────────────────────────────────────────
+#
+# CENÁRIO 3: PM2 não está rodando
+# - pm2 list mostra "stopped" ou "errored"
+#
+# SOLUÇÃO: pm2 restart signal-engine
+#
+# ═══════════════════════════════════════════════════════════════
