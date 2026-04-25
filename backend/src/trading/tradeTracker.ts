@@ -227,7 +227,7 @@ export class TradeTracker {
 
       if (isSLHit) {
         // Verificar se já foi processado (proteção adicional)
-        if (signal.status === 'CLOSED_SL') {
+        if (signal.status !== 'ACTIVE') {
           continue;
         }
         await this.handleStopLoss(signal, update.price);
