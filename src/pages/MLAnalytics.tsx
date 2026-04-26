@@ -19,6 +19,7 @@ interface MLStats {
     tp2Hits: number;
     tp3Hits: number;
     avgPnl: number;
+    trainingSamples?: number;
 }
 
 interface MLLearning {
@@ -150,22 +151,22 @@ const MLAnalytics = () => {
                     <CardContent>
                         <div className="text-2xl font-bold flex items-center gap-2">
                             <Database className="h-5 w-5 text-purple-400" />
-                            {stats?.totalSignals ?? 0}
+                            {stats?.trainingSamples ?? 0}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">amostras coletadas</p>
+                        <p className="text-xs text-muted-foreground mt-1">amostras de treino ML</p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Win Rate (dados)</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Win Rate (real)</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-green-400">
                             {stats ? `${stats.winRate.toFixed(1)}%` : 'N/A'}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                            {stats?.wins ?? 0}W / {stats?.losses ?? 0}L
+                            {stats?.wins ?? 0}W / {stats?.losses ?? 0}L — sinais fechados
                         </p>
                     </CardContent>
                 </Card>

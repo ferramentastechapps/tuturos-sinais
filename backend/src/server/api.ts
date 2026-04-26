@@ -458,52 +458,46 @@ router.get('/metrics', (_req: Request, res: Response) => {
 
 router.get('/ml/stats', async (_req: Request, res: Response) => {
     try {
-        // Buscar dados de treinamento
-        const trainingData = await db.mLTrainingData.findMany({
+        // Usar sinais REAIS fechados (não dados de treino históricos)
+        const closedSignals = await db.tradeSignal.findMany({
+            where: { status: { in: ['CLOSED_TP', 'CLOSED_SL'] } },
             select: {
-                outcome_label: true,
-                outcome_pnl: true,
-                features: true,
+                status: true,
+                take_profits: true,
+                entry_range_low: true,
+                entry_range_high: true,
+                stop_loss: true,
+                pnl: true,
             }
         });
 
-        const totalSignals = trainingData.length;
-        const wins = trainingData.filter((d: any) => d.outcome_label === 1).length;
-        const losses = trainingData.filter((d: any) => d.outcome_label === 0).length;
+        const wins = closedSignals.filter((s: any) => s.status === 'CLOSED_TP').length;
+        const losses = closedSignals.filter((s: any) => s.status === 'CLOSED_SL').length;
+        const totalSignals = wins + losses;
         const winRate = totalSignals > 0 ? (wins / totalSignals) * 100 : 0;
 
-        // Calcular PnL médio
+        // PnL médio real
         const avgPnl = totalSignals > 0
-            ? trainingData.reduce((sum: number, d: any) => sum + d.outcome_pnl, 0) / totalSignals
+            ? closedSignals.reduce((sum: number, s: any) => sum + (s.pnl || 0), 0) / totalSignals
             : 0;
 
-        // Contar quantos TPs foram alcançados (buscar nos sinais fechados)
-        const closedSignals = await db.activeSignal.findMany({
-            where: {
-                status: { in: ['CLOSED_TP', 'CLOSED_SL'] }
-            },
-            select: {
-                take_profits: true,
-                status: true,
-            }
-        });
-
+        // Contar TPs atingidos
         let tp1Hits = 0, tp2Hits = 0, tp3Hits = 0;
-        
         for (const signal of closedSignals) {
             if (signal.status === 'CLOSED_TP') {
                 try {
                     const tps = JSON.parse(signal.take_profits);
                     if (Array.isArray(tps)) {
-                        if (tps.find(t => t.level === 1 && t.hit)) tp1Hits++;
-                        if (tps.find(t => t.level === 2 && t.hit)) tp2Hits++;
-                        if (tps.find(t => t.level === 3 && t.hit)) tp3Hits++;
+                        if (tps.find((t: any) => t.level === 1 && t.hit)) tp1Hits++;
+                        if (tps.find((t: any) => t.level === 2 && t.hit)) tp2Hits++;
+                        if (tps.find((t: any) => t.level === 3 && t.hit)) tp3Hits++;
                     }
-                } catch (e) {
-                    // Ignore parse errors
-                }
+                } catch (e) { /* ignore */ }
             }
         }
+
+        // Amostras de treino (só para info)
+        const trainingSamples = await db.mLTrainingData.count();
 
         res.json({
             enabled: config.ml.enabled,
@@ -516,6 +510,7 @@ router.get('/ml/stats', async (_req: Request, res: Response) => {
             tp2Hits,
             tp3Hits,
             avgPnl,
+            trainingSamples,
         });
     } catch (error: any) {
         logger.error('Error fetching ML stats', { error: error.message });

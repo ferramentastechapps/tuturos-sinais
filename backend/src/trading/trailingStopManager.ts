@@ -269,7 +269,8 @@ export function formatTrailingStopMessage(
 
     if (result.newStopLoss) {
         msg += `🛡 <b>Stop Loss atualizado:</b>\n`;
-        msg += `   ${signal.stopLoss.toFixed(2)} → ${result.newStopLoss.toFixed(2)}\n\n`;
+        const oldSL = signal.stopLoss != null ? signal.stopLoss.toFixed(2) : '?';
+        msg += `   ${oldSL} → ${result.newStopLoss.toFixed(2)}\n\n`;
     }
 
     msg += `📊 <b>Status:</b> ${result.reason}\n`;

@@ -260,7 +260,13 @@ export class TradeTracker {
 
   private async processTrailingStop(signal: ActiveSignal, currentPrice: number) {
     // FASE 2: Integração com trailingStopManager
-    
+
+    // Guarda: sem stop_loss definido não há como calcular trailing
+    if (!signal.stop_loss || !currentPrice || currentPrice <= 0) {
+      console.warn(`[TradeTracker] processTrailingStop: dados inválidos para ${signal.pair} (stop_loss=${signal.stop_loss}, price=${currentPrice})`);
+      return;
+    }
+
     // Buscar ATR atual para cálculo dinâmico
     let atr = 0;
     try {
@@ -314,7 +320,7 @@ export class TradeTracker {
         signal.stop_loss = result.newStopLoss;
         signal.lastNotifiedSL = result.newStopLoss;
         
-        console.log(`[TradeTracker] ${signal.pair} SL atualizado: ${oldSL.toFixed(2)} → ${result.newStopLoss.toFixed(2)}`);
+        console.log(`[TradeTracker] ${signal.pair} SL atualizado: ${oldSL?.toFixed(2) ?? '?'} → ${result.newStopLoss.toFixed(2)}`);
       }
       
       signal.trailingActive = true;
@@ -405,7 +411,7 @@ export class TradeTracker {
         );
         
         const message = formatTrailingStopMessage(signal as any, result, currentPrice, partialProfit);
-        sendTrailingStopUpdate(signal, currentPrice, oldSL, result.newStopLoss, message).catch(e =>
+        sendTrailingStopUpdate(signal, currentPrice, oldSL ?? result.newStopLoss, result.newStopLoss, message).catch(e =>
           console.error('[TradeTracker] TG error', e)
         );
       }
