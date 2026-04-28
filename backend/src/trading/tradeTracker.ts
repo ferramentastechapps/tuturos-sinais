@@ -44,6 +44,7 @@ export class TradeTracker {
   private activeSignals: Map<string, ActiveSignal[]> = new Map();
   private activatedSignals: Set<string> = new Set(); // Rastrear sinais já ativados
   private sessionClosedTrades = 0; // Contador de trades finalizados na sessão
+  private lastSLNotification = new Map<string, number>(); // Rate limiter de notificações de SL
 
   constructor() {
     this.setupListeners();
@@ -53,11 +54,28 @@ export class TradeTracker {
     console.log('[TradeTracker] Loading active signals from DB...');
     try {
       const data = await db.activeSignal.findMany({
-        where: { status: { in: ['ACTIVE', 'PENDING'] } }
+        where: { status: { in: ['ACTIVE', 'PENDING'] } },
+        orderBy: { id: 'desc' } // Os mais recentes primeiro
       });
 
       this.activeSignals.clear();
+      const seenPairs = new Set<string>();
+
       for (const rawSignal of (data || [])) {
+        // Deduplicação: se já carregamos um sinal mais recente para esse par, cancela os antigos no BD
+        if (seenPairs.has(rawSignal.pair)) {
+          console.log(`[TradeTracker] Cleaning up duplicate DB signal for ${rawSignal.pair}`);
+          try {
+             await db.activeSignal.update({
+               where: { id: rawSignal.id },
+               data: { status: 'CANCELLED' }
+             });
+          } catch(e) { /* ignore */ }
+          continue;
+        }
+        
+        seenPairs.add(rawSignal.pair);
+
         const signal = {
           ...rawSignal,
           take_profits: typeof rawSignal.take_profits === 'string' ? JSON.parse(rawSignal.take_profits) : rawSignal.take_profits,
@@ -65,7 +83,7 @@ export class TradeTracker {
         } as any as ActiveSignal;
         this.addSignalToMemory(signal);
       }
-      console.log(`[TradeTracker] Loaded ${data?.length || 0} active signals.`);
+      console.log(`[TradeTracker] Loaded ${seenPairs.size} unique active signals.`);
     } catch (error) {
       console.error('[TradeTracker] Failed to load signals', error);
       return;
@@ -570,7 +588,15 @@ export class TradeTracker {
         this.logEvent(signal.id, 'SL_HIT', `Stop Loss hit at ${currentPrice} (PnL: ${pnl.toFixed(2)}%)`, currentPrice).catch(()=>{});
     } catch (e) { /* skip */ }
 
-    sendSLNotification(signal, currentPrice).catch(e => console.error('TG error', e));
+    // Rate Limiting para evitar spam no Telegram
+    const now = Date.now();
+    const lastNotified = this.lastSLNotification.get(signal.pair) || 0;
+    if (now - lastNotified > 60000) { // Cooldown de 60 segundos por par
+        this.lastSLNotification.set(signal.pair, now);
+        sendSLNotification(signal, currentPrice).catch(e => console.error('TG error', e));
+    } else {
+        console.warn(`[TradeTracker] Spam Protection: Ignorando notificação duplicada de SL para ${signal.pair}`);
+    }
   }
 
   private async logEvent(signalId: string, eventType: string, message: string, price: number) {
