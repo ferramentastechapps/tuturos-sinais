@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useBacktest } from '@/hooks/useBacktest';
 import { BacktestConfig, DEFAULT_BACKTEST_CONFIG, BacktestTrade } from '@/types/backtestTypes';
 import { DEFAULT_OPTIMIZATION_PARAMS } from '@/utils/backtestHelpers';
@@ -12,7 +12,10 @@ import {
     Play, Settings, TrendingUp, BarChart3, Table, Zap, AlertTriangle,
     Download, Trash2, Clock, Target, Shield, Activity, ChevronDown,
     ChevronUp, Search, Filter, ArrowUpRight, ArrowDownRight, Database,
+    GitCompare, History, CheckCircle, Bot,
 } from 'lucide-react';
+
+const API = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 // ═══════════════════════════ MAIN PAGE ═══════════════════════════
 
@@ -24,7 +27,7 @@ const Backtesting: React.FC = () => {
         latestResult, loadResult, clearHistory, defaultConfig,
     } = useBacktest();
 
-    const [activeTab, setActiveTab] = useState<'config' | 'results' | 'trades' | 'optimization' | 'walkforward'>('config');
+    const [activeTab, setActiveTab] = useState<'config' | 'results' | 'trades' | 'optimization' | 'walkforward' | 'comparar' | 'historico'>('config');
     const [config, setConfig] = useState<BacktestConfig>(defaultConfig);
     const [isCollecting, setIsCollecting] = useState(false);
 
@@ -34,6 +37,8 @@ const Backtesting: React.FC = () => {
         { id: 'trades' as const, label: 'Operações', icon: Table },
         { id: 'optimization' as const, label: 'Otimização', icon: Zap },
         { id: 'walkforward' as const, label: 'Walk Forward', icon: Shield },
+        { id: 'comparar' as const, label: 'Comparar', icon: GitCompare },
+        { id: 'historico' as const, label: 'Histórico', icon: History },
     ];
 
     const handleRun = async () => {
@@ -173,6 +178,8 @@ const Backtesting: React.FC = () => {
             {activeTab === 'trades' && !result && <EmptyState message="Execute um backtest para ver operações" />}
             {activeTab === 'optimization' && <OptimizationPanel config={config} startOptimization={startOptimization} result={optimizationResult} isRunning={isRunning} />}
             {activeTab === 'walkforward' && <WalkForwardPanel config={config} startWalkForward={startWalkForward} result={walkForwardResult} isRunning={isRunning} startOptimization={startOptimization} />}
+            {activeTab === 'comparar' && <ComparePanel baseConfig={config} />}
+            {activeTab === 'historico' && <HistoryPanel onLoad={(r: any) => { loadResult(r); setActiveTab('results'); }} />}
 
             {/* Saved Results */}
             {savedResults.length > 0 && (
@@ -886,4 +893,373 @@ const EmptyState: React.FC<{ message: string }> = ({ message }) => (
     </div>
 );
 
+// ═══════════════════════════ COMPARE PANEL ═══════════════════════════
+
+const METRIC_COLOR = (v: number, good: number) => v >= good ? '#22c55e' : v >= good * 0.7 ? '#f59e0b' : '#ef4444';
+
+const ComparePanel: React.FC<{ baseConfig: BacktestConfig }> = ({ baseConfig }) => {
+    const [slots, setSlots] = useState<BacktestConfig[]>([
+        { ...baseConfig },
+        { ...baseConfig, signal: { ...baseConfig.signal, minScore: baseConfig.signal.minScore + 5 } },
+    ]);
+    const [results, setResults] = useState<any[]>([]);
+    const [ranking, setRanking] = useState<any[]>([]);
+    const [running, setRunning] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [applying, setApplying] = useState<number | null>(null);
+    const [appliedIdx, setAppliedIdx] = useState<number | null>(null);
+
+    const sectionStyle: React.CSSProperties = { background: '#1f2937', borderRadius: '0.75rem', padding: '1.25rem', border: '1px solid #374151' };
+    const inputStyle: React.CSSProperties = { width: '100%', padding: '0.4rem 0.6rem', borderRadius: '0.375rem', border: '1px solid #374151', background: '#111827', color: '#e5e7eb', fontSize: '0.8rem' };
+    const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.2rem' };
+
+    const addSlot = () => {
+        if (slots.length >= 3) return;
+        setSlots(prev => [...prev, { ...baseConfig, signal: { ...baseConfig.signal, minScore: baseConfig.signal.minScore + (prev.length * 5) } }]);
+    };
+
+    const removeSlot = (idx: number) => setSlots(prev => prev.filter((_, i) => i !== idx));
+
+    const updateSlot = (idx: number, field: string, value: any) => {
+        setSlots(prev => prev.map((s, i) => {
+            if (i !== idx) return s;
+            const parts = field.split('.');
+            const next = JSON.parse(JSON.stringify(s));
+            let obj = next;
+            for (let p = 0; p < parts.length - 1; p++) obj = obj[parts[p]];
+            obj[parts[parts.length - 1]] = value;
+            return next;
+        }));
+    };
+
+    const runCompare = async () => {
+        setRunning(true); setError(null); setResults([]); setRanking([]);
+        try {
+            const { fetchMultiSymbolData } = await import('@/services/historicalDataService');
+            const allSymbols = [...new Set(slots.flatMap(c => c.symbols))];
+            const dataMap = await fetchMultiSymbolData(allSymbols, slots[0].timeframe, slots[0].startDate, slots[0].endDate);
+            const ohlcData = Object.fromEntries(dataMap);
+
+            const res = await fetch(`${API}/api/backtest/compare`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ configs: slots, ohlcData }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+            setResults(data.results);
+            setRanking(data.ranking);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    const applyToRobot = async (idx: number) => {
+        setApplying(idx);
+        try {
+            const res = await fetch(`${API}/api/backtest/apply-to-robot`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ config: slots[idx] }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+            setAppliedIdx(idx);
+            setTimeout(() => setAppliedIdx(null), 3000);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setApplying(null);
+        }
+    };
+
+    const COLORS = ['#3b82f6', '#22c55e', '#f59e0b'];
+    const LABELS = ['Config A', 'Config B', 'Config C'];
+
+    return (
+        <div style={{ display: 'grid', gap: '1.25rem' }}>
+            {/* Slot editors */}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${slots.length}, 1fr)`, gap: '1rem' }}>
+                {slots.map((slot, idx) => (
+                    <div key={idx} style={{ ...sectionStyle, borderTop: `3px solid ${COLORS[idx]}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                            <span style={{ fontWeight: 700, color: COLORS[idx], fontSize: '0.875rem' }}>{LABELS[idx]}</span>
+                            {slots.length > 2 && (
+                                <button onClick={() => removeSlot(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem' }}>✕</button>
+                            )}
+                        </div>
+                        <div style={{ display: 'grid', gap: '0.6rem' }}>
+                            <div>
+                                <label style={labelStyle}>Score Mínimo</label>
+                                <input type="number" style={inputStyle} value={slot.signal.minScore} onChange={e => updateSlot(idx, 'signal.minScore', Number(e.target.value))} />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Max Posições</label>
+                                <input type="number" style={inputStyle} value={slot.signal.maxSimultaneousPositions} onChange={e => updateSlot(idx, 'signal.maxSimultaneousPositions', Number(e.target.value))} />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Capital/Posição (%)</label>
+                                <input type="number" style={inputStyle} value={slot.signal.maxCapitalPerPosition} onChange={e => updateSlot(idx, 'signal.maxCapitalPerPosition', Number(e.target.value))} />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Timeframe</label>
+                                <select style={inputStyle} value={slot.timeframe} onChange={e => updateSlot(idx, 'timeframe', e.target.value)}>
+                                    {['1m','5m','15m','1h','4h','1d'].map(tf => <option key={tf} value={tf}>{tf}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                {slots.length < 3 && (
+                    <button onClick={addSlot} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px dashed #374151', background: 'transparent', color: '#9ca3af', cursor: 'pointer', fontSize: '0.8rem' }}>
+                        + Adicionar Config C
+                    </button>
+                )}
+                <button onClick={runCompare} disabled={running} style={{ padding: '0.5rem 1.25rem', borderRadius: '0.5rem', border: 'none', background: running ? '#374151' : 'linear-gradient(135deg,#3b82f6,#1d4ed8)', color: '#fff', cursor: running ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <GitCompare size={15} /> {running ? 'Comparando...' : 'Comparar Agora'}
+                </button>
+            </div>
+
+            {error && (
+                <div style={{ padding: '0.75rem', borderRadius: '0.5rem', background: '#7f1d1d33', border: '1px solid #991b1b', color: '#fca5a5', fontSize: '0.8rem' }}>
+                    <AlertTriangle size={14} style={{ display: 'inline', marginRight: '0.5rem' }} />{error}
+                </div>
+            )}
+
+            {/* Results */}
+            {results.length > 0 && (
+                <div style={{ display: 'grid', gap: '1rem' }}>
+                    {/* Ranking banner */}
+                    {ranking.length > 0 && (
+                        <div style={{ ...sectionStyle, display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>🏆 Melhor configuração:</span>
+                            <span style={{ fontWeight: 700, color: COLORS[ranking[0].index], fontSize: '1rem' }}>{LABELS[ranking[0].index]}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Score: {ranking[0].score.toFixed(1)}</span>
+                            <button
+                                onClick={() => applyToRobot(ranking[0].index)}
+                                disabled={applying !== null}
+                                style={{ marginLeft: 'auto', padding: '0.4rem 1rem', borderRadius: '0.5rem', border: 'none', background: appliedIdx === ranking[0].index ? '#22c55e' : 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                            >
+                                {appliedIdx === ranking[0].index ? <><CheckCircle size={14} /> Aplicado!</> : <><Bot size={14} /> Aplicar ao Robô</>}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Metrics table */}
+                    <div style={{ ...sectionStyle, overflowX: 'auto' }}>
+                        <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#d1d5db', marginBottom: '1rem' }}>📊 Métricas Comparadas</h3>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '1px solid #374151' }}>
+                                    <th style={{ padding: '0.5rem', textAlign: 'left', color: '#9ca3af' }}>Métrica</th>
+                                    {results.map((_, i) => (
+                                        <th key={i} style={{ padding: '0.5rem', textAlign: 'right', color: COLORS[i], fontWeight: 700 }}>{LABELS[i]}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[
+                                    { label: 'Total Trades', key: (r: any) => r.metrics?.main?.totalTrades ?? 0, fmt: (v: any) => v, good: 20 },
+                                    { label: 'Win Rate (%)', key: (r: any) => r.metrics?.main?.winRate ?? 0, fmt: (v: any) => v.toFixed(1) + '%', good: 55 },
+                                    { label: 'PnL Total (%)', key: (r: any) => r.metrics?.main?.totalPnLPercent ?? 0, fmt: (v: any) => (v >= 0 ? '+' : '') + v.toFixed(2) + '%', good: 5 },
+                                    { label: 'Profit Factor', key: (r: any) => r.metrics?.risk?.profitFactor ?? 0, fmt: (v: any) => v === Infinity ? '∞' : v.toFixed(2), good: 1.5 },
+                                    { label: 'Max Drawdown', key: (r: any) => r.metrics?.risk?.maxDrawdownPercent ?? 0, fmt: (v: any) => v.toFixed(2) + '%', good: 0, invert: true },
+                                    { label: 'Sharpe Ratio', key: (r: any) => r.metrics?.risk?.sharpeRatio ?? 0, fmt: (v: any) => v.toFixed(2), good: 1 },
+                                    { label: 'Sortino Ratio', key: (r: any) => r.metrics?.risk?.sortinoRatio ?? 0, fmt: (v: any) => v.toFixed(2), good: 1.5 },
+                                    { label: 'Expectância ($)', key: (r: any) => r.metrics?.main?.expectancy ?? 0, fmt: (v: any) => '$' + v.toFixed(2), good: 0 },
+                                ].map(row => {
+                                    const vals = results.map(r => row.key(r));
+                                    const best = (row as any).invert ? Math.min(...vals) : Math.max(...vals);
+                                    return (
+                                        <tr key={row.label} style={{ borderBottom: '1px solid #37415130' }}>
+                                            <td style={{ padding: '0.4rem 0.5rem', color: '#9ca3af' }}>{row.label}</td>
+                                            {vals.map((v, i) => (
+                                                <td key={i} style={{ padding: '0.4rem 0.5rem', textAlign: 'right', fontWeight: v === best ? 700 : 400, color: v === best ? '#22c55e' : '#d1d5db' }}>
+                                                    {v === best && '✓ '}{row.fmt(v)}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Equity curves */}
+                    <div style={sectionStyle}>
+                        <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#d1d5db', marginBottom: '1rem' }}>📈 Equity Curves</h3>
+                        <div style={{ height: 280 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                    <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#6b7280' }} />
+                                    <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} />
+                                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', fontSize: '0.75rem' }} />
+                                    {results.map((r, i) => {
+                                        const step = Math.max(1, Math.floor(r.equityCurve.length / 200));
+                                        const data = r.equityCurve.filter((_: any, j: number) => j % step === 0).map((p: any) => ({
+                                            time: new Date(p.timestamp).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' }),
+                                            [`eq${i}`]: parseFloat(p.equity.toFixed(2)),
+                                        }));
+                                        return <Line key={i} data={data} type="monotone" dataKey={`eq${i}`} stroke={COLORS[i]} strokeWidth={2} dot={false} name={LABELS[i]} />;
+                                    })}
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* Per-config apply buttons */}
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        {results.map((_, idx) => (
+                            <button key={idx} onClick={() => applyToRobot(idx)} disabled={applying !== null}
+                                style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: `1px solid ${COLORS[idx]}`, background: appliedIdx === idx ? COLORS[idx] : 'transparent', color: appliedIdx === idx ? '#fff' : COLORS[idx], cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}>
+                                {appliedIdx === idx ? <CheckCircle size={14} /> : <Bot size={14} />}
+                                {appliedIdx === idx ? 'Aplicado!' : `Aplicar ${LABELS[idx]} ao Robô`}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ═══════════════════════════ HISTORY PANEL ═══════════════════════════
+
+const HistoryPanel: React.FC<{ onLoad: (result: any) => void }> = ({ onLoad }) => {
+    const [history, setHistory] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [symbolFilter, setSymbolFilter] = useState('');
+
+    const fetchHistory = useCallback(async () => {
+        setLoading(true); setError(null);
+        try {
+            const qs = symbolFilter ? `?symbol=${symbolFilter.toUpperCase()}` : '';
+            const res = await fetch(`${API}/api/backtest/history${qs}`);
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+            setHistory(data.history ?? []);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [symbolFilter]);
+
+    useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+    const loadFull = async (id: string) => {
+        try {
+            const res = await fetch(`${API}/api/backtest/history/${id}`);
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error ?? 'Erro ao carregar');
+            const row = data.result;
+            onLoad({
+                id: row.id,
+                config: row.config_json,
+                metrics: row.result_json?.metrics,
+                trades: row.result_json?.trades ?? [],
+                equityCurve: row.result_json?.equityCurve ?? [],
+                buyAndHoldComparison: row.result_json?.buyAndHold ?? null,
+                timestamp: new Date(row.created_at).getTime(),
+                durationMs: 0,
+            });
+        } catch (e: any) {
+            alert('Erro ao carregar: ' + e.message);
+        }
+    };
+
+    const sectionStyle: React.CSSProperties = { background: '#1f2937', borderRadius: '0.75rem', padding: '1.25rem', border: '1px solid #374151' };
+
+    return (
+        <div style={{ display: 'grid', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                    value={symbolFilter} onChange={e => setSymbolFilter(e.target.value)}
+                    placeholder="Filtrar por símbolo (ex: BTCUSDT)..."
+                    style={{ padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #374151', background: '#111827', color: '#e5e7eb', fontSize: '0.8rem', flex: 1, minWidth: 200 }}
+                />
+                <button onClick={fetchHistory} disabled={loading}
+                    style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <History size={14} /> {loading ? 'Carregando...' : 'Atualizar'}
+                </button>
+            </div>
+
+            {error && (
+                <div style={{ padding: '0.75rem', borderRadius: '0.5rem', background: '#7f1d1d33', border: '1px solid #991b1b', color: '#fca5a5', fontSize: '0.8rem' }}>
+                    <AlertTriangle size={14} style={{ display: 'inline', marginRight: '0.5rem' }} />{error}
+                </div>
+            )}
+
+            {history.length === 0 && !loading && (
+                <EmptyState message="Nenhum backtest salvo ainda. Execute um backtest para ver o histórico aqui." />
+            )}
+
+            {history.length > 0 && (
+                <div style={sectionStyle}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                        <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#d1d5db' }}>
+                            📋 Histórico do Supabase ({history.length} registros)
+                        </h3>
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '1px solid #374151' }}>
+                                    {['Data', 'Símbolos', 'TF', 'Período', 'Trades', 'Win Rate', 'PnL %', 'DD Máx', 'Sharpe', 'Ações'].map(h => (
+                                        <th key={h} style={{ padding: '0.4rem 0.6rem', textAlign: h === 'Ações' ? 'center' : 'left', color: '#9ca3af', fontWeight: 500, whiteSpace: 'nowrap' }}>{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {history.map((row: any) => (
+                                    <tr key={row.id} style={{ borderBottom: '1px solid #37415130' }}>
+                                        <td style={{ padding: '0.4rem 0.6rem', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                                            {new Date(row.created_at).toLocaleDateString('pt-BR')}
+                                        </td>
+                                        <td style={{ padding: '0.4rem 0.6rem', fontWeight: 600, fontSize: '0.75rem' }}>
+                                            {(row.symbols ?? []).join(', ')}
+                                        </td>
+                                        <td style={{ padding: '0.4rem 0.6rem', color: '#9ca3af' }}>{row.timeframe}</td>
+                                        <td style={{ padding: '0.4rem 0.6rem', color: '#6b7280', whiteSpace: 'nowrap', fontSize: '0.72rem' }}>
+                                            {row.start_date} → {row.end_date}
+                                        </td>
+                                        <td style={{ padding: '0.4rem 0.6rem', color: '#3b82f6' }}>{row.total_trades ?? '—'}</td>
+                                        <td style={{ padding: '0.4rem 0.6rem', color: (row.win_rate ?? 0) >= 50 ? '#22c55e' : '#ef4444' }}>
+                                            {row.win_rate != null ? row.win_rate.toFixed(1) + '%' : '—'}
+                                        </td>
+                                        <td style={{ padding: '0.4rem 0.6rem', color: (row.total_pnl_percent ?? 0) >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+                                            {row.total_pnl_percent != null ? ((row.total_pnl_percent >= 0 ? '+' : '') + row.total_pnl_percent.toFixed(2) + '%') : '—'}
+                                        </td>
+                                        <td style={{ padding: '0.4rem 0.6rem', color: '#ef4444' }}>
+                                            {row.max_drawdown_pct != null ? row.max_drawdown_pct.toFixed(2) + '%' : '—'}
+                                        </td>
+                                        <td style={{ padding: '0.4rem 0.6rem', color: (row.sharpe_ratio ?? 0) >= 1 ? '#22c55e' : '#f59e0b' }}>
+                                            {row.sharpe_ratio != null ? row.sharpe_ratio.toFixed(2) : '—'}
+                                        </td>
+                                        <td style={{ padding: '0.4rem 0.6rem', textAlign: 'center' }}>
+                                            <button onClick={() => loadFull(row.id)}
+                                                style={{ padding: '0.25rem 0.75rem', borderRadius: '0.375rem', border: '1px solid #3b82f6', background: '#1e3a5f', color: '#60a5fa', cursor: 'pointer', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                                                Ver
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 export default Backtesting;
+

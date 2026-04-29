@@ -3,20 +3,95 @@
 // POST /api/backtest/run          → Executa backtesting
 // POST /api/backtest/optimize     → Otimização por grid search
 // POST /api/backtest/walk-forward → Walk-Forward Analysis
+// GET  /api/backtest/history      → Histórico persistido (Supabase)
+// POST /api/backtest/compare      → Comparação de até 3 configs
+// POST /api/backtest/apply-to-robot → Aplica params ao robô ativo
 // ═══════════════════════════════════════════════════════════
 
 import { Router, Request, Response } from 'express';
 import { logger } from '../../lib/logger.js';
+import { supabase } from '../../lib/supabaseClient.js';
 import { BacktestEngine } from '../../engine/backtest/backtestEngine.js';
 import { analyzeBacktestResults, calculateBuyAndHold } from '../../engine/backtest/backtestAnalyzer.js';
 import { runGridSearchOptimization } from '../../engine/backtest/backtestOptimizer.js';
 import { runWalkForwardAnalysis } from '../../engine/backtest/walkForwardAnalysis.js';
+import { paperTradingEngine } from '../../trading/paperTradingEngine.js';
 import type { BacktestConfig, OptimizationConfig, WalkForwardConfig, BacktestProgress } from '../../types/backtestTypes.js';
 import type { OHLCPoint } from '../../types/trading.js';
 
 const router = Router();
 
-// ──── POST /run ────
+// ──────────── Helpers ────────────
+
+/** Runs the engine for all symbols and returns merged results. */
+async function runEngineForConfig(
+    config: BacktestConfig,
+    ohlcData: Record<string, OHLCPoint[]>,
+    onProgress?: (p: BacktestProgress) => void
+) {
+    const symbols = Object.keys(ohlcData);
+    const engine = new BacktestEngine(config);
+    let allTrades: any[] = [];
+    let allEquityCurve: any[] = [];
+
+    for (const symbol of symbols) {
+        const { trades, equityCurve } = await engine.runSymbol(
+            symbol,
+            ohlcData[symbol],
+            onProgress ?? ((p: BacktestProgress) => logger.debug(`[BT] ${p.message}`))
+        );
+        allTrades = allTrades.concat(trades);
+        allEquityCurve = allEquityCurve.concat(equityCurve);
+        engine.reset();
+    }
+
+    const metrics = analyzeBacktestResults(allTrades, allEquityCurve, config);
+    const buyAndHold = symbols.length === 1
+        ? calculateBuyAndHold(ohlcData[symbols[0]], config.initialCapital, symbols[0])
+        : null;
+
+    return { trades: allTrades, equityCurve: allEquityCurve, metrics, buyAndHold };
+}
+
+/** Persists a completed backtest run to Supabase. */
+async function persistResult(
+    config: BacktestConfig,
+    trades: any[],
+    equityCurve: any[],
+    metrics: any,
+    buyAndHold: any
+) {
+    const m = metrics?.main ?? {};
+    const r = metrics?.risk ?? {};
+
+    const row = {
+        symbols:           config.symbols,
+        timeframe:         config.timeframe,
+        start_date:        config.startDate,
+        end_date:          config.endDate,
+        initial_capital:   config.initialCapital,
+        total_trades:      m.totalTrades ?? 0,
+        win_rate:          m.winRate ?? null,
+        profit_factor:     r.profitFactor ?? null,
+        total_pnl:         m.totalPnL ?? null,
+        total_pnl_percent: m.totalPnLPercent ?? null,
+        max_drawdown_pct:  r.maxDrawdownPercent ?? null,
+        sharpe_ratio:      r.sharpeRatio ?? null,
+        sortino_ratio:     r.sortinoRatio ?? null,
+        config_json:       config,
+        result_json: {
+            trades:        trades.slice(0, 500),   // cap at 500 trades to avoid JSONB bloat
+            equityCurve:   equityCurve.filter((_: any, i: number) => i % 3 === 0), // downsample 3x
+            metrics,
+            buyAndHold,
+        },
+    };
+
+    const { error } = await supabase.from('backtest_results').insert(row);
+    if (error) logger.warn('[Backtest] Failed to persist result:', error.message);
+}
+
+// ──────────── POST /run ────────────
 
 router.post('/run', async (req: Request, res: Response) => {
     try {
@@ -38,42 +113,26 @@ router.post('/run', async (req: Request, res: Response) => {
 
         logger.info(`[Backtest] Iniciando — ${symbols.join(', ')}`);
 
-        const engine = new BacktestEngine(config);
+        const { trades, equityCurve, metrics, buyAndHold } = await runEngineForConfig(config, ohlcData);
 
-        let allTrades: any[] = [];
-        let allEquityCurve: any[] = [];
+        logger.info(`[Backtest] Completo — ${trades.length} trades, PnL: ${metrics.main.totalPnLPercent.toFixed(2)}%`);
 
-        for (const symbol of symbols) {
-            const { trades, equityCurve } = await engine.runSymbol(
-                symbol,
-                ohlcData[symbol],
-                (p: BacktestProgress) => logger.debug(`[BT] ${p.message}`)
-            );
-            allTrades = allTrades.concat(trades);
-            allEquityCurve = allEquityCurve.concat(equityCurve);
-            engine.reset();
-        }
-
-        const metrics = analyzeBacktestResults(allTrades, allEquityCurve, config);
-        const buyAndHold = symbols.length === 1
-            ? calculateBuyAndHold(ohlcData[symbols[0]], config.initialCapital, symbols[0])
-            : null;
-
-        logger.info(`[Backtest] Completo — ${allTrades.length} trades, PnL: ${metrics.main.totalPnLPercent.toFixed(2)}%`);
+        // Persist to Supabase asynchronously (don't block response)
+        persistResult(config, trades, equityCurve, metrics, buyAndHold).catch(() => {});
 
         res.json({
             success: true,
-            trades: allTrades,
-            equityCurve: allEquityCurve,
+            trades,
+            equityCurve,
             metrics,
             buyAndHold,
             summary: {
-                totalTrades: allTrades.length,
-                winRate: metrics.main.winRate,
-                totalPnL: metrics.main.totalPnL,
-                totalPnLPercent: metrics.main.totalPnLPercent,
-                maxDrawdown: metrics.risk.maxDrawdownPercent,
-                sharpeRatio: metrics.risk.sharpeRatio,
+                totalTrades:      trades.length,
+                winRate:          metrics.main.winRate,
+                totalPnL:         metrics.main.totalPnL,
+                totalPnLPercent:  metrics.main.totalPnLPercent,
+                maxDrawdown:      metrics.risk.maxDrawdownPercent,
+                sharpeRatio:      metrics.risk.sharpeRatio,
             },
         });
     } catch (error: any) {
@@ -82,7 +141,7 @@ router.post('/run', async (req: Request, res: Response) => {
     }
 });
 
-// ──── POST /optimize ────
+// ──────────── POST /optimize ────────────
 
 router.post('/optimize', async (req: Request, res: Response) => {
     try {
@@ -115,7 +174,7 @@ router.post('/optimize', async (req: Request, res: Response) => {
     }
 });
 
-// ──── POST /walk-forward ────
+// ──────────── POST /walk-forward ────────────
 
 router.post('/walk-forward', async (req: Request, res: Response) => {
     try {
@@ -139,10 +198,7 @@ router.post('/walk-forward', async (req: Request, res: Response) => {
 
         logger.info(`[Backtest] Walk-Forward para ${symbols.join(', ')}...`);
 
-        const results = await runWalkForwardAnalysis(
-            wfConfig,
-            dataMap
-        );
+        const results = await runWalkForwardAnalysis(wfConfig, dataMap);
 
         logger.info(`[Backtest] Walk-Forward completo — ${results.windows.length} janelas`);
 
@@ -152,5 +208,185 @@ router.post('/walk-forward', async (req: Request, res: Response) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// ──────────── GET /history ────────────
+
+router.get('/history', async (req: Request, res: Response) => {
+    try {
+        const limit  = Math.min(parseInt(String(req.query.limit  ?? '50')), 100);
+        const symbol = String(req.query.symbol ?? '');
+
+        let query = supabase
+            .from('backtest_results')
+            .select([
+                'id', 'created_at', 'symbols', 'timeframe', 'start_date', 'end_date',
+                'initial_capital', 'total_trades', 'win_rate', 'profit_factor',
+                'total_pnl', 'total_pnl_percent', 'max_drawdown_pct',
+                'sharpe_ratio', 'sortino_ratio', 'label',
+            ].join(', '))
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        // Optional symbol filter (Supabase array contains)
+        if (symbol) {
+            query = query.contains('symbols', [symbol.toUpperCase()]);
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+
+        res.json({ success: true, history: data ?? [] });
+    } catch (error: any) {
+        logger.error('[Backtest] Erro ao buscar histórico:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ──────────── GET /history/:id ────────────
+
+router.get('/history/:id', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+
+        const { data, error } = await supabase
+            .from('backtest_results')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error || !data) {
+            res.status(404).json({ error: 'Backtest não encontrado' });
+            return;
+        }
+
+        res.json({ success: true, result: data });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ──────────── POST /compare ────────────
+
+router.post('/compare', async (req: Request, res: Response) => {
+    try {
+        const { configs, ohlcData } = req.body as {
+            configs: BacktestConfig[];                    // 2–3 configs
+            ohlcData: Record<string, OHLCPoint[]>;       // shared OHLC data
+        };
+
+        if (!configs || !Array.isArray(configs) || configs.length < 2) {
+            res.status(400).json({ error: 'Envie entre 2 e 3 configs para comparar' });
+            return;
+        }
+
+        if (configs.length > 3) {
+            res.status(400).json({ error: 'Máximo de 3 configs por comparação' });
+            return;
+        }
+
+        if (!ohlcData || Object.keys(ohlcData).length === 0) {
+            res.status(400).json({ error: 'ohlcData é obrigatório' });
+            return;
+        }
+
+        logger.info(`[Backtest] Comparando ${configs.length} configurações...`);
+
+        // Run all configs in parallel
+        const results = await Promise.all(
+            configs.map(config => runEngineForConfig(config, ohlcData))
+        );
+
+        // Build comparison score for ranking
+        const scored = results.map((r, idx) => {
+            const m = r.metrics?.main ?? {};
+            const risk = r.metrics?.risk ?? {};
+            const score = scoreConfig(m, risk);
+            return { index: idx, config: configs[idx], score, summary: buildSummary(m, risk) };
+        });
+
+        const ranking = [...scored].sort((a, b) => b.score - a.score);
+
+        res.json({
+            success: true,
+            results: results.map((r, idx) => ({
+                index:       idx,
+                config:      configs[idx],
+                trades:      r.trades,
+                equityCurve: r.equityCurve,
+                metrics:     r.metrics,
+                buyAndHold:  r.buyAndHold,
+            })),
+            ranking,
+        });
+    } catch (error: any) {
+        logger.error('[Backtest] Erro na comparação:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ──────────── POST /apply-to-robot ────────────
+
+router.post('/apply-to-robot', async (req: Request, res: Response) => {
+    try {
+        const { config } = req.body as { config: BacktestConfig };
+
+        if (!config?.signal) {
+            res.status(400).json({ error: 'config.signal é obrigatório' });
+            return;
+        }
+
+        const { signal } = config;
+
+        // Read current config then patch only the relevant fields
+        const current = paperTradingEngine.getState().config.autoTrade;
+        paperTradingEngine.updateConfig({
+            autoTrade: {
+                ...current,
+                minScore:                signal.minScore,
+                maxSimultaneousPositions: signal.maxSimultaneousPositions,
+                maxCapitalPerTrade:      signal.maxCapitalPerPosition ?? current.maxCapitalPerTrade,
+            },
+        });
+
+        logger.info(`[Backtest] Config aplicada ao robô: score≥${signal.minScore}, maxPos=${signal.maxSimultaneousPositions}, cap=${signal.maxCapitalPerPosition}%`);
+
+        res.json({
+            success: true,
+            message: 'Configuração aplicada ao robô em tempo real',
+            applied: {
+                minScore:                signal.minScore,
+                maxSimultaneousPositions: signal.maxSimultaneousPositions,
+                maxCapitalPerTrade:      signal.maxCapitalPerPosition ?? 20,
+            },
+        });
+    } catch (error: any) {
+        logger.error('[Backtest] Erro ao aplicar config ao robô:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ──────────── Scoring helpers ────────────
+
+function scoreConfig(m: any, risk: any): number {
+    const winRateScore    = ((m.winRate ?? 0) / 100) * 35;
+    const pfScore         = Math.min((risk.profitFactor ?? 0) / 3, 1) * 25;
+    const sharpeScore     = Math.min((risk.sharpeRatio ?? 0) / 2, 1) * 20;
+    const drawdownScore   = (1 - Math.min((risk.maxDrawdownPercent ?? 50) / 50, 1)) * 15;
+    const expectancyScore = (m.expectancy ?? 0) > 0 ? 5 : 0;
+    return winRateScore + pfScore + sharpeScore + drawdownScore + expectancyScore;
+}
+
+function buildSummary(m: any, risk: any) {
+    return {
+        totalTrades:      m.totalTrades      ?? 0,
+        winRate:          m.winRate          ?? 0,
+        totalPnLPercent:  m.totalPnLPercent  ?? 0,
+        profitFactor:     risk.profitFactor  ?? 0,
+        maxDrawdownPct:   risk.maxDrawdownPercent ?? 0,
+        sharpeRatio:      risk.sharpeRatio   ?? 0,
+        expectancy:       m.expectancy       ?? 0,
+    };
+}
 
 export default router;
