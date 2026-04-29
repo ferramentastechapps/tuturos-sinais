@@ -43,6 +43,7 @@ export interface SignalFilterConfig {
     maxCapitalPerPosition: number;     // % máximo por posição (ex: 20)
     allowLong: boolean;
     allowShort: boolean;
+    useMLFilter?: boolean;             // false = desliga filtro ML no backtest
 }
 
 export interface RiskConfig {
@@ -362,6 +363,7 @@ export const DEFAULT_BACKTEST_CONFIG: BacktestConfig = {
         maxCapitalPerPosition: 20,
         allowLong: true,
         allowShort: true,
+        useMLFilter: false,
     },
     risk: {
         useProfilePerSymbol: true,

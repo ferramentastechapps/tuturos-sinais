@@ -168,8 +168,8 @@ export class BacktestEngine {
             if (signal && this.shouldEnterTrade(signal)) {
                 let passML = true;
 
-                // Emular a Inteligência Artificial do Robô
-                if (isModelLoaded()) {
+                // Emular a Inteligência Artificial do Robô (somente se useMLFilter=true)
+                if (this.config.signal.useMLFilter && isModelLoaded()) {
                     const precomputed = signal.mlData ?? {};
                     const features = {
                         symbol_id: getSymbolId(symbol),
