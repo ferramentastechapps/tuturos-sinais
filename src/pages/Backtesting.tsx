@@ -46,6 +46,23 @@ const Backtesting: React.FC = () => {
         setActiveTab('results');
     };
 
+    // Quick backtest: top 5 symbols only to avoid 413 payload too large
+    const handleQuickBacktest = async () => {
+        const top5 = (config.symbols ?? ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']).slice(0, 5);
+        await startQuickBacktest(top5);
+        setActiveTab('results');
+    };
+
+    const handleClearCache = () => {
+        const keys: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k?.startsWith('bt_ohlc_')) keys.push(k);
+        }
+        keys.forEach(k => localStorage.removeItem(k));
+        alert(`Cache limpo! ${keys.length} entradas removidas.`);
+    };
+
     const handleCollectData = async () => {
         if (!result) return;
         setIsCollecting(true);
@@ -87,7 +104,18 @@ const Backtesting: React.FC = () => {
                         </button>
                     )}
                     <button
-                        onClick={() => startQuickBacktest()}
+                        onClick={handleClearCache}
+                        title="Limpar cache OHLC do localStorage"
+                        style={{
+                            padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #374151',
+                            background: 'transparent', color: '#6b7280', cursor: 'pointer', fontSize: '0.8rem',
+                            display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        }}
+                    >
+                        <Trash2 size={14} /> Cache
+                    </button>
+                    <button
+                        onClick={handleQuickBacktest}
                         disabled={isRunning}
                         style={{
                             padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid #374151',
