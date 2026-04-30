@@ -374,6 +374,16 @@ const ConfigPanel: React.FC<{ config: BacktestConfig; setConfig: (c: BacktestCon
                         <input type="date" value={config.endDate} onChange={e => update('endDate', e.target.value)} style={inputStyle} />
                     </div>
                     <div>
+                        <label style={labelStyle}>Estratégia</label>
+                        <select value={config.strategyId || 'DEFAULT'} onChange={e => update('strategyId', e.target.value)} style={inputStyle}>
+                            <option value="DEFAULT">Signal Engine Padrão (Score)</option>
+                            <option value="EMA_CROSS_VOLUME">EMA Cross Volume (15m)</option>
+                            <option value="RSI_DIVERGENCE">RSI Divergence (15m/1h)</option>
+                            <option value="BOLLINGER_SQUEEZE">Bollinger Squeeze (15m/1h)</option>
+                            <option value="VWAP_REVERSION">VWAP Reversion (1m/5m)</option>
+                        </select>
+                    </div>
+                    <div>
                         <label style={labelStyle}>Timeframe</label>
                         <select value={config.timeframe} onChange={e => update('timeframe', e.target.value)} style={inputStyle}>
                             <option value="1m">1 Minuto</option>
@@ -1031,6 +1041,16 @@ const ComparePanel: React.FC<{ baseConfig: BacktestConfig }> = ({ baseConfig }) 
                             <div>
                                 <label style={labelStyle}>Capital/Posição (%)</label>
                                 <input type="number" style={inputStyle} value={slot.signal.maxCapitalPerPosition} onChange={e => updateSlot(idx, 'signal.maxCapitalPerPosition', Number(e.target.value))} />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Estratégia</label>
+                                <select style={inputStyle} value={slot.strategyId || 'DEFAULT'} onChange={e => updateSlot(idx, 'strategyId', e.target.value)}>
+                                    <option value="DEFAULT">Signal Engine Padrão</option>
+                                    <option value="EMA_CROSS_VOLUME">EMA Cross Volume (15m)</option>
+                                    <option value="RSI_DIVERGENCE">RSI Divergence (15m/1h)</option>
+                                    <option value="BOLLINGER_SQUEEZE">Bollinger Squeeze (15m/1h)</option>
+                                    <option value="VWAP_REVERSION">VWAP Reversion (1m/5m)</option>
+                                </select>
                             </div>
                             <div>
                                 <label style={labelStyle}>Timeframe</label>

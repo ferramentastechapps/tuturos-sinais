@@ -12,6 +12,8 @@ export interface BacktestConfig {
     // Ativos
     symbols: string[];   // e.g. ["BTCUSDT", "ETHUSDT"] ou todos
     timeframe: BacktestTimeframe;
+    strategyId?: string; // ID da estratégia plugável (ex: EMA_CROSS_VOLUME)
+
 
     // Capital
     initialCapital: number;

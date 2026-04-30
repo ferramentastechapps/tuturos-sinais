@@ -7,6 +7,7 @@
 import { OHLCPoint, TradeSignal, CryptoPair } from '../../types/trading.js';
 import { generateSignalFromData } from '../signalEngine.js';
 import { predictSignal, isModelLoaded, getSymbolId } from '../../ml/mlPredictionService.js';
+import { getStrategy } from '../../strategies/registry.js';
 import {
     BacktestConfig, BacktestTrade, EquityPoint, BacktestProgress,
 } from '../../types/backtestTypes.js';
@@ -160,9 +161,36 @@ export class BacktestEngine {
             const fundingRate = 0; // Mock 0% funding for backtesting
 
             // Force dynamic wait for signal Engine
-            const signal = generateSignalFromData(
-                symbol, window, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, this.config.signal.minScore
-            );
+            let signal: TradeSignal | null = null;
+
+            if (this.config.strategyId && this.config.strategyId !== 'DEFAULT') {
+                const strategy = getStrategy(this.config.strategyId);
+                if (strategy) {
+                    const stratSignal = strategy.generate(window);
+                    if (stratSignal.direction !== 'none') {
+                        signal = {
+                            id: `bt_${Date.now()}`,
+                            pair: symbol,
+                            type: stratSignal.direction,
+                            entry: currentPrice,
+                            takeProfit: stratSignal.takeProfit,
+                            takeProfit1: stratSignal.takeProfit,
+                            stopLoss: stratSignal.stopLoss,
+                            riskReward: Math.abs(stratSignal.takeProfit - currentPrice) / Math.abs(stratSignal.stopLoss - currentPrice),
+                            timeframe: this.config.timeframe,
+                            status: 'PENDING',
+                            confidence: stratSignal.confidence ?? 70,
+                            score: stratSignal.confidence ?? 70,
+                            createdAt: new Date(candle.timestamp),
+                            indicators: stratSignal.indicators ?? [],
+                        } as TradeSignal;
+                    }
+                }
+            } else {
+                signal = generateSignalFromData(
+                    symbol, window, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, this.config.signal.minScore
+                );
+            }
 
             // 6. Process signal (if any)
             if (signal && this.shouldEnterTrade(signal)) {
