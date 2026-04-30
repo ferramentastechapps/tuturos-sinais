@@ -6,6 +6,11 @@
 // GET  /api/backtest/history      → Histórico persistido (Supabase)
 // POST /api/backtest/compare      → Comparação de até 3 configs
 // POST /api/backtest/apply-to-robot → Aplica params ao robô ativo
+// GET  /api/backtest/ohlc         → Proxy Bybit klines (resolve CORS)
+// ═══════════════════════════════════════════════════════════
+//
+// DEBUG: todos os endpoints logam payload size e duração
+// para facilitar diagnóstico de problemas.
 // ═══════════════════════════════════════════════════════════
 
 import { Router, Request, Response } from 'express';
@@ -91,9 +96,60 @@ async function persistResult(
     if (error) logger.warn('[Backtest] Failed to persist result:', error.message);
 }
 
+// ──────────── GET /ohlc (Proxy Bybit — resolve CORS do browser) ────────────
+
+const BYBIT_INTERVAL: Record<string, string> = {
+    '1m': '1', '5m': '5', '15m': '15', '1h': '60', '4h': '240', '1d': 'D',
+};
+
+router.get('/ohlc', async (req: Request, res: Response) => {
+    try {
+        const symbol   = String(req.query.symbol ?? '').toUpperCase();
+        const interval = String(req.query.interval ?? '60');
+        const start    = String(req.query.start ?? '');
+        const end      = String(req.query.end ?? '');
+        const limit    = Math.min(parseInt(String(req.query.limit ?? '1000')), 1000);
+
+        if (!symbol || !start || !end) {
+            res.status(400).json({ error: 'symbol, start e end são obrigatórios' });
+            return;
+        }
+
+        const bybitInterval = BYBIT_INTERVAL[interval] ?? interval;
+        const url = new URL('https://api.bybit.com/v5/market/kline');
+        url.searchParams.set('category', 'linear');
+        url.searchParams.set('symbol', symbol);
+        url.searchParams.set('interval', bybitInterval);
+        url.searchParams.set('start', start);
+        url.searchParams.set('end', end);
+        url.searchParams.set('limit', limit.toString());
+
+        logger.debug(`[Backtest/OHLC] ${symbol} ${interval} start=${start} end=${end} limit=${limit}`);
+
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+            res.status(response.status).json({ error: `Bybit API error: ${response.statusText}` });
+            return;
+        }
+
+        const json = await response.json() as any;
+        if (json.retCode !== 0) {
+            res.status(400).json({ error: `Bybit API: ${json.retMsg}` });
+            return;
+        }
+
+        // Pass through Bybit response directly
+        res.json(json);
+    } catch (error: any) {
+        logger.error('[Backtest/OHLC] Proxy error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ──────────── POST /run ────────────
 
 router.post('/run', async (req: Request, res: Response) => {
+    const t0 = Date.now();
     try {
         const { config, ohlcData } = req.body as {
             config: BacktestConfig;
@@ -111,11 +167,16 @@ router.post('/run', async (req: Request, res: Response) => {
             return;
         }
 
-        logger.info(`[Backtest] Iniciando — ${symbols.join(', ')}`);
+        // Debug: log payload size
+        const payloadKB = Math.round(JSON.stringify(req.body).length / 1024);
+        const candleCounts = symbols.map(s => `${s}:${ohlcData[s]?.length ?? 0}`).join(', ');
+        logger.info(`[Backtest/run] Início — símbolos=[${symbols.join(', ')}] candles=[${candleCounts}] payload=${payloadKB}KB`);
+        logger.info(`[Backtest/run] Config — tf=${config.timeframe} período=${config.startDate}→${config.endDate} score≥${config.signal?.minScore} maxPos=${config.signal?.maxSimultaneousPositions}`);
 
         const { trades, equityCurve, metrics, buyAndHold } = await runEngineForConfig(config, ohlcData);
 
-        logger.info(`[Backtest] Completo — ${trades.length} trades, PnL: ${metrics.main.totalPnLPercent.toFixed(2)}%`);
+        const elapsedSec = ((Date.now() - t0) / 1000).toFixed(1);
+        logger.info(`[Backtest/run] Completo em ${elapsedSec}s — ${trades.length} trades, PnL: ${metrics.main.totalPnLPercent.toFixed(2)}%, WR: ${metrics.main.winRate.toFixed(1)}%`);
 
         // Persist to Supabase asynchronously (don't block response)
         persistResult(config, trades, equityCurve, metrics, buyAndHold).catch(() => {});
@@ -390,3 +451,4 @@ function buildSummary(m: any, risk: any) {
 }
 
 export default router;
+

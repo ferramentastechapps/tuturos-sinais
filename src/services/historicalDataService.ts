@@ -6,9 +6,12 @@
 import { OHLCPoint } from '@/services/coingeckoOHLC';
 import { BacktestTimeframe, OHLCCacheEntry } from '@/types/backtestTypes';
 
-const BYBIT_BASE = 'https://api.bybit.com';
-const MAX_KLINES_PER_REQUEST = 1000; // Bybit max per request
-const RATE_LIMIT_DELAY = 200; // ms between requests
+// Proxy URL: o backend faz o fetch para a Bybit (evita CORS do browser)
+const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+const OHLC_PROXY   = `${BACKEND_BASE}/api/backtest/ohlc`;
+
+const MAX_KLINES_PER_REQUEST = 1000; // Bybit max por request
+const RATE_LIMIT_DELAY = 250;         // ms entre requests (proxy + Bybit)
 
 // Bybit usa códigos numéricos para intervalos (exceto '1d' e 'W')
 const BYBIT_INTERVAL: Record<BacktestTimeframe, string> = {
@@ -108,8 +111,9 @@ const cleanOldCaches = (): void => {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Busca klines da Bybit V5 Linear API com paginação.
- * A Bybit retorna os dados do mais recente para o mais antigo,
+ * Busca klines via proxy do backend (resolve CORS do browser).
+ * O backend repassa a requisição para a Bybit V5 Linear API.
+ * A Bybit retorna do mais recente para o mais antigo,
  * então paginamos do fim para o início e revertemos no final.
  */
 const fetchKlinesPaginated = async (
@@ -128,30 +132,31 @@ const fetchKlinesPaginated = async (
     const estimatedCandles = Math.ceil((endMs - startMs) / intervalMs);
     const allCandles: OHLCPoint[] = [];
 
-    // Bybit pagina do fim para o início: começamos com end = endMs
-    // e vamos reduzindo conforme coletamos candles
     let currentEnd = endMs;
     let requestCount = 0;
 
+    console.log(`[HistoricalData] Iniciando fetch via proxy: ${formattedSymbol} ${interval} | ${new Date(startMs).toLocaleDateString()} → ${new Date(endMs).toLocaleDateString()} (~${estimatedCandles} candles)`);
+
     while (currentEnd > startMs) {
-        const url = new URL(`${BYBIT_BASE}/v5/market/kline`);
-        url.searchParams.set('category', 'linear');
-        url.searchParams.set('symbol', formattedSymbol);
+        // Usa o proxy do backend em vez de chamar a Bybit diretamente (CORS)
+        const url = new URL(OHLC_PROXY);
+        url.searchParams.set('symbol',   formattedSymbol);
         url.searchParams.set('interval', bybitInterval);
-        url.searchParams.set('start', startMs.toString());
-        url.searchParams.set('end', currentEnd.toString());
-        url.searchParams.set('limit', MAX_KLINES_PER_REQUEST.toString());
+        url.searchParams.set('start',    startMs.toString());
+        url.searchParams.set('end',      currentEnd.toString());
+        url.searchParams.set('limit',    MAX_KLINES_PER_REQUEST.toString());
 
         try {
             const response = await fetch(url.toString());
 
             if (!response.ok) {
                 if (response.status === 429) {
-                    console.warn('[HistoricalData] Rate limited, waiting 5s...');
+                    console.warn('[HistoricalData] Rate limited, aguardando 5s...');
                     await delay(5000);
                     continue;
                 }
-                throw new Error(`Bybit API error: ${response.status} ${response.statusText}`);
+                const errBody = await response.text();
+                throw new Error(`Proxy error ${response.status}: ${errBody}`);
             }
 
             const json = await response.json() as {
@@ -165,10 +170,12 @@ const fetchKlinesPaginated = async (
             }
 
             const list = json.result?.list ?? [];
-            if (list.length === 0) break;
+            if (list.length === 0) {
+                console.log(`[HistoricalData] Sem mais candles para ${formattedSymbol} (request ${requestCount + 1})`);
+                break;
+            }
 
             // Bybit retorna [startTime, open, high, low, close, volume, turnover]
-            // em ordem do mais recente para o mais antigo
             const candles: OHLCPoint[] = list.map(k => ({
                 timestamp: parseInt(k[0], 10),
                 open:      parseFloat(k[1]),
@@ -180,15 +187,13 @@ const fetchKlinesPaginated = async (
 
             allCandles.push(...candles);
 
-            // Próxima página: end = timestamp do candle mais antigo desta página - 1ms
             const oldestTimestamp = candles[candles.length - 1].timestamp;
-
-            // Se o candle mais antigo já está antes ou igual ao início, terminamos
             if (oldestTimestamp <= startMs) break;
 
             currentEnd = oldestTimestamp - 1;
-
             requestCount++;
+
+            console.log(`[HistoricalData] ${formattedSymbol} — req #${requestCount}: ${candles.length} candles | total: ${allCandles.length}/${estimatedCandles}`);
             onProgress?.(allCandles.length, estimatedCandles);
 
             if (currentEnd > startMs) {
@@ -196,7 +201,7 @@ const fetchKlinesPaginated = async (
             }
 
         } catch (error) {
-            console.error(`[HistoricalData] Failed to fetch klines (request ${requestCount}):`, error);
+            console.error(`[HistoricalData] Falha na requisição #${requestCount} para ${formattedSymbol}:`, error);
             throw error;
         }
     }
@@ -214,6 +219,7 @@ const fetchKlinesPaginated = async (
     // Ordenar crescente (mais antigo primeiro) — Bybit retorna decrescente
     unique.sort((a, b) => a.timestamp - b.timestamp);
 
+    console.log(`[HistoricalData] ${formattedSymbol} finalizado: ${unique.length} candles únicos em ${requestCount} requests`);
     return unique;
 };
 

@@ -49,12 +49,21 @@ export const runBacktest = async (
     );
 
     const ohlcData = Object.fromEntries(dataMap);
+    const totalCandles = Object.values(ohlcData).reduce((s, c) => s + c.length, 0);
+    console.log(`[BacktestService] OHLC pronto: ${Object.keys(ohlcData).join(', ')} | total ${totalCandles} candles`);
+
+    if (totalCandles === 0) {
+        throw new Error('Nenhum dado histórico encontrado. Verifique se o backend está rodando e se a Bybit está acessível.');
+    }
 
     onProgress?.({
         phase: 'warming_up',
         percentComplete: 35,
-        message: 'Enviando dados para o motor',
+        message: `Enviando ${totalCandles} candles para o motor de backtest...`,
     });
+
+    console.log(`[BacktestService] Enviando para API: ${getApiUrl('/run')}`);
+    const t0 = Date.now();
 
     // 2. Run engine via Backend API
     const response = await fetch(getApiUrl('/run'), {
@@ -84,6 +93,9 @@ export const runBacktest = async (
     if (!data.success) {
         throw new Error(data.error || 'Erro desconhecido na execução');
     }
+
+    const apiMs = Date.now() - t0;
+    console.log(`[BacktestService] API respondeu em ${(apiMs/1000).toFixed(1)}s | ${data.trades?.length ?? 0} trades | PnL: ${data.metrics?.main?.totalPnLPercent?.toFixed(2) ?? '?'}% | WR: ${data.metrics?.main?.winRate?.toFixed(1) ?? '?'}%`);
 
     const result: BacktestResult = {
         id: `bt_${Date.now()}`,
