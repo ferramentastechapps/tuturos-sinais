@@ -581,6 +581,7 @@ export class BacktestEngine {
             case '1m': return 1440;
             case '5m': return 288;
             case '15m': return 96;
+            case '30m': return 48;
             case '1h': return 24;
             case '4h': return 6;
             case '1d': return 1;

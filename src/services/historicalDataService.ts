@@ -13,11 +13,12 @@ const OHLC_PROXY   = `${BACKEND_BASE}/api/backtest/ohlc`;
 const MAX_KLINES_PER_REQUEST = 1000; // Bybit max por request
 const RATE_LIMIT_DELAY = 250;         // ms entre requests (proxy + Bybit)
 
-// Bybit usa códigos numéricos para intervalos (exceto '1d' e 'W')
+// Bybit usa códigos numéricos para intervalos
 const BYBIT_INTERVAL: Record<BacktestTimeframe, string> = {
     '1m':  '1',
     '5m':  '5',
     '15m': '15',
+    '30m': '30',
     '1h':  '60',
     '4h':  '240',
     '1d':  'D',
@@ -28,6 +29,7 @@ const TIMEFRAME_MS: Record<BacktestTimeframe, number> = {
     '1m':  60 * 1000,
     '5m':  5 * 60 * 1000,
     '15m': 15 * 60 * 1000,
+    '30m': 30 * 60 * 1000,
     '1h':  60 * 60 * 1000,
     '4h':  4 * 60 * 60 * 1000,
     '1d':  24 * 60 * 60 * 1000,

@@ -379,6 +379,7 @@ const ConfigPanel: React.FC<{ config: BacktestConfig; setConfig: (c: BacktestCon
                             <option value="1m">1 Minuto</option>
                             <option value="5m">5 Minutos</option>
                             <option value="15m">15 Minutos</option>
+                            <option value="30m">30 Minutos</option>
                             <option value="1h">1 Hora</option>
                             <option value="4h">4 Horas</option>
                             <option value="1d">1 Dia</option>
@@ -1034,7 +1035,7 @@ const ComparePanel: React.FC<{ baseConfig: BacktestConfig }> = ({ baseConfig }) 
                             <div>
                                 <label style={labelStyle}>Timeframe</label>
                                 <select style={inputStyle} value={slot.timeframe} onChange={e => updateSlot(idx, 'timeframe', e.target.value)}>
-                                    {['1m','5m','15m','1h','4h','1d'].map(tf => <option key={tf} value={tf}>{tf}</option>)}
+                                    {['1m','5m','15m','30m','1h','4h','1d'].map(tf => <option key={tf} value={tf}>{tf}</option>)}
                                 </select>
                             </div>
                         </div>

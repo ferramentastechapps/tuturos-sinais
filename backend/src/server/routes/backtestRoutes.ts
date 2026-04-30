@@ -99,7 +99,7 @@ async function persistResult(
 // ──────────── GET /ohlc (Proxy Bybit — resolve CORS do browser) ────────────
 
 const BYBIT_INTERVAL: Record<string, string> = {
-    '1m': '1', '5m': '5', '15m': '15', '1h': '60', '4h': '240', '1d': 'D',
+    '1m': '1', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240', '1d': 'D',
 };
 
 router.get('/ohlc', async (req: Request, res: Response) => {
