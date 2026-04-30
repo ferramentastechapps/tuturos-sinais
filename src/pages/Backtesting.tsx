@@ -377,10 +377,15 @@ const ConfigPanel: React.FC<{ config: BacktestConfig; setConfig: (c: BacktestCon
                         <label style={labelStyle}>Estratégia</label>
                         <select value={config.strategyId || 'DEFAULT'} onChange={e => update('strategyId', e.target.value)} style={inputStyle}>
                             <option value="DEFAULT">Signal Engine Padrão (Score)</option>
+                            <option value="SCALPING_BOT">Robô de Scalping (5m)</option>
                             <option value="EMA_CROSS_VOLUME">EMA Cross Volume (15m)</option>
                             <option value="RSI_DIVERGENCE">RSI Divergence (15m/1h)</option>
                             <option value="BOLLINGER_SQUEEZE">Bollinger Squeeze (15m/1h)</option>
                             <option value="VWAP_REVERSION">VWAP Reversion (1m/5m)</option>
+                            <option value="MACD_CROSS">MACD Cross (1h/4h)</option>
+                            <option value="ADX_TREND_FOLLOW">ADX Trend Follow (1h/4h)</option>
+                            <option value="ORDER_BLOCK_ICT">Order Block + FVG SMC (15m/1h)</option>
+                            <option value="GOLDEN_DEATH_CROSS">Golden Cross Swing (4h/1d)</option>
                         </select>
                     </div>
                     <div>
@@ -1046,10 +1051,15 @@ const ComparePanel: React.FC<{ baseConfig: BacktestConfig }> = ({ baseConfig }) 
                                 <label style={labelStyle}>Estratégia</label>
                                 <select style={inputStyle} value={slot.strategyId || 'DEFAULT'} onChange={e => updateSlot(idx, 'strategyId', e.target.value)}>
                                     <option value="DEFAULT">Signal Engine Padrão</option>
+                                    <option value="SCALPING_BOT">Robô de Scalping (5m)</option>
                                     <option value="EMA_CROSS_VOLUME">EMA Cross Volume (15m)</option>
                                     <option value="RSI_DIVERGENCE">RSI Divergence (15m/1h)</option>
                                     <option value="BOLLINGER_SQUEEZE">Bollinger Squeeze (15m/1h)</option>
                                     <option value="VWAP_REVERSION">VWAP Reversion (1m/5m)</option>
+                                    <option value="MACD_CROSS">MACD Cross (1h/4h)</option>
+                                    <option value="ADX_TREND_FOLLOW">ADX Trend Follow (1h/4h)</option>
+                                    <option value="ORDER_BLOCK_ICT">Order Block + SMC (15m/1h)</option>
+                                    <option value="GOLDEN_DEATH_CROSS">Golden Cross (4h/1d)</option>
                                 </select>
                             </div>
                             <div>
