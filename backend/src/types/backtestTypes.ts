@@ -27,7 +27,7 @@ export interface BacktestConfig {
     risk: RiskConfig;
 }
 
-export type BacktestTimeframe = '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
+export type BacktestTimeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d';
 
 export interface ExecutionConfig {
     spread: number;          // % de spread (ex: 0.02)
