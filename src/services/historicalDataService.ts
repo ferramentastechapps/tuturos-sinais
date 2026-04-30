@@ -65,6 +65,44 @@ const getFromCache = (key: string): OHLCPoint[] | null => {
     }
 };
 
+/** Estima o uso atual do cache de backtest em bytes */
+const estimateCacheUsage = (): number => {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(CACHE_PREFIX)) {
+            total += (localStorage.getItem(key)?.length ?? 0) * 2; // UTF-16
+        }
+    }
+    return total;
+};
+
+/** Remove as metades mais antigas das entradas de cache de backtest */
+const cleanOldCaches = (aggressiveClean = false): void => {
+    const keys: { key: string; ts: number }[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(CACHE_PREFIX)) {
+            try {
+                const raw = localStorage.getItem(key);
+                const ts = raw ? (JSON.parse(raw) as OHLCCacheEntry).fetchedAt : 0;
+                keys.push({ key, ts });
+            } catch {
+                keys.push({ key, ts: 0 });
+            }
+        }
+    }
+    // Ordena do mais antigo para o mais novo
+    keys.sort((a, b) => a.ts - b.ts);
+    // Remove 50% ou 100% dependendo do nível de agressividade
+    const removeCount = aggressiveClean ? keys.length : Math.ceil(keys.length / 2);
+    keys.slice(0, removeCount).forEach(({ key }) => localStorage.removeItem(key));
+    console.info(`[HistoricalData] Cache limpo: ${removeCount}/${keys.length} entradas removidas`);
+};
+
+const MAX_CACHE_ENTRY_BYTES = 2 * 1024 * 1024; // 2 MB por entrada
+const MAX_CACHE_TOTAL_BYTES = 8 * 1024 * 1024; // 8 MB total para backtest cache
+
 const saveToCache = (
     key: string,
     symbol: string,
@@ -84,29 +122,31 @@ const saveToCache = (
         };
 
         const serialized = JSON.stringify(entry);
-        if (serialized.length > 4 * 1024 * 1024) {
-            console.warn(`[HistoricalData] Cache entry too large for ${symbol}, skipping cache`);
+
+        // Entrada individual muito grande — descarta sem erro
+        if (serialized.length * 2 > MAX_CACHE_ENTRY_BYTES) {
+            console.warn(`[HistoricalData] Cache entry too large for ${symbol} (${(serialized.length * 2 / 1024).toFixed(0)}KB), skipping cache`);
             return;
+        }
+
+        // Verifica se o total do cache de backtest já está no limite
+        const currentUsage = estimateCacheUsage();
+        if (currentUsage + serialized.length * 2 > MAX_CACHE_TOTAL_BYTES) {
+            cleanOldCaches(false); // limpa 50% primeiro
+            // Se ainda estiver cheio, limpa tudo
+            if (estimateCacheUsage() + serialized.length * 2 > MAX_CACHE_TOTAL_BYTES) {
+                cleanOldCaches(true);
+            }
         }
 
         localStorage.setItem(key, serialized);
     } catch (e) {
         console.warn('[HistoricalData] Failed to cache data:', e);
-        cleanOldCaches();
+        // Último recurso: limpa tudo de backtest
+        cleanOldCaches(true);
     }
 };
 
-const cleanOldCaches = (): void => {
-    const keys: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key?.startsWith(CACHE_PREFIX)) {
-            keys.push(key);
-        }
-    }
-    const toRemove = keys.slice(0, Math.ceil(keys.length / 2));
-    toRemove.forEach(k => localStorage.removeItem(k));
-};
 
 // ──────────── Fetch Paginado (Bybit V5) ────────────
 
