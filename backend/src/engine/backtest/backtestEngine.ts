@@ -164,15 +164,6 @@ export class BacktestEngine {
                 symbol, window, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, this.config.signal.minScore
             );
 
-            // Debug: log a cada 500 barras o que o signal engine está retornando
-            if (barIndex % 500 === 0) {
-                // Gerar sem filtro de score para ver o score real
-                const signalDebug = generateSignalFromData(
-                    symbol, window, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, 0
-                );
-                console.log(`[BacktestEngine] ${symbol} bar=${barIndex}/${totalBars} | signalDebug=${signalDebug ? `${signalDebug.type.toUpperCase()} score=${signalDebug.score}` : 'null'} | minScore=${this.config.signal.minScore} | signal=${signal ? 'GERADO' : 'filtrado/nulo'} | trades=${this.closedTrades.length} | equity=$${this.equity.toFixed(2)}`);
-            }
-
             // 6. Process signal (if any)
             if (signal && this.shouldEnterTrade(signal)) {
                 let passML = true;
@@ -299,8 +290,9 @@ export class BacktestEngine {
         if (typeLower === 'long' && !allowLong) return false;
         if (typeLower === 'short' && !allowShort) return false;
 
-        // Score filter
-        if ((signal.score || 0) < minScore) return false;
+        // Score filter — usa signal.score se disponivel, senao confidence
+        const effectiveScore = signal.score ?? signal.confidence ?? 0;
+        if (effectiveScore < minScore) return false;
 
         // Capital per position
         const maxCapitalForPosition = this.equity * (this.config.signal.maxCapitalPerPosition / 100);
@@ -359,9 +351,9 @@ export class BacktestEngine {
             takeProfit2: signal.takeProfit2 || signal.takeProfit,
             takeProfit3: signal.takeProfit3 || signal.takeProfit * 1.5,
             entryTime: timestamp,
-            signalScore: signal.score || 0,
-            signalConfidence: signal.score || 0,
-            signalIndicators: [],
+            signalScore: signal.score ?? signal.confidence ?? 0,
+            signalConfidence: signal.confidence ?? signal.score ?? 0,
+            signalIndicators: signal.indicators ?? [],
             riskScore: 50,
             maxPrice: entryPrice,
             minPrice: entryPrice,

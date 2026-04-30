@@ -653,9 +653,11 @@ export function generateSignalFromData(
     // Cap global: Limita o score cru em 10 pontos
     rawScore = Math.max(0, Math.min(rawScore, 10));
 
-    // Regra de Aprovação: Score >= 6
-    if (rawScore < 6) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO SCORE: Pontuação ${rawScore}/10 é insuficiente.`);
+    // Regra de Aprovação: Score >= limiar
+    // customMinScore está em escala 0-100, rawScore em 0-10 → converter
+    const scoreThreshold = customMinScore !== undefined ? Math.floor(customMinScore / 10) : 6;
+    if (rawScore < scoreThreshold) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO SCORE: Pontuação ${rawScore}/10 < ${scoreThreshold} (min=${customMinScore ?? 60}).`);
         return null;
     }
 
