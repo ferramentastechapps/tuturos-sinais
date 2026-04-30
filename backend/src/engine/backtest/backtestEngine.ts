@@ -164,6 +164,15 @@ export class BacktestEngine {
                 symbol, window, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, this.config.signal.minScore
             );
 
+            // Debug: log a cada 500 barras o que o signal engine está retornando
+            if (barIndex % 500 === 0) {
+                // Gerar sem filtro de score para ver o score real
+                const signalDebug = generateSignalFromData(
+                    symbol, window, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, 0
+                );
+                console.log(`[BacktestEngine] ${symbol} bar=${barIndex}/${totalBars} | signalDebug=${signalDebug ? `${signalDebug.type.toUpperCase()} score=${signalDebug.score}` : 'null'} | minScore=${this.config.signal.minScore} | signal=${signal ? 'GERADO' : 'filtrado/nulo'} | trades=${this.closedTrades.length} | equity=$${this.equity.toFixed(2)}`);
+            }
+
             // 6. Process signal (if any)
             if (signal && this.shouldEnterTrade(signal)) {
                 let passML = true;
