@@ -746,12 +746,6 @@ export function generateSignalFromData(
         tp1Distance = stopLossDistance * 2.0 * tpScale;  // RR 2:1
         tp2Distance = stopLossDistance * 3.0 * tpScale;  // RR 3:1
         tp3Distance = stopLossDistance * 4.5 * tpScale;  // RR 4.5:1
-    }3Distance = stopLossDistance * 3.0;
-    } else {
-        const tpScale = type === macroTrend ? 1 : 0.7;
-        tp1Distance = stopLossDistance * 1.5 * tpScale;
-        tp2Distance = stopLossDistance * 2.5 * tpScale;
-        tp3Distance = stopLossDistance * 4.0 * tpScale;
     }
 
     let entry: number, stopLoss: number, tp1: number, tp2: number, tp3: number;

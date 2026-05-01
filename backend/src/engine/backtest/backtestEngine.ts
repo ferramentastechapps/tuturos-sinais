@@ -290,7 +290,17 @@ export class BacktestEngine {
         if (existingPositionIndex !== -1) {
             const existingPosition = this.positions[existingPositionIndex];
             const sigType = signal.type.toLowerCase() as 'long'|'short';
+            
             if (existingPosition.type !== sigType) {
+                // CORREÇÃO 3: Tempo mínimo de trade antes de saída por signal_flip
+                const ageHours = (timestamp - existingPosition.entryTime) / (60 * 60 * 1000);
+                const minHours = parseFloat(process.env.MIN_TRADE_DURATION_HOURS || '4');
+                
+                if (ageHours < minHours) {
+                    logger.debug(`[Backtest] ${symbol} signal_flip ignorado - trade com ${ageHours.toFixed(1)}h < ${minHours}h mínimo`);
+                    return; // Não fecha a posição - aguarda SL/TP ou tempo mínimo
+                }
+                
                 // Close the existing position at current candle's close price (signal generation price)
                 this.closePosition(existingPositionIndex, signal.entry, 'signal_flip', timestamp);
             }
@@ -413,7 +423,20 @@ export class BacktestEngine {
             const estFundingRate = 0.01; // 0.01% per period (average)
             pos.fundingAccumulated = fundingPeriods * (estFundingRate / 100) * pos.quantity * pos.entryPrice;
 
+            // CORREÇÃO 4: Trailing stop após atingir 1× RR
+            const initialRisk = Math.abs(pos.entryPrice - pos.stopLoss);
+            
             if (pos.type === 'long') {
+                const currentProfit = candle.close - pos.entryPrice;
+                const rr1Reached = currentProfit >= initialRisk;
+                
+                // Move SL to breakeven quando atingir 1× RR
+                if (rr1Reached && pos.stopLoss < pos.entryPrice) {
+                    const newStopLoss = pos.entryPrice * 1.001; // Breakeven + 0.1% buffer
+                    logger.debug(`[Trailing] ${pos.symbol} LONG SL → breakeven @ ${newStopLoss.toFixed(2)} (RR 1:1 atingido)`);
+                    pos.stopLoss = newStopLoss;
+                }
+                
                 // SL check (pessimistic: SL checked before TP on same candle)
                 if (candle.low <= pos.stopLoss) {
                     toClose.push({ index: idx, exitPrice: pos.stopLoss, reason: 'sl' });
@@ -436,6 +459,16 @@ export class BacktestEngine {
                 }
             } else {
                 // SHORT
+                const currentProfit = pos.entryPrice - candle.close;
+                const rr1Reached = currentProfit >= initialRisk;
+                
+                // Move SL to breakeven quando atingir 1× RR
+                if (rr1Reached && pos.stopLoss > pos.entryPrice) {
+                    const newStopLoss = pos.entryPrice * 0.999; // Breakeven - 0.1% buffer
+                    logger.debug(`[Trailing] ${pos.symbol} SHORT SL → breakeven @ ${newStopLoss.toFixed(2)} (RR 1:1 atingido)`);
+                    pos.stopLoss = newStopLoss;
+                }
+                
                 if (candle.high >= pos.stopLoss) {
                     toClose.push({ index: idx, exitPrice: pos.stopLoss, reason: 'sl' });
                     continue;
