@@ -65,8 +65,8 @@ async function fetchOHLC(symbol: string, interval: string, startMs: number, endM
 }
 
 const BASE_CONFIG: BacktestConfig = {
-    startDate: '2026-01-31',
-    endDate: '2026-05-01',
+    startDate: '2024-01-31',
+    endDate: '2024-05-01',
     timeframe: '1h',
     symbols: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'],
     initialCapital: 10000,
