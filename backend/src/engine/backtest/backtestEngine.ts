@@ -8,6 +8,7 @@ import { OHLCPoint, TradeSignal, CryptoPair } from '../../types/trading.js';
 import { generateSignalFromData } from '../signalEngine.js';
 import { predictSignal, isModelLoaded, getSymbolId } from '../../ml/mlPredictionService.js';
 import { getStrategy } from '../../strategies/registry.js';
+import { logger } from '../../lib/logger.js';
 import {
     BacktestConfig, BacktestTrade, EquityPoint, BacktestProgress,
 } from '../../types/backtestTypes.js';
