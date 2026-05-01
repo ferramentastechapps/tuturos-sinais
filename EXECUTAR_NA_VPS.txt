@@ -1,0 +1,95 @@
+# ═══════════════════════════════════════════════════════════
+# COPIE E COLE ESTE COMANDO COMPLETO NA VPS
+# ═══════════════════════════════════════════════════════════
+
+cat > /tmp/diagnostico.sh << 'SCRIPT_EOF'
+#!/bin/bash
+cd /var/www/signal-dashboard/backend
+echo "═══ DIAGNÓSTICO COMPLETO - ANÁLISE DE VETOS ═══"
+echo ""
+echo "Coletando logs..."
+pm2 logs signal-engine --lines 5000 --nostream > /tmp/logs.txt 2>&1
+echo "Logs capturados. Analisando..."
+echo ""
+echo "═══════════════════════════════════════════════════════"
+echo "1. VETOS POR TIPO"
+echo "═══════════════════════════════════════════════════════"
+VETO_ADX=$(grep -i "VETO ADX" /tmp/logs.txt | wc -l)
+VETO_ATR=$(grep -i "VETO ATR" /tmp/logs.txt | wc -l)
+VETO_SCORE=$(grep -i "VETO SCORE" /tmp/logs.txt | wc -l)
+VETO_RR=$(grep -i "VETO R:R" /tmp/logs.txt | wc -l)
+VETO_MTF=$(grep -i "VETO MTF" /tmp/logs.txt | wc -l)
+LONG_BLOCKED=$(grep -i "LONG bloqueado - tendência 4H bearish" /tmp/logs.txt | wc -l)
+SHORT_BLOCKED=$(grep -i "SHORT bloqueado - tendência 4H bullish" /tmp/logs.txt | wc -l)
+TREND_BLOCKED=$((LONG_BLOCKED + SHORT_BLOCKED))
+LIQUIDEZ_BLOCKED=$(grep -i "baixa liquidez" /tmp/logs.txt | wc -l)
+DADOS_4H=$(grep -i "Dados 4H insuficientes" /tmp/logs.txt | wc -l)
+TOTAL_VETOS=$((VETO_ADX + VETO_ATR + VETO_SCORE + VETO_RR + VETO_MTF + TREND_BLOCKED + DADOS_4H))
+echo ""
+echo "Tipo de VETO                    | Quantidade | % do Total"
+echo "────────────────────────────────┼────────────┼───────────"
+if [ $TOTAL_VETOS -gt 0 ]; then
+  printf "%-32s| %10d | %6.1f%%\n" "Tendência 4H (EMA200)" $TREND_BLOCKED $(awk "BEGIN {printf \"%.1f\", ($TREND_BLOCKED/$TOTAL_VETOS)*100}")
+  printf "%-32s| %10d | %6.1f%%\n" "ADX < 15" $VETO_ADX $(awk "BEGIN {printf \"%.1f\", ($VETO_ADX/$TOTAL_VETOS)*100}")
+  printf "%-32s| %10d | %6.1f%%\n" "ATR < 0.4%" $VETO_ATR $(awk "BEGIN {printf \"%.1f\", ($VETO_ATR/$TOTAL_VETOS)*100}")
+  printf "%-32s| %10d | %6.1f%%\n" "Score < 60" $VETO_SCORE $(awk "BEGIN {printf \"%.1f\", ($VETO_SCORE/$TOTAL_VETOS)*100}")
+  printf "%-32s| %10d | %6.1f%%\n" "R:R < 1.5" $VETO_RR $(awk "BEGIN {printf \"%.1f\", ($VETO_RR/$TOTAL_VETOS)*100}")
+  printf "%-32s| %10d | %6.1f%%\n" "MTF (4H oposto)" $VETO_MTF $(awk "BEGIN {printf \"%.1f\", ($VETO_MTF/$TOTAL_VETOS)*100}")
+  printf "%-32s| %10d | %6.1f%%\n" "Dados 4H insuficientes" $DADOS_4H $(awk "BEGIN {printf \"%.1f\", ($DADOS_4H/$TOTAL_VETOS)*100}")
+  echo "────────────────────────────────┼────────────┼───────────"
+  printf "%-32s| %10d | %6s\n" "TOTAL" $TOTAL_VETOS "100.0%"
+fi
+echo ""
+echo "Símbolos ignorados (baixa liquidez): $LIQUIDEZ_BLOCKED"
+echo ""
+echo "═══════════════════════════════════════════════════════"
+echo "2. SINAIS GERADOS"
+echo "═══════════════════════════════════════════════════════"
+SIGNALS_TOTAL=$(grep "Signal generated" /tmp/logs.txt | wc -l)
+TODAY=$(date +%Y-%m-%d)
+SIGNALS_TODAY=$(grep "Signal generated" /tmp/logs.txt | grep "$TODAY" | wc -l)
+echo ""
+echo "Total de sinais (últimas 5000 linhas): $SIGNALS_TOTAL"
+echo "Sinais gerados hoje ($TODAY):          $SIGNALS_TODAY"
+echo ""
+if [ $SIGNALS_TOTAL -gt 0 ]; then
+  echo "Últimos 5 sinais:"
+  grep "Signal generated" /tmp/logs.txt | tail -5 | sed 's/.*Signal generated: /  → /'
+  echo ""
+fi
+echo "═══════════════════════════════════════════════════════"
+echo "3. TAXA DE APROVAÇÃO"
+echo "═══════════════════════════════════════════════════════"
+TOTAL_ANALISES=$((SIGNALS_TOTAL + TOTAL_VETOS))
+if [ $TOTAL_ANALISES -gt 0 ]; then
+  APPROVAL_RATE=$(awk "BEGIN {printf \"%.1f\", ($SIGNALS_TOTAL/$TOTAL_ANALISES)*100}")
+  echo ""
+  echo "Total de análises: $TOTAL_ANALISES"
+  echo "Aprovados:         $SIGNALS_TOTAL ($APPROVAL_RATE%)"
+  echo "Vetados:           $TOTAL_VETOS"
+  echo ""
+fi
+echo "═══════════════════════════════════════════════════════"
+echo "4. FILTRO MAIS IMPACTANTE"
+echo "═══════════════════════════════════════════════════════"
+MAX_VETO=0
+MAX_NAME=""
+if [ $TREND_BLOCKED -gt $MAX_VETO ]; then MAX_VETO=$TREND_BLOCKED; MAX_NAME="Tendência 4H"; fi
+if [ $VETO_ADX -gt $MAX_VETO ]; then MAX_VETO=$VETO_ADX; MAX_NAME="ADX < 15"; fi
+if [ $VETO_ATR -gt $MAX_VETO ]; then MAX_VETO=$VETO_ATR; MAX_NAME="ATR < 0.4%"; fi
+if [ $VETO_SCORE -gt $MAX_VETO ]; then MAX_VETO=$VETO_SCORE; MAX_NAME="Score < 60"; fi
+if [ $TOTAL_VETOS -gt 0 ]; then
+  IMPACT=$(awk "BEGIN {printf \"%.1f\", ($MAX_VETO/$TOTAL_VETOS)*100}")
+  echo ""
+  echo "🎯 Filtro: $MAX_NAME"
+  echo "   Bloqueios: $MAX_VETO ($IMPACT%)"
+  echo ""
+fi
+echo "═══════════════════════════════════════════════════════"
+SCRIPT_EOF
+
+chmod +x /tmp/diagnostico.sh && bash /tmp/diagnostico.sh
+
+# ═══════════════════════════════════════════════════════════
+# FIM DO COMANDO
+# ═══════════════════════════════════════════════════════════

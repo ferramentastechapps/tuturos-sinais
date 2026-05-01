@@ -145,7 +145,13 @@ export class BacktestEngine {
             if (this.positions.length >= this.config.signal.maxSimultaneousPositions) continue;
 
             // 5. Generate signal via Original Backend Logic
-            const window = history.slice(Math.max(0, i - 1000), i + 1);
+            // Calculate dynamic window size based on timeframe and period
+            const timeframeMinutes = this.getTimeframeMinutes(this.config.timeframe);
+            const startMs = new Date(this.config.startDate).getTime();
+            const endMs = new Date(this.config.endDate).getTime();
+            const periodDays = Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24));
+            const candlesNeeded = Math.ceil(periodDays * 24 * 60 / timeframeMinutes) + 200; // +200 for indicator warmup
+            const window = history.slice(Math.max(0, i - candlesNeeded), i + 1);
             
             // Build MTF aggregates mock
             const ohlc4h = aggregateOHLC(window, 4 * 60 * 60 * 1000);
@@ -636,6 +642,19 @@ export class BacktestEngine {
     }
 
     // ──────────── Helpers ────────────
+
+    private getTimeframeMinutes(timeframe: string): number {
+        switch (timeframe) {
+            case '1m': return 1;
+            case '5m': return 5;
+            case '15m': return 15;
+            case '30m': return 30;
+            case '1h': return 60;
+            case '4h': return 240;
+            case '1d': return 1440;
+            default: return 60; // default to 1h
+        }
+    }
 
     private getLookback24h(): number {
         const tf = this.config.timeframe;

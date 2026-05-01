@@ -9,25 +9,59 @@ import type { OHLCPoint } from '../src/types/trading.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Fetch OHLC data from Bybit
+// Fetch OHLC data from Bybit with pagination to get all candles in the period
 async function fetchOHLC(symbol: string, interval: string, startMs: number, endMs: number): Promise<OHLCPoint[]> {
-    const url = `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&start=${startMs}&end=${endMs}&limit=1000`;
-    const response = await fetch(url);
-    const json = await response.json() as any;
+    const allCandles: OHLCPoint[] = [];
+    let currentStart = startMs;
+    const maxCandlesPerRequest = 1000;
     
-    if (json.retCode !== 0) {
-        console.error(`Bybit API error for ${symbol}:`, json.retMsg);
-        return [];
+    // Calculate interval in milliseconds
+    const intervalMs = (() => {
+        const match = interval.match(/^(\d+)$/);
+        if (match) return parseInt(match[1]) * 60 * 1000; // Assume minutes if just number
+        return 60 * 60 * 1000; // Default to 1h
+    })();
+    
+    console.log(`  Buscando ${symbol} (${interval})...`);
+    
+    while (currentStart < endMs) {
+        const url = `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&start=${currentStart}&end=${endMs}&limit=${maxCandlesPerRequest}`;
+        const response = await fetch(url);
+        const json = await response.json() as any;
+        
+        if (json.retCode !== 0) {
+            console.error(`    ❌ Bybit API error: ${json.retMsg}`);
+            break;
+        }
+        
+        const batch = (json.result?.list ?? []).reverse().map((k: any) => ({
+            timestamp: parseInt(k[0]),
+            open: parseFloat(k[1]),
+            high: parseFloat(k[2]),
+            low: parseFloat(k[3]),
+            close: parseFloat(k[4]),
+            volume: parseFloat(k[5]),
+        }));
+        
+        if (batch.length === 0) break;
+        
+        allCandles.push(...batch);
+        
+        // Move to next batch
+        const lastTimestamp = batch[batch.length - 1].timestamp;
+        currentStart = lastTimestamp + intervalMs;
+        
+        // Rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        console.log(`    → ${allCandles.length} candles...`);
+        
+        // If we got less than max, we've reached the end
+        if (batch.length < maxCandlesPerRequest) break;
     }
     
-    return (json.result?.list ?? []).reverse().map((k: any) => ({
-        timestamp: parseInt(k[0]),
-        open: parseFloat(k[1]),
-        high: parseFloat(k[2]),
-        low: parseFloat(k[3]),
-        close: parseFloat(k[4]),
-        volume: parseFloat(k[5]),
-    }));
+    console.log(`    ✓ Total: ${allCandles.length} candles`);
+    return allCandles;
 }
 
 const BASE_CONFIG: BacktestConfig = {
@@ -149,18 +183,18 @@ async function main() {
     
     // Fetch OHLC data
     console.log('📊 Buscando dados históricos da Bybit...');
-    const startMs = new Date('2026-01-31').getTime();
-    const endMs = new Date('2026-05-01').getTime();
+    console.log(`Período: ${BASE_CONFIG.startDate} → ${BASE_CONFIG.endDate}`);
+    console.log(`Timeframe: ${BASE_CONFIG.timeframe}\n`);
+    
+    const startMs = new Date(BASE_CONFIG.startDate).getTime();
+    const endMs = new Date(BASE_CONFIG.endDate).getTime();
     const ohlcData: Record<string, OHLCPoint[]> = {};
     
     for (const symbol of BASE_CONFIG.symbols) {
-        process.stdout.write(`  ${symbol}... `);
         ohlcData[symbol] = await fetchOHLC(symbol, '60', startMs, endMs);
-        console.log(`${ohlcData[symbol].length} candles`);
-        await new Promise(resolve => setTimeout(resolve, 200)); // Rate limit
     }
     
-    console.log('\n✓ Dados carregados\n');
+    console.log('\n✓ Todos os dados carregados\n');
     
     // Run scenarios
     const results: ScenarioResult[] = [];
