@@ -11,6 +11,7 @@ import type { TradeSignal, TechnicalIndicator, OHLCPoint, CryptoPair } from '../
 import { tradeTracker } from '../trading/tradeTracker.js';
 import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
+import { isHighLiquidity } from '../config/highLiquiditySymbols.js'; // CORREÇÃO 5
 
 // ──── State ────
 
@@ -527,12 +528,29 @@ export function generateSignalFromData(
                 : 'neutral';
         macroTrend = trend4h === 'neutral' ? (currentPrice > ema200_4h ? 'long' : 'short') : trend4h;
 
+        // CORREÇÃO 2: Filtro de tendência macro OBRIGATÓRIO
+        // Bloqueia trades contra a tendência 4H (EMA200)
+        const trend4hMacro = currentPrice > ema200_4h ? 'long' : 'short';
+        
+        if (type === 'long' && trend4hMacro !== 'long') {
+            logger.debug(`[SIGNAL-VETO] ${symbol} ❌ LONG bloqueado - tendência 4H bearish (preço < EMA200)`);
+            return null;
+        }
+        if (type === 'short' && trend4hMacro !== 'short') {
+            logger.debug(`[SIGNAL-VETO] ${symbol} ❌ SHORT bloqueado - tendência 4H bullish (preço > EMA200)`);
+            return null;
+        }
+
         // "4H não contradiz fortemente o 1H" -> Veta se preço < EMA200 e MACD cruzado para o lado oposto
         if (type === 'long') {
             strongContradict4H = currentPrice < ema200_4h && macd4h.histogram < 0;
         } else {
             strongContradict4H = currentPrice > ema200_4h && macd4h.histogram > 0;
         }
+    } else {
+        // CORREÇÃO 2: Se não há dados 4H suficientes, rejeitar o sinal
+        logger.debug(`[SIGNAL-VETO] ${symbol} ❌ Dados 4H insuficientes para validar tendência macro`);
+        return null;
     }
 
     if (strongContradict4H) {
@@ -665,40 +683,70 @@ export function generateSignalFromData(
     const finalScore = rawScore * 10;
 
     // --- ICT Order Block + Structural Stop + Fibonacci TPs ---
-    let stopLossDistance = 0;
-    const atrPercent = currentPrice > 0 ? (atr / currentPrice * 100) : 2;
+    // CORREÇÃO 1: Stop Loss dinâmico baseado em ATR(14)
+    const atr14 = calculateATR(ohlc, 14);
+    const atrMultiplierSL = parseFloat(process.env.ATR_SL_MULTIPLIER || '1.5');
+    const atrMultiplierTP = parseFloat(process.env.ATR_TP_MULTIPLIER || '3.0');
+    
+    // Rejeitar trade se ATR não disponível ou muito baixo
+    if (atr14 === 0) {
+        logger.debug(`[SIGNAL-VETO] ${symbol} ❌ ATR(14) = 0 - dados insuficientes`);
+        return null;
+    }
+    
+    const atrBasedSLDistance = (atr14 * atrMultiplierSL / currentPrice) * 100;
+    
+    if (atrBasedSLDistance < 0.3) {
+        logger.debug(`[SIGNAL-VETO] ${symbol} ❌ ATR-based SL ${atrBasedSLDistance.toFixed(2)}% < 0.3% (volatilidade morta)`);
+        return null;
+    }
+    
+    let stopLossDistance = atrBasedSLDistance;
+    const atrPercent = currentPrice > 0 ? (atr14 / currentPrice * 100) : 2;
     let obEntryLow = currentPrice * 0.998;
     let obEntryHigh = currentPrice * 1.002;
     let usingStructuralStop = false;
 
     if (type === 'long' && priceInBullishOB && bullishOB) {
         const structuralStop = Math.min(swingLow, bullishOB.low) * 0.999;
-        stopLossDistance = Math.max(((currentPrice - structuralStop) / currentPrice) * 100, 0.5);
+        const structuralDistance = Math.max(((currentPrice - structuralStop) / currentPrice) * 100, 0.5);
+        
+        // Usar o maior entre ATR-based e structural (mais conservador)
+        stopLossDistance = Math.max(atrBasedSLDistance, structuralDistance);
         obEntryLow = bullishOB.low;
         obEntryHigh = bullishOB.high;
         usingStructuralStop = true;
     } else if (type === 'short' && priceInBearishOB && bearishOB) {
         const structuralStop = Math.max(swingHigh, bearishOB.high) * 1.001;
-        stopLossDistance = Math.max(((structuralStop - currentPrice) / currentPrice) * 100, 0.5);
+        const structuralDistance = Math.max(((structuralStop - currentPrice) / currentPrice) * 100, 0.5);
+        
+        // Usar o maior entre ATR-based e structural (mais conservador)
+        stopLossDistance = Math.max(atrBasedSLDistance, structuralDistance);
         obEntryLow = bearishOB.low;
         obEntryHigh = bearishOB.high;
         usingStructuralStop = true;
     } else if (type === 'long' && isSweepLow) {
         const lowestWick = ohlc[ohlc.length - 1].low;
-        stopLossDistance = Math.max(((currentPrice - lowestWick) / currentPrice * 100) * 1.05, 0.5);
+        const sweepDistance = Math.max(((currentPrice - lowestWick) / currentPrice * 100) * 1.05, 0.5);
+        stopLossDistance = Math.max(atrBasedSLDistance, sweepDistance);
     } else if (type === 'short' && isSweepHigh) {
         const highestWick = ohlc[ohlc.length - 1].high;
-        stopLossDistance = Math.max(((highestWick - currentPrice) / currentPrice * 100) * 1.05, 0.5);
-    } else {
-        const atrMultiplier = type === macroTrend ? 1.5 : 1.0;
-        stopLossDistance = Math.max(atrPercent * atrMultiplier, 0.5);
+        const sweepDistance = Math.max(((highestWick - currentPrice) / currentPrice * 100) * 1.05, 0.5);
+        stopLossDistance = Math.max(atrBasedSLDistance, sweepDistance);
     }
-
+    
+    // CORREÇÃO 1: TPs baseados em múltiplos de ATR
     let tp1Distance: number, tp2Distance: number, tp3Distance: number;
     if (usingStructuralStop) {
         tp1Distance = stopLossDistance * 1.5;
         tp2Distance = stopLossDistance * 2.0;
         tp3Distance = stopLossDistance * 3.0;
+    } else {
+        const tpScale = type === macroTrend ? 1 : 0.7;
+        tp1Distance = stopLossDistance * 2.0 * tpScale;  // RR 2:1
+        tp2Distance = stopLossDistance * 3.0 * tpScale;  // RR 3:1
+        tp3Distance = stopLossDistance * 4.5 * tpScale;  // RR 4.5:1
+    }3Distance = stopLossDistance * 3.0;
     } else {
         const tpScale = type === macroTrend ? 1 : 0.7;
         tp1Distance = stopLossDistance * 1.5 * tpScale;
@@ -733,12 +781,15 @@ export function generateSignalFromData(
     const marginPercent = config.riskManagement.marginPercent;
     let dynamicLeverage = Math.round((accountRiskLevel / stopLossDistance) / (marginPercent / 100));
     
-    // Ajuste de alavancagem com base no finalScore (0-100)
-    if (finalScore >= 80) dynamicLeverage = Math.round(dynamicLeverage * 1.2);
-    else if (finalScore < 70) dynamicLeverage = Math.round(dynamicLeverage * 0.8);
+    // CORREÇÃO 6: Inverter lógica de alavancagem - score alto = alavancagem MENOR (mais conservador)
+    // Problema original: score alto correlacionado com win rate baixo porque aumentava alavancagem
+    if (finalScore >= 80) dynamicLeverage = Math.round(dynamicLeverage * 0.8);  // Reduz 20%
+    else if (finalScore < 70) dynamicLeverage = Math.round(dynamicLeverage * 1.0); // Mantém base
     
     if (dynamicLeverage < 2) dynamicLeverage = 2;
     if (dynamicLeverage > 30) dynamicLeverage = 30;
+    
+    logger.debug(`[SCORE-DEBUG] ${symbol} ${type} - Score: ${finalScore}/100, Leverage: ${dynamicLeverage}x, SL: ${stopLossDistance.toFixed(2)}%`);
 
     let tradeType = 'Day Trade';
     let expectedDuration = '12-24 horas';
@@ -826,6 +877,12 @@ async function runSignalCycle(): Promise<void> {
 
     for (const symbol of symbols) {
         try {
+            // CORREÇÃO 5: Filtrar símbolos de baixa liquidez
+            if (!isHighLiquidity(symbol)) {
+                logger.debug(`[Engine] ${symbol} ignorado - baixa liquidez (< $100M volume diário)`);
+                continue;
+            }
+            
             // Get OHLC data - prefer cached WebSocket data, fallback to REST
             let ohlc = bybitConnector.getKlineData(symbol);
             if (ohlc.length < 50) {
