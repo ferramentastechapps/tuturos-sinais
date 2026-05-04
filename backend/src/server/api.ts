@@ -607,6 +607,50 @@ router.post('/ml/retrain', async (_req: Request, res: Response) => {
     });
 });
 
+// ──── ML Export Data ────
+router.get('/ml/export', async (req: Request, res: Response) => {
+    try {
+        const data = await db.mLTrainingData.findMany({
+            orderBy: { entry_time: 'desc' }
+        });
+        
+        if (!data || data.length === 0) {
+            res.status(404).send('No data found');
+            return;
+        }
+
+        let csv = 'id,symbol,outcome_label,outcome_pnl,entry_time';
+        let featureKeys: string[] = [];
+        
+        try {
+            if (data[0].features) {
+                const f = typeof data[0].features === 'string' ? JSON.parse(data[0].features) : data[0].features;
+                featureKeys = Object.keys(f);
+                csv += ',' + featureKeys.join(',');
+            }
+        } catch(e) {}
+        
+        csv += '\n';
+
+        for (const row of data) {
+            let featuresObj: any = {};
+            try {
+                featuresObj = typeof row.features === 'string' ? JSON.parse(row.features) : (row.features || {});
+            } catch(e) {}
+            
+            const featureValues = featureKeys.map(k => featuresObj[k] !== undefined ? featuresObj[k] : '');
+            csv += `${row.id},${row.symbol},${row.outcome_label},${row.outcome_pnl},${row.entry_time},${featureValues.join(',')}\n`;
+        }
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=ml_training_data.csv');
+        res.send(csv);
+    } catch (error: any) {
+        logger.error('Error exporting ML data', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ──── ML Predict ────
 
 import { predictSignal } from '../ml/mlPredictionService.js';

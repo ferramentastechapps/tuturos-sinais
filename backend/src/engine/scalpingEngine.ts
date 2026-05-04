@@ -25,7 +25,7 @@ import { tradeTracker } from '../trading/tradeTracker.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
 
 // FASE 3: Apenas pares de alta liquidez para scalping
-const SCALPING_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
+const SCALPING_SYMBOLS = config.scalpingSymbols;
 
 // ──── State isolado do robô de scalping ────
 
@@ -271,14 +271,14 @@ export function generateScalpingSignal(
 
     // O critério direcional já nos deu o tipo. Somamos 1 ponto por indicador válido.
     if (type === 'long') {
-        if (bullishCount < 4) { // Substituiu a antiga exigência de 5/7
+        if (bullishCount < 3) { // Reduzido de 4/7 para 3/7 a pedido do usuário
             logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO BASE: Confluência fraca (${bullishCount}/7)`);
             return null;
         }
         rawScore += bullishCount; // 4 a 7 pontos
         confluences.push(`${bullishCount}/7 ind. bullish base`);
     } else {
-        if (bearishCount < 4) {
+        if (bearishCount < 3) {
             logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO BASE: Confluência fraca (${bearishCount}/7)`);
             return null;
         }
@@ -337,8 +337,8 @@ export function generateScalpingSignal(
     rawScore = Math.max(0, Math.min(rawScore, 10));
 
     // ── VETO FINAL DE SCORE ──
-    // Requisito solicitado: Gerar sinal apenas quando Score >= 6
-    if (rawScore < 6) {
+    // Requisito solicitado: Gerar sinal apenas quando Score >= 5
+    if (rawScore < 5) {
         logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO SCORE: Pontuação final ${rawScore}/10 é insuficiente.`);
         return null;
     }

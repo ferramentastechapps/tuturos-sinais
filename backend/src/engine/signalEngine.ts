@@ -528,17 +528,17 @@ export function generateSignalFromData(
                 : 'neutral';
         macroTrend = trend4h === 'neutral' ? (currentPrice > ema200_4h ? 'long' : 'short') : trend4h;
 
-        // CORREÇÃO 2: Filtro de tendência macro OBRIGATÓRIO
-        // Bloqueia trades contra a tendência 4H (EMA200)
+        // CORREÇÃO 2: Filtro de tendência macro
+        // A pedido do usuário, agora permite trades contra a tendência 4H (EMA200), mas avisa no log.
         const trend4hMacro = currentPrice > ema200_4h ? 'long' : 'short';
         
         if (type === 'long' && trend4hMacro !== 'long') {
-            logger.debug(`[SIGNAL-VETO] ${symbol} ❌ LONG bloqueado - tendência 4H bearish (preço < EMA200)`);
-            return null;
+            logger.debug(`[SIGNAL-WARN] ${symbol} ⚠️ LONG contra-tendência - tendência 4H bearish (preço < EMA200)`);
+            // return null; // Removido a pedido do usuário
         }
         if (type === 'short' && trend4hMacro !== 'short') {
-            logger.debug(`[SIGNAL-VETO] ${symbol} ❌ SHORT bloqueado - tendência 4H bullish (preço > EMA200)`);
-            return null;
+            logger.debug(`[SIGNAL-WARN] ${symbol} ⚠️ SHORT contra-tendência - tendência 4H bullish (preço > EMA200)`);
+            // return null; // Removido a pedido do usuário
         }
 
         // "4H não contradiz fortemente o 1H" -> Veta se preço < EMA200 e MACD cruzado para o lado oposto
@@ -554,8 +554,8 @@ export function generateSignalFromData(
     }
 
     if (strongContradict4H) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO MTF: 4H fortemente oposto (Preço + MACD contra)`);
-        return null;
+        logger.debug(`[SIGNAL-WARN] ${symbol} ⚠️ MTF: 4H fortemente oposto (Preço + MACD contra)`);
+        // return null; // Removido a pedido do usuário para permitir contra-tendência
     }
 
     // Análise MTF - 15M

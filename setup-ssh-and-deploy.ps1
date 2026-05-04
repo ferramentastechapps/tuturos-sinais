@@ -58,5 +58,5 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "`n🎉 Tudo pronto! VPS atualizada com sucesso." -ForegroundColor Green
     Write-Host "   Próxima vez use: ssh $VPS (sem senha)" -ForegroundColor Gray
 } else {
-    Write-Host "`n⚠️  Deploy falhou. Verifique os logs: ssh $VPS 'pm2 logs --lines 30'" -ForegroundColor Red
+    Write-Host "`n⚠️  Deploy falhou. Verifique os logs: ssh $VPS pm2 logs --lines 30" -ForegroundColor Red
 }

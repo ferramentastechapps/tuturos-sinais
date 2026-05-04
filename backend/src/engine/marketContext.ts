@@ -303,23 +303,28 @@ export async function validateSignalContext(
         };
     }
     
-    // 4. VETO: BTC em queda forte → bloquear LONGs em altcoins
+    // 4. VETO: BTC em queda forte → bloquear LONGs em altcoins (Desativado a pedido do usuário)
+    /*
     if (type === 'long' && context.btcTrend === 'STRONG_DOWN') {
         return {
             allowed: false,
             reason: `BTC em queda forte (${context.btcTrend}) - altcoins seguem BTC`,
         };
     }
+    */
     
-    // 5. VETO: BTC em alta forte → bloquear SHORTs em altcoins
+    // 5. VETO: BTC em alta forte → bloquear SHORTs em altcoins (Desativado a pedido do usuário)
+    /*
     if (type === 'short' && context.btcTrend === 'STRONG_UP') {
         return {
             allowed: false,
             reason: `BTC em alta forte (${context.btcTrend}) - altcoins seguem BTC`,
         };
     }
+    */
     
-    // 6. VETO: Confirmação Daily (EMA 200)
+    // 6. VETO: Confirmação Daily (EMA 200) (Desativado a pedido do usuário para permitir contra-tendência)
+    /*
     const dailyConfirmation = await getDailyConfirmation(symbol);
     
     if (type === 'long' && !dailyConfirmation.aboveEma200) {
@@ -335,6 +340,7 @@ export async function validateSignalContext(
             reason: `Preço acima da EMA200 Daily (${dailyConfirmation.price.toFixed(4)} > ${dailyConfirmation.ema200Daily.toFixed(4)})`,
         };
     }
+    */
     
     // ✅ Todos os filtros passaram
     return { allowed: true };

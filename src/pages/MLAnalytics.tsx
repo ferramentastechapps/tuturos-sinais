@@ -108,6 +108,14 @@ const MLAnalytics = () => {
                         <RefreshCw className="h-4 w-4 mr-2" /> Atualizar
                     </Button>
                     <Button
+                        onClick={() => window.open(`${API_BASE}/api/ml/export`, '_blank')}
+                        variant="outline"
+                        className="border-purple-500/50 hover:bg-purple-500/10"
+                    >
+                        <Database className="mr-2 h-4 w-4 text-purple-400" />
+                        Exportar CSV
+                    </Button>
+                    <Button
                         onClick={handleRetrain}
                         disabled={retraining || !stats?.enabled}
                         className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
