@@ -593,7 +593,7 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
         
         for (const h of historyForAcc) {
             let parsedML: any = {};
-            try { parsedML = JSON.parse(h.ml_data); } catch(e){}
+            try { if (h.ml_data) parsedML = JSON.parse(h.ml_data); } catch(e){}
             
             if (parsedML && typeof parsedML.predictedClass === 'number') {
                 const isWin = h.outcome === 'WIN';

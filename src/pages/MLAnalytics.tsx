@@ -398,6 +398,14 @@ const MLAnalytics = () => {
                                         {selectedLearning.all_indicators && Array.isArray(selectedLearning.all_indicators) && selectedLearning.all_indicators.length > 0 ? (
                                             <ul className="space-y-2">
                                                 {selectedLearning.all_indicators.map((ind: any, i: number) => {
+                                                    if (typeof ind === 'string') {
+                                                        return (
+                                                            <li key={i} className="flex items-center gap-2 border-b border-border/50 pb-1 last:border-0 last:pb-0">
+                                                                <CheckCircle2 className="h-3 w-3 text-green-400 flex-shrink-0" />
+                                                                <span className="font-medium text-sm text-foreground">{ind}</span>
+                                                            </li>
+                                                        );
+                                                    }
                                                     const name = ind.name || ind.indicator || Object.keys(ind)[0] || 'Ind';
                                                     const val = ind.value !== undefined ? ind.value : Object.values(ind)[0];
                                                     return (
