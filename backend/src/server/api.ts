@@ -543,7 +543,10 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 pnl: true,
                 exit_time: true,
                 ml_data: true,
-                indicators: true
+                indicators: true,
+                trade_type: true,
+                entry_time: true,
+                created_at: true
             }
         });
 
@@ -570,7 +573,12 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 result: h.outcome,
                 profit_percent: h.pnl || 0,
                 ml_was_correct: wasCorrect,
-                key_indicators
+                key_indicators,
+                trade_type: h.trade_type,
+                entry_time: h.entry_time || h.created_at,
+                exit_time: h.exit_time,
+                all_indicators: parsedInd,
+                ml_data: parsedML
             };
         });
 

@@ -2,9 +2,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, BrainCircuit, CheckCircle2, XCircle, RefreshCw, TrendingUp, Database, Target } from 'lucide-react';
+import { Loader2, BrainCircuit, CheckCircle2, XCircle, RefreshCw, TrendingUp, Database, Target, Info } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -29,6 +30,11 @@ interface MLLearning {
     profit_percent: number;
     ml_was_correct: boolean;
     key_indicators: string[];
+    trade_type?: string;
+    entry_time?: string;
+    exit_time?: string;
+    all_indicators?: any;
+    ml_data?: any;
 }
 
 interface MLLearningHistory {
@@ -43,6 +49,7 @@ const MLAnalytics = () => {
     const [history, setHistory] = useState<MLLearningHistory | null>(null);
     const [loading, setLoading] = useState(true);
     const [retraining, setRetraining] = useState(false);
+    const [selectedLearning, setSelectedLearning] = useState<MLLearning | null>(null);
 
     const loadData = useCallback(async () => {
         try {
@@ -287,13 +294,22 @@ const MLAnalytics = () => {
                             ) : (
                                 <div className="space-y-3">
                                     {history.learnings.map((item) => (
-                                        <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border/50">
+                                        <div 
+                                            key={item.id} 
+                                            onClick={() => setSelectedLearning(item)}
+                                            className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border/50 cursor-pointer hover:bg-muted/80 transition-colors group"
+                                        >
                                             <div className="flex items-center gap-3">
                                                 {item.ml_was_correct
                                                     ? <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
                                                     : <XCircle className="h-5 w-5 text-red-500 shrink-0" />}
                                                 <div>
-                                                    <p className="font-medium text-sm">{item.symbol}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-medium text-sm group-hover:text-purple-400 transition-colors">{item.symbol}</p>
+                                                        {item.trade_type && (
+                                                            <Badge variant="outline" className="text-[10px] h-4 px-1">{item.trade_type}</Badge>
+                                                        )}
+                                                    </div>
                                                     <p className="text-xs text-muted-foreground">
                                                         {item.key_indicators?.join(', ')}
                                                     </p>
@@ -315,6 +331,125 @@ const MLAnalytics = () => {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            <Dialog open={!!selectedLearning} onOpenChange={(o) => !o && setSelectedLearning(null)}>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-xl">
+                            {selectedLearning?.symbol} 
+                            <Badge variant={selectedLearning?.result === 'WIN' ? 'default' : 'destructive'}>
+                                {selectedLearning?.result}
+                            </Badge>
+                            {selectedLearning?.trade_type && (
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                    {selectedLearning.trade_type}
+                                </Badge>
+                            )}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Detalhes completos da operação e análise da Inteligência Artificial.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedLearning && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                            <div className="space-y-4">
+                                <div>
+                                    <h4 className="text-sm font-semibold text-muted-foreground mb-1 flex items-center gap-1">
+                                        <Info className="h-4 w-4" /> Informações Básicas
+                                    </h4>
+                                    <div className="bg-muted/50 p-3 rounded-md space-y-2 text-sm border border-border/30">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-muted-foreground">Entrada:</span>
+                                            <span className="font-medium text-right">
+                                                {selectedLearning.entry_time ? new Date(selectedLearning.entry_time).toLocaleString('pt-BR') : 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-muted-foreground">Saída:</span>
+                                            <span className="font-medium text-right">
+                                                {selectedLearning.exit_time ? new Date(selectedLearning.exit_time).toLocaleString('pt-BR') : 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center pt-2 border-t border-border/30">
+                                            <span className="text-muted-foreground">Resultado (%):</span>
+                                            <span className={`font-bold ${selectedLearning.profit_percent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                {selectedLearning.profit_percent >= 0 ? '+' : ''}{selectedLearning.profit_percent.toFixed(2)}%
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-muted-foreground">IA Previu Certo?</span>
+                                            <span className="font-medium">
+                                                {selectedLearning.ml_was_correct ? (
+                                                    <span className="text-green-400 flex items-center gap-1 justify-end"><CheckCircle2 className="h-4 w-4" /> Sim</span>
+                                                ) : (
+                                                    <span className="text-red-400 flex items-center gap-1 justify-end"><XCircle className="h-4 w-4" /> Não</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <h4 className="text-sm font-semibold text-muted-foreground mb-1 flex items-center gap-1">
+                                        <Target className="h-4 w-4" /> Indicadores Técnicos
+                                    </h4>
+                                    <div className="bg-muted/50 p-3 rounded-md text-sm max-h-48 overflow-y-auto border border-border/30">
+                                        {selectedLearning.all_indicators && Array.isArray(selectedLearning.all_indicators) && selectedLearning.all_indicators.length > 0 ? (
+                                            <ul className="space-y-2">
+                                                {selectedLearning.all_indicators.map((ind: any, i: number) => {
+                                                    const name = ind.name || ind.indicator || Object.keys(ind)[0] || 'Ind';
+                                                    const val = ind.value !== undefined ? ind.value : Object.values(ind)[0];
+                                                    return (
+                                                        <li key={i} className="flex justify-between border-b border-border/50 pb-1 last:border-0 last:pb-0">
+                                                            <span className="text-muted-foreground">{name}:</span>
+                                                            <span className="font-medium font-mono">{typeof val === 'number' ? val.toFixed(4) : JSON.stringify(val)}</span>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-muted-foreground italic text-xs text-center py-2">Sem indicadores detalhados salvos para esta operação.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <h4 className="text-sm font-semibold text-muted-foreground mb-1 flex items-center gap-1">
+                                        <BrainCircuit className="h-4 w-4" /> Dados da IA (Features)
+                                    </h4>
+                                    <div className="bg-muted/50 p-3 rounded-md text-sm h-full max-h-[350px] overflow-y-auto border border-border/30">
+                                        {selectedLearning.ml_data ? (
+                                            <pre className="text-xs text-muted-foreground break-words whitespace-pre-wrap font-mono">
+                                                {JSON.stringify(selectedLearning.ml_data, null, 2)}
+                                            </pre>
+                                        ) : (
+                                            <p className="text-muted-foreground italic text-xs text-center py-4">Sem dados de machine learning salvos.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {selectedLearning && (
+                        <div className="mt-2 pt-4 border-t border-border/50">
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                                <TrendingUp className="h-4 w-4" /> Gráfico da Operação
+                            </h4>
+                            <div className="h-72 w-full bg-muted/30 rounded-md overflow-hidden border border-border/30">
+                                <iframe 
+                                    src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol=${selectedLearning.symbol.replace('USDT', '')}USDT&interval=15&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=America%2FSao_Paulo`}
+                                    className="w-full h-full border-0"
+                                    title={`Gráfico ${selectedLearning.symbol}`}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

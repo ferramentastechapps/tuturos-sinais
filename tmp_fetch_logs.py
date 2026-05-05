@@ -28,16 +28,13 @@ if __name__ == "__main__":
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(VPS_HOST, username=VPS_USER, password=VPS_PASS, timeout=10)
         sftp = client.open_sftp()
-        sftp.put(r"c:\\Users\\jotas\\tuturos-sinais\\src\\pages\\MLAnalytics.tsx", "/var/www/signal-dashboard/src/pages/MLAnalytics.tsx")
         sftp.put(r"c:\\Users\\jotas\\tuturos-sinais\\backend\\src\\server\\api.ts", "/var/www/signal-dashboard/backend/src/server/api.ts")
         sftp.close()
         client.close()
         print("Files uploaded successfully.")
         
         diagnostic_cmd = """
-cd /var/www/signal-dashboard
-npm run build
-cd backend
+cd /var/www/signal-dashboard/backend
 npx tsc
 pm2 restart signal-engine
 """
