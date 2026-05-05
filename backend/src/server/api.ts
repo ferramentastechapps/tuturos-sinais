@@ -481,18 +481,25 @@ router.get('/ml/stats', async (_req: Request, res: Response) => {
             ? closedSignals.reduce((sum: number, s: any) => sum + (s.pnl || 0), 0) / totalSignals
             : 0;
 
-        // Contar TPs atingidos
         let tp1Hits = 0, tp2Hits = 0, tp3Hits = 0;
         for (const signal of closedSignals) {
             if (signal.status === 'CLOSED_TP') {
+                let hasHit1 = false, hasHit2 = false, hasHit3 = false;
                 try {
                     const tps = JSON.parse(signal.take_profits);
                     if (Array.isArray(tps)) {
-                        if (tps.find((t: any) => t.level === 1 && t.hit)) tp1Hits++;
-                        if (tps.find((t: any) => t.level === 2 && t.hit)) tp2Hits++;
-                        if (tps.find((t: any) => t.level === 3 && t.hit)) tp3Hits++;
+                        if (tps.find((t: any) => (t.level === 1 || t.tp === 1) && t.hit)) hasHit1 = true;
+                        if (tps.find((t: any) => (t.level === 2 || t.tp === 2) && t.hit)) hasHit2 = true;
+                        if (tps.find((t: any) => (t.level === 3 || t.tp === 3) && t.hit)) hasHit3 = true;
                     }
                 } catch (e) { /* ignore */ }
+                
+                // Fallback: Se o status é CLOSED_TP, no mínimo bateu o TP1
+                if (!hasHit1) hasHit1 = true;
+
+                if (hasHit1) tp1Hits++;
+                if (hasHit2) tp2Hits++;
+                if (hasHit3) tp3Hits++;
             }
         }
 
@@ -567,10 +574,43 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             };
         });
 
-        // Summary stats based on MLTrainingData
+        // Summary stats: Acurácia real da IA baseada nos sinais reais
+        const historyForAcc = await db.tradeSignal.findMany({
+            where: { outcome: { not: null }, ml_data: { not: null } },
+            select: { outcome: true, ml_data: true }
+        });
+        
+        let correctCount = 0;
+        let totalCount = 0;
+        
+        for (const h of historyForAcc) {
+            let parsedML: any = {};
+            try { parsedML = JSON.parse(h.ml_data); } catch(e){}
+            
+            if (parsedML && typeof parsedML.predictedClass === 'number') {
+                const isWin = h.outcome === 'WIN';
+                const wasCorrect = (parsedML.predictedClass === 1 && isWin) || (parsedML.predictedClass === 0 && !isWin);
+                if (wasCorrect) correctCount++;
+                totalCount++;
+            }
+        }
+        
+        // Se não houver dados reais suficientes para acurácia, tenta usar o accuracy do model_metrics (treinamento)
+        let ml_accuracy = totalCount > 0 ? correctCount / totalCount : 0;
+        
+        if (totalCount === 0) {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const metricsPath = path.join(process.cwd(), '../ml_engine/data/model_metrics.json');
+                if (fs.existsSync(metricsPath)) {
+                    const metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf-8'));
+                    if (metrics.test_accuracy) ml_accuracy = metrics.test_accuracy;
+                }
+            } catch(e) {}
+        }
+
         const total = await db.mLTrainingData.count();
-        const wins = await db.mLTrainingData.count({ where: { outcome_label: 1 } });
-        const ml_accuracy = total > 0 ? wins / total : 0;
 
         res.json({
             success: true,
@@ -619,7 +659,15 @@ router.get('/ml/export', async (req: Request, res: Response) => {
             return;
         }
 
-        let csv = 'id,symbol,outcome_label,outcome_pnl,entry_time';
+        // Buscar trade_types do banco para diferenciar os robôs
+        const signalIds = data.map((d: any) => d.signal_id);
+        const tradeSignals = await db.tradeSignal.findMany({
+            where: { id: { in: signalIds } },
+            select: { id: true, trade_type: true }
+        });
+        const tradeTypeMap = new Map(tradeSignals.map((s: any) => [s.id, s.trade_type]));
+
+        let csv = 'id,signal_id,symbol,trade_type,outcome_label,outcome_pnl,entry_time';
         let featureKeys: string[] = [];
         
         try {
@@ -639,7 +687,9 @@ router.get('/ml/export', async (req: Request, res: Response) => {
             } catch(e) {}
             
             const featureValues = featureKeys.map(k => featuresObj[k] !== undefined ? featuresObj[k] : '');
-            csv += `${row.id},${row.symbol},${row.outcome_label},${row.outcome_pnl},${row.entry_time},${featureValues.join(',')}\n`;
+            const tradeType = tradeTypeMap.get(row.signal_id) || 'Desconhecido';
+            
+            csv += `${row.id},${row.signal_id},${row.symbol},${tradeType},${row.outcome_label},${row.outcome_pnl},${row.entry_time},${featureValues.join(',')}\n`;
         }
 
         res.setHeader('Content-Type', 'text/csv');
