@@ -82,6 +82,26 @@ const MLAnalytics = () => {
         }
     };
 
+    const handleExportCSV = async () => {
+        try {
+            toast({ title: 'Exportando', description: 'Gerando arquivo CSV...' });
+            const res = await fetch(`${API_BASE}/api/ml/export`);
+            if (!res.ok) throw new Error('Falha ao exportar os dados do ML');
+            
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ml_training_data.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Erro', description: err.message });
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -108,7 +128,7 @@ const MLAnalytics = () => {
                         <RefreshCw className="h-4 w-4 mr-2" /> Atualizar
                     </Button>
                     <Button
-                        onClick={() => window.open(`${API_BASE}/api/ml/export`, '_blank')}
+                        onClick={handleExportCSV}
                         variant="outline"
                         className="border-purple-500/50 hover:bg-purple-500/10"
                     >
