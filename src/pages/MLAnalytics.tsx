@@ -2,12 +2,16 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, BrainCircuit, CheckCircle2, XCircle, RefreshCw, TrendingUp, Database, Target, Info } from 'lucide-react';
+import { Loader2, BrainCircuit, CheckCircle2, XCircle, RefreshCw, TrendingUp, Database, Target, Info, Calendar, Filter } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+type DateFilter = 'today' | 'yesterday' | 'week' | 'month' | 'all';
+type RobotFilter = 'all' | 'swing' | 'scalping';
 
 interface MLStats {
     enabled: boolean;
@@ -50,12 +54,49 @@ const MLAnalytics = () => {
     const [loading, setLoading] = useState(true);
     const [retraining, setRetraining] = useState(false);
     const [selectedLearning, setSelectedLearning] = useState<MLLearning | null>(null);
+    
+    // Filtros
+    const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+    const [robotFilter, setRobotFilter] = useState<RobotFilter>('all');
+
+    const getDateRange = (filter: DateFilter): { start?: string; end?: string } => {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        switch (filter) {
+            case 'today':
+                return { start: today.toISOString() };
+            case 'yesterday':
+                const yesterday = new Date(today);
+                yesterday.setDate(yesterday.getDate() - 1);
+                return { start: yesterday.toISOString(), end: today.toISOString() };
+            case 'week':
+                const weekAgo = new Date(today);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                return { start: weekAgo.toISOString() };
+            case 'month':
+                const monthAgo = new Date(today);
+                monthAgo.setMonth(monthAgo.getMonth() - 1);
+                return { start: monthAgo.toISOString() };
+            default:
+                return {};
+        }
+    };
 
     const loadData = useCallback(async () => {
         try {
+            const dateRange = getDateRange(dateFilter);
+            const params = new URLSearchParams();
+            
+            if (dateRange.start) params.append('startDate', dateRange.start);
+            if (dateRange.end) params.append('endDate', dateRange.end);
+            if (robotFilter !== 'all') params.append('robotType', robotFilter);
+            
+            const queryString = params.toString();
+            
             const [statsRes, historyRes] = await Promise.all([
-                fetch(`${API_BASE}/api/ml/stats`),
-                fetch(`${API_BASE}/api/ml/learning-history?limit=10`),
+                fetch(`${API_BASE}/api/ml/stats${queryString ? `?${queryString}` : ''}`),
+                fetch(`${API_BASE}/api/ml/learning-history?limit=10${queryString ? `&${queryString}` : ''}`),
             ]);
             if (statsRes.ok) setStats(await statsRes.json());
             if (historyRes.ok) setHistory(await historyRes.json());
@@ -64,7 +105,7 @@ const MLAnalytics = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [dateFilter, robotFilter]);
 
     useEffect(() => {
         loadData();
@@ -154,6 +195,62 @@ const MLAnalytics = () => {
                     </Button>
                 </div>
             </div>
+
+            {/* Filtros */}
+            <Card className="border-purple-500/20 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
+                <CardContent className="pt-6">
+                    <div className="flex items-center gap-4 flex-wrap">
+                        <div className="flex items-center gap-2">
+                            <Filter className="h-4 w-4 text-purple-400" />
+                            <span className="text-sm font-medium">Filtros:</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
+                                <SelectTrigger className="w-[140px] h-9">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos</SelectItem>
+                                    <SelectItem value="today">Hoje</SelectItem>
+                                    <SelectItem value="yesterday">Ontem</SelectItem>
+                                    <SelectItem value="week">Última Semana</SelectItem>
+                                    <SelectItem value="month">Último Mês</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <BrainCircuit className="h-4 w-4 text-muted-foreground" />
+                            <Select value={robotFilter} onValueChange={(v) => setRobotFilter(v as RobotFilter)}>
+                                <SelectTrigger className="w-[140px] h-9">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos Robôs</SelectItem>
+                                    <SelectItem value="swing">Swing Trading</SelectItem>
+                                    <SelectItem value="scalping">Scalping</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {(dateFilter !== 'all' || robotFilter !== 'all') && (
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => {
+                                    setDateFilter('all');
+                                    setRobotFilter('all');
+                                }}
+                                className="text-xs"
+                            >
+                                Limpar Filtros
+                            </Button>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
