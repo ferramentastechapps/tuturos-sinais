@@ -583,6 +583,7 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             select: {
                 id: true,
                 pair: true,
+                type: true,
                 outcome: true,
                 pnl: true,
                 exit_time: true,
@@ -590,7 +591,15 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 indicators: true,
                 trade_type: true,
                 entry_time: true,
-                created_at: true
+                created_at: true,
+                // Price data
+                entry_range_low: true,
+                entry_range_high: true,
+                stop_loss: true,
+                take_profits: true,
+                // ML quality fields
+                confidence: true,
+                risk_reward: true,
             }
         });
 
@@ -600,6 +609,9 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             
             let parsedInd: any[] = [];
             try { if (h.indicators) parsedInd = JSON.parse(h.indicators); } catch(e){}
+
+            let parsedTPs: any[] = [];
+            try { if (h.take_profits) parsedTPs = JSON.parse(h.take_profits); } catch(e){}
 
             // 1 = previu WIN, 0 = previu LOSS. 
             // Se não houver previsão salva (sinais antigos), assumimos 1 pois o bot só opera previsões positivas.
@@ -611,18 +623,37 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
 
             const key_indicators = parsedInd.length > 0 ? parsedInd.slice(0, 3) : ['RSI', 'MACD', 'EMA'];
 
+            // Entry price = midpoint
+            const entry_price = h.entry_range_low && h.entry_range_high
+                ? (h.entry_range_low + h.entry_range_high) / 2
+                : null;
+
+            // Score: prefer confidence stored on signal, fallback to ml_data
+            const score = h.confidence ?? parsedML.confidence ?? parsedML.quality_score ?? null;
+
             return {
                 id: h.id,
                 symbol: h.pair,
+                direction: h.type, // LONG / SHORT
                 result: h.outcome,
                 profit_percent: h.pnl || 0,
                 ml_was_correct: wasCorrect,
                 key_indicators,
                 trade_type: h.trade_type,
+                signal_created_at: h.created_at,
                 entry_time: h.entry_time || h.created_at,
                 exit_time: h.exit_time,
                 all_indicators: parsedInd,
-                ml_data: parsedML
+                ml_data: parsedML,
+                // Price snapshot
+                entry_price,
+                entry_range_low: h.entry_range_low,
+                entry_range_high: h.entry_range_high,
+                stop_loss: h.stop_loss,
+                take_profits: parsedTPs,
+                // Quality
+                score,
+                risk_reward: h.risk_reward ?? parsedML.risk_reward ?? null,
             };
         });
 
