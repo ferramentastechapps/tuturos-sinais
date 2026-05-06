@@ -472,9 +472,13 @@ router.get('/ml/stats', async (req: Request, res: Response) => {
             if (endDate) whereClause.exit_time.lte = new Date(endDate as string);
         }
         
-        // Filtro de tipo de robô
+        // Filtro de tipo de robô (case-insensitive)
         if (robotType && robotType !== 'all') {
-            whereClause.trade_type = robotType;
+            // Aceita 'swing', 'Swing', 'SWING', 'Day Trade', etc
+            const typePattern = robotType === 'swing' 
+                ? { contains: 'swing', mode: 'insensitive' as const }
+                : { contains: 'scalp', mode: 'insensitive' as const };
+            whereClause.trade_type = typePattern;
         }
         
         // Usar sinais REAIS fechados (não dados de treino históricos)
@@ -563,9 +567,12 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             if (endDate) whereClause.exit_time.lte = new Date(endDate as string);
         }
         
-        // Filtro de tipo de robô
+        // Filtro de tipo de robô (case-insensitive)
         if (robotType && robotType !== 'all') {
-            whereClause.trade_type = robotType;
+            const typePattern = robotType === 'swing' 
+                ? { contains: 'swing', mode: 'insensitive' as const }
+                : { contains: 'scalp', mode: 'insensitive' as const };
+            whereClause.trade_type = typePattern;
         }
         
         // Fetch recently closed trades with outcomes
@@ -632,7 +639,10 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             if (endDate) whereClauseForAcc.exit_time.lte = new Date(endDate as string);
         }
         if (robotType && robotType !== 'all') {
-            whereClauseForAcc.trade_type = robotType;
+            const typePattern = robotType === 'swing' 
+                ? { contains: 'swing', mode: 'insensitive' as const }
+                : { contains: 'scalp', mode: 'insensitive' as const };
+            whereClauseForAcc.trade_type = typePattern;
         }
         
         const historyForAcc = await db.tradeSignal.findMany({
