@@ -15,6 +15,7 @@
 
 import { Router, Request, Response } from 'express';
 import { logger } from '../../lib/logger.js';
+import { config } from '../../lib/config.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { BacktestEngine } from '../../engine/backtest/backtestEngine.js';
 import { analyzeBacktestResults, calculateBuyAndHold } from '../../engine/backtest/backtestAnalyzer.js';
@@ -516,8 +517,8 @@ router.get('/robot-config/:type', async (req: Request, res: Response) => {
         // Load config from environment or database
         const robotConfig = {
             symbols: type === 'swing' 
-                ? ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
-                : ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+                ? config.monitoredSymbols // Todas as moedas monitoradas pelo robô Swing
+                : config.scalpingSymbols,  // Moedas do robô Scalping
             signal: {
                 minScore: type === 'swing' ? 75 : 70,
                 maxSimultaneousPositions: type === 'swing' ? 5 : 8,
