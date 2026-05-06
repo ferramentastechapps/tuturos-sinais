@@ -450,5 +450,94 @@ function buildSummary(m: any, risk: any) {
     };
 }
 
+// ──────────── GET /strategies ────────────
+
+router.get('/strategies', async (req: Request, res: Response) => {
+    try {
+        const { data, error } = await supabase
+            .from('backtest_strategies')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        res.json({ success: true, strategies: data ?? [] });
+    } catch (error: any) {
+        logger.error('[Backtest] Erro ao buscar estratégias:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ──────────── POST /strategies ────────────
+
+router.post('/strategies', async (req: Request, res: Response) => {
+    try {
+        const { name, description, type, timeframe, indicators } = req.body;
+
+        if (!name || !description) {
+            res.status(400).json({ error: 'name e description são obrigatórios' });
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from('backtest_strategies')
+            .insert({
+                name,
+                description,
+                type: type || 'swing',
+                timeframe: timeframe || '1h',
+                indicators: indicators || [],
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        logger.info(`[Backtest] Nova estratégia criada: ${name}`);
+
+        res.json({ success: true, strategy: data });
+    } catch (error: any) {
+        logger.error('[Backtest] Erro ao criar estratégia:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ──────────── GET /robot-config/:type ────────────
+
+router.get('/robot-config/:type', async (req: Request, res: Response) => {
+    try {
+        const { type } = req.params; // 'swing' or 'scalping'
+
+        if (type !== 'swing' && type !== 'scalping') {
+            res.status(400).json({ error: 'type deve ser "swing" ou "scalping"' });
+            return;
+        }
+
+        // Load config from environment or database
+        const robotConfig = {
+            symbols: type === 'swing' 
+                ? ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
+                : ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+            signal: {
+                minScore: type === 'swing' ? 75 : 70,
+                maxSimultaneousPositions: type === 'swing' ? 5 : 8,
+                maxCapitalPerPosition: type === 'swing' ? 10 : 5,
+                allowLong: true,
+                allowShort: true,
+                useMLFilter: false,
+            },
+            timeframe: type === 'swing' ? '1h' : '5m',
+            strategyId: type === 'swing' ? 'DEFAULT' : 'SCALPING_BOT',
+        };
+
+        logger.info(`[Backtest] Config do robô ${type} carregada`);
+
+        res.json({ success: true, config: robotConfig });
+    } catch (error: any) {
+        logger.error('[Backtest] Erro ao carregar config do robô:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
 

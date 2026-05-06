@@ -146,40 +146,56 @@ export const runQuickBacktest = async (
 
 // ──────────── Load Bot Settings as BacktestConfig ────────────
 
-export const loadBotConfig = async (): Promise<Partial<BacktestConfig>> => {
+export const loadBotConfig = async (robotType: 'swing' | 'scalping' = 'swing'): Promise<Partial<BacktestConfig>> => {
     const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
     
-    const [portfolioRes, marketRes] = await Promise.all([
-        fetch(`${apiUrl}/api/portfolio`, { credentials: 'include' }).catch(() => null),
-        fetch(`${apiUrl}/api/market`, { credentials: 'include' }).catch(() => null)
-    ]);
+    try {
+        const response = await fetch(`${apiUrl}/api/backtest/robot-config/${robotType}`, { 
+            credentials: 'include' 
+        });
 
-    if (!portfolioRes?.ok && !marketRes?.ok) {
-        throw new Error('Não foi possível acessar a API do servidor');
-    }
-
-    const partial: Partial<BacktestConfig> = {};
-
-    if (portfolioRes?.ok) {
-        const pData = await portfolioRes.json();
-        const auto = pData?.config?.autoTrade;
-        if (auto) {
-            partial.signal = { 
-                ...(partial.signal ?? DEFAULT_BACKTEST_CONFIG.signal), 
-                minScore: Number(auto.minScore ?? 75),
-                maxSimultaneousPositions: Number(auto.maxSimultaneousPositions ?? 5)
-            };
+        if (!response.ok) {
+            throw new Error(`Failed to load ${robotType} config`);
         }
-    }
 
-    if (marketRes?.ok) {
-        const mData = await marketRes.json();
-        if (Array.isArray(mData) && mData.length > 0) {
-            partial.symbols = mData.map((m: any) => m.symbol.replace('/', '').toUpperCase());
+        const data = await response.json();
+        return data.config;
+    } catch (error) {
+        console.error('Error loading bot config:', error);
+        
+        // Fallback to old method
+        const [portfolioRes, marketRes] = await Promise.all([
+            fetch(`${apiUrl}/api/portfolio`, { credentials: 'include' }).catch(() => null),
+            fetch(`${apiUrl}/api/market`, { credentials: 'include' }).catch(() => null)
+        ]);
+
+        if (!portfolioRes?.ok && !marketRes?.ok) {
+            throw new Error('Não foi possível acessar a API do servidor');
         }
-    }
 
-    return partial;
+        const partial: Partial<BacktestConfig> = {};
+
+        if (portfolioRes?.ok) {
+            const pData = await portfolioRes.json();
+            const auto = pData?.config?.autoTrade;
+            if (auto) {
+                partial.signal = { 
+                    ...(partial.signal ?? DEFAULT_BACKTEST_CONFIG.signal), 
+                    minScore: Number(auto.minScore ?? 75),
+                    maxSimultaneousPositions: Number(auto.maxSimultaneousPositions ?? 5)
+                };
+            }
+        }
+
+        if (marketRes?.ok) {
+            const mData = await marketRes.json();
+            if (Array.isArray(mData) && mData.length > 0) {
+                partial.symbols = mData.map((m: any) => m.symbol.replace('/', '').toUpperCase());
+            }
+        }
+
+        return partial;
+    }
 };
 
 // ──────────── Optimization ────────────

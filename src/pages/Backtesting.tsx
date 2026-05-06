@@ -292,15 +292,27 @@ const ConfigPanel: React.FC<{ config: BacktestConfig; setConfig: (c: BacktestCon
     // Load live bot config from API
     const [loadingBot, setLoadingBot] = React.useState(false);
     const [botLoadMsg, setBotLoadMsg] = React.useState<string | null>(null);
+    const [selectedRobot, setSelectedRobot] = React.useState<'swing' | 'scalping'>('swing');
+    const [availableStrategies, setAvailableStrategies] = React.useState<any[]>([]);
+    const [showAddStrategy, setShowAddStrategy] = React.useState(false);
+
+    // Fetch available strategies from backend
+    React.useEffect(() => {
+        fetch(`${API}/api/backtest/strategies`)
+            .then(res => res.json())
+            .then(data => setAvailableStrategies(data.strategies || []))
+            .catch(err => console.error('Failed to load strategies:', err));
+    }, []);
+
     const handleLoadBotConfig = async () => {
         setLoadingBot(true);
         setBotLoadMsg(null);
         try {
-            const partial = await loadBotConfig();
+            const partial = await loadBotConfig(selectedRobot);
             const end = new Date().toISOString().split('T')[0];
             const start = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
             setConfig({ ...config, ...partial, startDate: start, endDate: end });
-            setBotLoadMsg(`✅ Config do robô carregada!${partial.symbols ? ` Pares: ${partial.symbols.join(', ')}` : ''} Score mín: ${partial.signal?.minScore ?? config.signal.minScore}`);
+            setBotLoadMsg(`✅ Config do robô ${selectedRobot === 'swing' ? 'Swing' : 'Scalping'} carregada!${partial.symbols ? ` Pares: ${partial.symbols.join(', ')}` : ''} Score mín: ${partial.signal?.minScore ?? config.signal.minScore}`);
         } catch (e: any) {
             setBotLoadMsg(`⚠️ Não foi possível carregar config do robô (${e.message}).`);
         } finally {
@@ -311,19 +323,46 @@ const ConfigPanel: React.FC<{ config: BacktestConfig; setConfig: (c: BacktestCon
     return (
         <div style={{ display: 'grid', gap: '1.25rem' }}>
             {/* Load Bot Config Banner */}
-            <div style={{ background: 'linear-gradient(135deg, #1e3a5f33, #0f2027)', borderRadius: '0.75rem', padding: '1rem 1.25rem', border: '1px solid #3b82f640', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ background: 'linear-gradient(135deg, #1e3a5f33, #0f2027)', borderRadius: '0.75rem', padding: '1rem 1.25rem', border: '1px solid #3b82f640', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div>
                     <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#60a5fa', marginBottom: '0.15rem' }}>🤖 Configurações do Robô</p>
                     <p style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Carrega automaticamente o score mínimo, pares e limites de risco do robô ativo.</p>
                     {botLoadMsg && <p style={{ fontSize: '0.75rem', color: botLoadMsg.startsWith('✅') ? '#22c55e' : '#f59e0b', marginTop: '0.25rem' }}>{botLoadMsg}</p>}
                 </div>
-                <button
-                    onClick={handleLoadBotConfig}
-                    disabled={loadingBot}
-                    style={{ padding: '0.5rem 1.25rem', borderRadius: '0.5rem', border: 'none', background: loadingBot ? '#374151' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', cursor: loadingBot ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}
-                >
-                    {loadingBot ? '⏳ Carregando...' : '🤖 Usar Config do Robô (90d)'}
-                </button>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Robot Selector */}
+                    <div style={{ display: 'flex', gap: '0.5rem', padding: '0.25rem', background: '#111827', borderRadius: '0.5rem', border: '1px solid #374151' }}>
+                        <button
+                            onClick={() => setSelectedRobot('swing')}
+                            style={{
+                                padding: '0.5rem 1rem', borderRadius: '0.375rem', border: 'none',
+                                background: selectedRobot === 'swing' ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)' : 'transparent',
+                                color: selectedRobot === 'swing' ? '#fff' : '#9ca3af',
+                                cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', transition: 'all 0.2s',
+                            }}
+                        >
+                            📊 Swing Trading
+                        </button>
+                        <button
+                            onClick={() => setSelectedRobot('scalping')}
+                            style={{
+                                padding: '0.5rem 1rem', borderRadius: '0.375rem', border: 'none',
+                                background: selectedRobot === 'scalping' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'transparent',
+                                color: selectedRobot === 'scalping' ? '#fff' : '#9ca3af',
+                                cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', transition: 'all 0.2s',
+                            }}
+                        >
+                            ⚡ Scalping
+                        </button>
+                    </div>
+                    <button
+                        onClick={handleLoadBotConfig}
+                        disabled={loadingBot}
+                        style={{ padding: '0.5rem 1.25rem', borderRadius: '0.5rem', border: 'none', background: loadingBot ? '#374151' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', cursor: loadingBot ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+                    >
+                        {loadingBot ? '⏳ Carregando...' : `🤖 Usar Config ${selectedRobot === 'swing' ? 'Swing' : 'Scalping'} (90d)`}
+                    </button>
+                </div>
             </div>
 
             {/* Presets */}
@@ -341,6 +380,86 @@ const ConfigPanel: React.FC<{ config: BacktestConfig; setConfig: (c: BacktestCon
                     <button onClick={() => applyPreset('sniper')} style={{ padding: '0.5rem 1rem', borderRadius: '0.5rem', background: '#8b5cf633', border: '1px solid #8b5cf6', color: '#c084fc', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
                         🎯 Sniper (Score 85)
                     </button>
+                </div>
+            </div>
+
+            {/* Available Strategies */}
+            <div style={sectionStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#d1d5db', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Target size={16} /> Estratégias Disponíveis
+                    </h3>
+                    <button
+                        onClick={() => setShowAddStrategy(!showAddStrategy)}
+                        style={{
+                            padding: '0.375rem 0.75rem', borderRadius: '0.375rem', border: '1px solid #22c55e',
+                            background: '#22c55e20', color: '#22c55e', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600,
+                        }}
+                    >
+                        {showAddStrategy ? '✕ Cancelar' : '+ Nova Estratégia'}
+                    </button>
+                </div>
+
+                {/* Add Strategy Form */}
+                {showAddStrategy && (
+                    <div style={{ marginBottom: '1rem', padding: '1rem', background: '#111827', borderRadius: '0.5rem', border: '1px solid #374151' }}>
+                        <AddStrategyForm onSuccess={() => {
+                            setShowAddStrategy(false);
+                            // Reload strategies
+                            fetch(`${API}/api/backtest/strategies`)
+                                .then(res => res.json())
+                                .then(data => setAvailableStrategies(data.strategies || []))
+                                .catch(err => console.error('Failed to reload strategies:', err));
+                        }} />
+                    </div>
+                )}
+
+                {/* Strategy Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
+                    {availableStrategies.map((strategy: any) => (
+                        <div
+                            key={strategy.id}
+                            onClick={() => update('strategyId', strategy.id)}
+                            style={{
+                                padding: '1rem', borderRadius: '0.5rem',
+                                background: config.strategyId === strategy.id ? '#1e3a5f' : '#111827',
+                                border: `1px solid ${config.strategyId === strategy.id ? '#3b82f6' : '#374151'}`,
+                                cursor: 'pointer', transition: 'all 0.2s',
+                            }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: config.strategyId === strategy.id ? '#60a5fa' : '#d1d5db' }}>
+                                        {strategy.name}
+                                    </div>
+                                    <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.15rem' }}>
+                                        {strategy.timeframe} • {strategy.type}
+                                    </div>
+                                </div>
+                                {config.strategyId === strategy.id && (
+                                    <CheckCircle size={16} style={{ color: '#22c55e' }} />
+                                )}
+                            </div>
+                            <p style={{ fontSize: '0.75rem', color: '#9ca3af', lineHeight: '1.4' }}>
+                                {strategy.description}
+                            </p>
+                            {strategy.indicators && strategy.indicators.length > 0 && (
+                                <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                                    {strategy.indicators.map((ind: string) => (
+                                        <span
+                                            key={ind}
+                                            style={{
+                                                padding: '0.125rem 0.375rem', borderRadius: '0.25rem', fontSize: '0.65rem',
+                                                background: '#374151', color: '#9ca3af',
+                                            }}
+                                        >
+                                            {ind}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
             </div>
 
@@ -1317,6 +1436,154 @@ const HistoryPanel: React.FC<{ onLoad: (result: any) => void }> = ({ onLoad }) =
                 </div>
             )}
         </div>
+    );
+};
+
+// ═══════════════════════════ ADD STRATEGY FORM ═══════════════════════════
+
+const AddStrategyForm: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
+    const [formData, setFormData] = useState({
+        name: '',
+        description: '',
+        type: 'swing',
+        timeframe: '1h',
+        indicators: '',
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`${API}/api/backtest/strategies`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...formData,
+                    indicators: formData.indicators.split(',').map(s => s.trim()).filter(Boolean),
+                }),
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Erro ao criar estratégia');
+            }
+
+            onSuccess();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const inputStyle: React.CSSProperties = {
+        width: '100%', padding: '0.5rem', borderRadius: '0.375rem', border: '1px solid #374151',
+        background: '#0a0a0f', color: '#e5e7eb', fontSize: '0.875rem', outline: 'none',
+    };
+
+    return (
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.75rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#9ca3af', marginBottom: '0.25rem' }}>
+                        Nome da Estratégia *
+                    </label>
+                    <input
+                        type="text"
+                        value={formData.name}
+                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="Ex: EMA Cross Volume"
+                        required
+                        style={inputStyle}
+                    />
+                </div>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#9ca3af', marginBottom: '0.25rem' }}>
+                        Tipo
+                    </label>
+                    <select
+                        value={formData.type}
+                        onChange={e => setFormData({ ...formData, type: e.target.value })}
+                        style={inputStyle}
+                    >
+                        <option value="swing">Swing Trading</option>
+                        <option value="scalping">Scalping</option>
+                        <option value="day-trade">Day Trade</option>
+                        <option value="position">Position Trading</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.75rem' }}>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#9ca3af', marginBottom: '0.25rem' }}>
+                        Timeframe
+                    </label>
+                    <select
+                        value={formData.timeframe}
+                        onChange={e => setFormData({ ...formData, timeframe: e.target.value })}
+                        style={inputStyle}
+                    >
+                        <option value="1m">1 Minuto</option>
+                        <option value="5m">5 Minutos</option>
+                        <option value="15m">15 Minutos</option>
+                        <option value="30m">30 Minutos</option>
+                        <option value="1h">1 Hora</option>
+                        <option value="4h">4 Horas</option>
+                        <option value="1d">1 Dia</option>
+                    </select>
+                </div>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#9ca3af', marginBottom: '0.25rem' }}>
+                        Indicadores (separados por vírgula)
+                    </label>
+                    <input
+                        type="text"
+                        value={formData.indicators}
+                        onChange={e => setFormData({ ...formData, indicators: e.target.value })}
+                        placeholder="Ex: EMA, RSI, MACD"
+                        style={inputStyle}
+                    />
+                </div>
+            </div>
+
+            <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', color: '#9ca3af', marginBottom: '0.25rem' }}>
+                    Descrição *
+                </label>
+                <textarea
+                    value={formData.description}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Descreva a lógica da estratégia..."
+                    required
+                    rows={3}
+                    style={{ ...inputStyle, resize: 'vertical' }}
+                />
+            </div>
+
+            {error && (
+                <div style={{ padding: '0.5rem', borderRadius: '0.375rem', background: '#7f1d1d33', border: '1px solid #991b1b', color: '#fca5a5', fontSize: '0.75rem' }}>
+                    {error}
+                </div>
+            )}
+
+            <button
+                type="submit"
+                disabled={isSubmitting}
+                style={{
+                    padding: '0.5rem 1rem', borderRadius: '0.375rem', border: 'none',
+                    background: isSubmitting ? '#374151' : 'linear-gradient(135deg, #22c55e, #16a34a)',
+                    color: '#fff', cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                    fontWeight: 600, fontSize: '0.875rem',
+                }}
+            >
+                {isSubmitting ? 'Criando...' : '✓ Criar Estratégia'}
+            </button>
+        </form>
     );
 };
 

@@ -1,0 +1,75 @@
+# ═══════════════════════════════════════════════════════
+# COMANDO ÚNICO - Copie e cole no SSH do VPS
+# ═══════════════════════════════════════════════════════
+
+cat > /tmp/fix_robo.sh << 'EOF'
+#!/bin/bash
+echo "🔧 FIX RÁPIDO: Bybit API Timeout"
+echo ""
+
+# 1. Testar API
+echo "1️⃣ Testando Bybit API..."
+RESPONSE=$(curl -s -w "\n%{http_code}" "https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT" --max-time 10)
+HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+    echo "✅ API respondendo (HTTP $HTTP_CODE)"
+else
+    echo "❌ API com problema (HTTP $HTTP_CODE)"
+fi
+
+# 2. Verificar erros ETIMEDOUT
+echo ""
+echo "2️⃣ Verificando erros ETIMEDOUT..."
+TIMEOUTS=$(pm2 logs signal-engine --lines 200 --nostream --err | grep "ETIMEDOUT" | wc -l)
+echo "Erros ETIMEDOUT encontrados: $TIMEOUTS"
+
+# 3. Adicionar timeout maior
+echo ""
+echo "3️⃣ Configurando timeout maior..."
+cd /var/www/signal-dashboard/backend
+
+# Backup do .env
+cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+
+# Adicionar ou atualizar timeout
+if grep -q "BYBIT_API_TIMEOUT" .env; then
+    sed -i 's/BYBIT_API_TIMEOUT=.*/BYBIT_API_TIMEOUT=30000/' .env
+    echo "✅ Timeout atualizado para 30s"
+else
+    echo "BYBIT_API_TIMEOUT=30000" >> .env
+    echo "✅ Timeout adicionado (30s)"
+fi
+
+# 4. Restart
+echo ""
+echo "4️⃣ Reiniciando signal-engine..."
+pm2 restart signal-engine
+sleep 8
+
+# 5. Verificar logs
+echo ""
+echo "5️⃣ Verificando logs recentes..."
+pm2 logs signal-engine --lines 20 --nostream
+
+# 6. Status final
+echo ""
+echo "6️⃣ Status final..."
+pm2 list | grep signal-engine
+
+echo ""
+echo "═══════════════════════════════════════════════════════"
+echo "✅ FIX APLICADO!"
+echo ""
+echo "📊 Próximos passos:"
+echo "1. Aguarde 5-10 minutos"
+echo "2. Execute: pm2 logs signal-engine --lines 50"
+echo "3. Verifique se não há mais erros ETIMEDOUT"
+echo "4. Verifique se sinais estão sendo gerados"
+echo ""
+echo "💡 Lembre-se: 0 sinais pode ser normal se não houver"
+echo "   oportunidades no mercado (score < 60, vetos, etc.)"
+echo "═══════════════════════════════════════════════════════"
+EOF
+
+chmod +x /tmp/fix_robo.sh && bash /tmp/fix_robo.sh
