@@ -456,11 +456,30 @@ router.get('/metrics', (_req: Request, res: Response) => {
 
 // ──── ML Stats ────
 
-router.get('/ml/stats', async (_req: Request, res: Response) => {
+router.get('/ml/stats', async (req: Request, res: Response) => {
     try {
+        const { startDate, endDate, robotType } = req.query;
+        
+        // Construir filtros dinâmicos
+        const whereClause: any = { 
+            status: { in: ['CLOSED_TP', 'CLOSED_SL'] } 
+        };
+        
+        // Filtro de data
+        if (startDate || endDate) {
+            whereClause.exit_time = {};
+            if (startDate) whereClause.exit_time.gte = new Date(startDate as string);
+            if (endDate) whereClause.exit_time.lte = new Date(endDate as string);
+        }
+        
+        // Filtro de tipo de robô
+        if (robotType && robotType !== 'all') {
+            whereClause.trade_type = robotType;
+        }
+        
         // Usar sinais REAIS fechados (não dados de treino históricos)
         const closedSignals = await db.tradeSignal.findMany({
-            where: { status: { in: ['CLOSED_TP', 'CLOSED_SL'] } },
+            where: whereClause,
             select: {
                 status: true,
                 take_profits: true,
@@ -530,10 +549,28 @@ router.get('/ml/stats', async (_req: Request, res: Response) => {
 router.get('/ml/learning-history', async (req: Request, res: Response) => {
     try {
         const limit = parseInt(getStringParam(req.query.limit)) || 5;
+        const { startDate, endDate, robotType } = req.query;
+        
+        // Construir filtros dinâmicos
+        const whereClause: any = { 
+            outcome: { not: null } 
+        };
+        
+        // Filtro de data
+        if (startDate || endDate) {
+            whereClause.exit_time = {};
+            if (startDate) whereClause.exit_time.gte = new Date(startDate as string);
+            if (endDate) whereClause.exit_time.lte = new Date(endDate as string);
+        }
+        
+        // Filtro de tipo de robô
+        if (robotType && robotType !== 'all') {
+            whereClause.trade_type = robotType;
+        }
         
         // Fetch recently closed trades with outcomes
         const history = await db.tradeSignal.findMany({
-            where: { outcome: { not: null } },
+            where: whereClause,
             orderBy: { exit_time: 'desc' },
             take: limit,
             select: {
@@ -583,8 +620,23 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
         });
 
         // Summary stats: Acurácia real da IA baseada nos sinais reais
+        const whereClauseForAcc: any = { 
+            outcome: { not: null }, 
+            ml_data: { not: null } 
+        };
+        
+        // Aplicar mesmos filtros de data e robô
+        if (startDate || endDate) {
+            whereClauseForAcc.exit_time = {};
+            if (startDate) whereClauseForAcc.exit_time.gte = new Date(startDate as string);
+            if (endDate) whereClauseForAcc.exit_time.lte = new Date(endDate as string);
+        }
+        if (robotType && robotType !== 'all') {
+            whereClauseForAcc.trade_type = robotType;
+        }
+        
         const historyForAcc = await db.tradeSignal.findMany({
-            where: { outcome: { not: null }, ml_data: { not: null } },
+            where: whereClauseForAcc,
             select: { outcome: true, ml_data: true }
         });
         
