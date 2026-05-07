@@ -95,6 +95,7 @@ model MLTrainingData {
   outcome_pnl    Float
   entry_time     String
   features       String   // JSON string of feature array/object
+  trade_type     String?  // 'swing' or 'scalping'
   
   created_at     DateTime @default(now())
 }

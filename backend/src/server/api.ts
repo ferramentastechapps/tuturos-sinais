@@ -460,74 +460,63 @@ router.get('/ml/stats', async (req: Request, res: Response) => {
     try {
         const { startDate, endDate, robotType } = req.query;
         
-        // Construir filtros dinâmicos
-        const whereClause: any = { 
-            status: { in: ['CLOSED_TP', 'CLOSED_SL'] } 
-        };
+        // Construir filtros dinâmicos para ml_training_data
+        const whereClause: any = {};
         
         // Filtro de data
         if (startDate || endDate) {
-            whereClause.exit_time = {};
-            if (startDate) whereClause.exit_time.gte = new Date(startDate as string);
-            if (endDate) whereClause.exit_time.lte = new Date(endDate as string);
+            whereClause.entry_time = {};
+            if (startDate) whereClause.entry_time.gte = new Date(startDate as string).toISOString();
+            if (endDate) whereClause.entry_time.lte = new Date(endDate as string).toISOString();
         }
         
         // Filtro de tipo de robô (case-insensitive)
         if (robotType && robotType !== 'all') {
-            // Aceita 'swing', 'Swing', 'SWING', 'Day Trade', etc
             const typePattern = robotType === 'swing' 
                 ? { contains: 'swing', mode: 'insensitive' as const }
                 : { contains: 'scalp', mode: 'insensitive' as const };
             whereClause.trade_type = typePattern;
         }
         
-        // Usar sinais REAIS fechados (não dados de treino históricos)
-        const closedSignals = await db.tradeSignal.findMany({
+        // Buscar dados de treino ML (sinais históricos fechados)
+        const trainingData = await db.mLTrainingData.findMany({
             where: whereClause,
             select: {
-                status: true,
-                take_profits: true,
-                entry_range_low: true,
-                entry_range_high: true,
-                stop_loss: true,
-                pnl: true,
+                outcome_label: true,
+                outcome_pnl: true,
+                features: true,
             }
         });
 
-        const wins = closedSignals.filter((s: any) => s.status === 'CLOSED_TP').length;
-        const losses = closedSignals.filter((s: any) => s.status === 'CLOSED_SL').length;
+        const wins = trainingData.filter((d: any) => d.outcome_label === 1).length;
+        const losses = trainingData.filter((d: any) => d.outcome_label === 0).length;
         const totalSignals = wins + losses;
         const winRate = totalSignals > 0 ? (wins / totalSignals) * 100 : 0;
 
-        // PnL médio real
+        // PnL médio
         const avgPnl = totalSignals > 0
-            ? closedSignals.reduce((sum: number, s: any) => sum + (s.pnl || 0), 0) / totalSignals
+            ? trainingData.reduce((sum: number, d: any) => sum + (d.outcome_pnl || 0), 0) / totalSignals
             : 0;
 
+        // Calcular TP hits dos features
         let tp1Hits = 0, tp2Hits = 0, tp3Hits = 0;
-        for (const signal of closedSignals) {
-            if (signal.status === 'CLOSED_TP') {
-                let hasHit1 = false, hasHit2 = false, hasHit3 = false;
+        for (const data of trainingData) {
+            if (data.outcome_label === 1) {
                 try {
-                    const tps = JSON.parse(signal.take_profits);
-                    if (Array.isArray(tps)) {
-                        if (tps.find((t: any) => (t.level === 1 || t.tp === 1) && t.hit)) hasHit1 = true;
-                        if (tps.find((t: any) => (t.level === 2 || t.tp === 2) && t.hit)) hasHit2 = true;
-                        if (tps.find((t: any) => (t.level === 3 || t.tp === 3) && t.hit)) hasHit3 = true;
-                    }
-                } catch (e) { /* ignore */ }
-                
-                // Fallback: Se o status é CLOSED_TP, no mínimo bateu o TP1
-                if (!hasHit1) hasHit1 = true;
-
-                if (hasHit1) tp1Hits++;
-                if (hasHit2) tp2Hits++;
-                if (hasHit3) tp3Hits++;
+                    const features = JSON.parse(data.features);
+                    // Tentar extrair info de TP dos features
+                    if (features.tp1_hit || features.tp_1_hit) tp1Hits++;
+                    if (features.tp2_hit || features.tp_2_hit) tp2Hits++;
+                    if (features.tp3_hit || features.tp_3_hit) tp3Hits++;
+                } catch (e) {
+                    // Se não conseguir parsear, assume que bateu pelo menos TP1
+                    tp1Hits++;
+                }
             }
         }
 
-        // Amostras de treino (só para info)
-        const trainingSamples = await db.mLTrainingData.count();
+        // Total de amostras de treino (com filtro aplicado)
+        const trainingSamples = totalSignals;
 
         res.json({
             enabled: config.ml.enabled,
@@ -555,16 +544,14 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
         const limit = parseInt(getStringParam(req.query.limit)) || 5;
         const { startDate, endDate, robotType } = req.query;
         
-        // Construir filtros dinâmicos
-        const whereClause: any = { 
-            outcome: { not: null } 
-        };
+        // Construir filtros dinâmicos para ml_training_data
+        const whereClause: any = {};
         
         // Filtro de data
         if (startDate || endDate) {
-            whereClause.exit_time = {};
-            if (startDate) whereClause.exit_time.gte = new Date(startDate as string);
-            if (endDate) whereClause.exit_time.lte = new Date(endDate as string);
+            whereClause.entry_time = {};
+            if (startDate) whereClause.entry_time.gte = new Date(startDate as string).toISOString();
+            if (endDate) whereClause.entry_time.lte = new Date(endDate as string).toISOString();
         }
         
         // Filtro de tipo de robô (case-insensitive)
@@ -575,68 +562,68 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             whereClause.trade_type = typePattern;
         }
         
-        // Fetch recently closed trades with outcomes
-        const history = await db.tradeSignal.findMany({
+        // Fetch recently closed trades from ml_training_data
+        const history = await db.mLTrainingData.findMany({
             where: whereClause,
-            orderBy: { exit_time: 'desc' },
+            orderBy: { created_at: 'desc' },
             take: limit,
             select: {
                 id: true,
-                pair: true,
-                outcome: true,
-                pnl: true,
-                exit_time: true,
-                ml_data: true,
-                indicators: true,
-                trade_type: true,
+                symbol: true,
+                outcome_label: true,
+                outcome_pnl: true,
                 entry_time: true,
+                features: true,
+                trade_type: true,
                 created_at: true
             }
         });
 
         const learnings = history.map((h: any) => {
-            let parsedML: any = {};
-            try { if (h.ml_data) parsedML = JSON.parse(h.ml_data); } catch(e){}
+            let parsedFeatures: any = {};
+            try { if (h.features) parsedFeatures = JSON.parse(h.features); } catch(e){}
             
-            let parsedInd: any[] = [];
-            try { if (h.indicators) parsedInd = JSON.parse(h.indicators); } catch(e){}
+            // Extrair indicadores dos features
+            const key_indicators: string[] = [];
+            if (parsedFeatures.rsi) key_indicators.push(`RSI: ${parsedFeatures.rsi.toFixed(2)}`);
+            if (parsedFeatures.macd) key_indicators.push(`MACD: ${parsedFeatures.macd.toFixed(4)}`);
+            if (parsedFeatures.ema_trend) key_indicators.push(`EMA: ${parsedFeatures.ema_trend}`);
+            
+            if (key_indicators.length === 0) {
+                key_indicators.push('RSI', 'MACD', 'EMA');
+            }
 
-            // 1 = previu WIN, 0 = previu LOSS. 
-            // Se não houver previsão salva (sinais antigos), assumimos 1 pois o bot só opera previsões positivas.
-            const predictedClass = parsedML.predictedClass ?? 1; 
-            const isWin = h.outcome === 'WIN';
+            // 1 = WIN, 0 = LOSS
+            const isWin = h.outcome_label === 1;
+            const result = isWin ? 'WIN' : 'LOSS';
             
-            // A IA acertou se: (Previu WIN e deu WIN) OU (Previu LOSS e deu LOSS)
+            // ML prediction (se disponível nos features)
+            const predictedClass = parsedFeatures.ml_prediction ?? 1;
             const wasCorrect = (predictedClass === 1 && isWin) || (predictedClass === 0 && !isWin);
-
-            const key_indicators = parsedInd.length > 0 ? parsedInd.slice(0, 3) : ['RSI', 'MACD', 'EMA'];
 
             return {
                 id: h.id,
-                symbol: h.pair,
-                result: h.outcome,
-                profit_percent: h.pnl || 0,
+                symbol: h.symbol,
+                result,
+                profit_percent: h.outcome_pnl || 0,
                 ml_was_correct: wasCorrect,
                 key_indicators,
                 trade_type: h.trade_type,
-                entry_time: h.entry_time || h.created_at,
-                exit_time: h.exit_time,
-                all_indicators: parsedInd,
-                ml_data: parsedML
+                entry_time: h.entry_time,
+                exit_time: h.entry_time, // ml_training_data não tem exit_time separado
+                all_indicators: parsedFeatures,
+                ml_data: parsedFeatures
             };
         });
 
-        // Summary stats: Acurácia real da IA baseada nos sinais reais
-        const whereClauseForAcc: any = { 
-            outcome: { not: null }, 
-            ml_data: { not: null } 
-        };
+        // Summary stats: Acurácia baseada nos dados de treino
+        const whereClauseForAcc: any = {};
         
-        // Aplicar mesmos filtros de data e robô
+        // Aplicar mesmos filtros
         if (startDate || endDate) {
-            whereClauseForAcc.exit_time = {};
-            if (startDate) whereClauseForAcc.exit_time.gte = new Date(startDate as string);
-            if (endDate) whereClauseForAcc.exit_time.lte = new Date(endDate as string);
+            whereClauseForAcc.entry_time = {};
+            if (startDate) whereClauseForAcc.entry_time.gte = new Date(startDate as string).toISOString();
+            if (endDate) whereClauseForAcc.entry_time.lte = new Date(endDate as string).toISOString();
         }
         if (robotType && robotType !== 'all') {
             const typePattern = robotType === 'swing' 
@@ -645,27 +632,27 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             whereClauseForAcc.trade_type = typePattern;
         }
         
-        const historyForAcc = await db.tradeSignal.findMany({
+        const allData = await db.mLTrainingData.findMany({
             where: whereClauseForAcc,
-            select: { outcome: true, ml_data: true }
+            select: { outcome_label: true, features: true }
         });
         
         let correctCount = 0;
         let totalCount = 0;
         
-        for (const h of historyForAcc) {
-            let parsedML: any = {};
-            try { if (h.ml_data) parsedML = JSON.parse(h.ml_data); } catch(e){}
+        for (const d of allData) {
+            let parsedFeatures: any = {};
+            try { if (d.features) parsedFeatures = JSON.parse(d.features); } catch(e){}
             
-            if (parsedML && typeof parsedML.predictedClass === 'number') {
-                const isWin = h.outcome === 'WIN';
-                const wasCorrect = (parsedML.predictedClass === 1 && isWin) || (parsedML.predictedClass === 0 && !isWin);
+            if (parsedFeatures && typeof parsedFeatures.ml_prediction === 'number') {
+                const isWin = d.outcome_label === 1;
+                const wasCorrect = (parsedFeatures.ml_prediction === 1 && isWin) || (parsedFeatures.ml_prediction === 0 && !isWin);
                 if (wasCorrect) correctCount++;
                 totalCount++;
             }
         }
         
-        // Se não houver dados reais suficientes para acurácia, tenta usar o accuracy do model_metrics (treinamento)
+        // Se não houver previsões nos features, usar accuracy do model_metrics
         let ml_accuracy = totalCount > 0 ? correctCount / totalCount : 0;
         
         if (totalCount === 0) {
@@ -680,7 +667,7 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             } catch(e) {}
         }
 
-        const total = await db.mLTrainingData.count();
+        const total = await db.mLTrainingData.count(whereClauseForAcc);
 
         res.json({
             success: true,
