@@ -1,0 +1,62 @@
+========================================
+  PROBLEMA CORRIGIDO - EXECUTE AGORA!
+========================================
+
+COMANDO:
+--------
+.\Fix-VPS-Deploy.ps1
+
+
+O QUE VAI ACONTECER:
+--------------------
+1. Criar diretorios na VPS
+2. Backup automatico
+3. Enviar 8 arquivos corrigidos
+4. Compilar na VPS
+5. Reiniciar backend
+6. Mostrar logs
+
+
+TEMPO ESTIMADO:
+---------------
+2-3 minutos
+
+
+SENHA SSH:
+----------
+Sera pedida ~10 vezes (uma para cada arquivo)
+
+
+APOS O DEPLOY:
+--------------
+Monitore os logs:
+ssh root@212.85.10.239 'pm2 logs backend --lines 50'
+
+
+LOGS ESPERADOS:
+---------------
+[ML-CONFIDENCE] prob=0.73, predictedClass=1, model=BTCUSDT
+[MLRetrain] Backup criado
+[VETO VOLATILIDADE ALTA] BTCUSDT - ATR=850
+[TradeTracker] Stop atualizado: 50000 -> 51000
+
+
+CORRECOES APLICADAS:
+--------------------
+1. Confidence invertido (mlPredictionService.ts)
+2. Retreinamento com backup (mlRetrainJob.ts)
+3. Isolamento por moeda (train_model.py + engines)
+4. Filtro volatilidade alta (volatilityTracker.ts)
+5. Trailing stop progressivo (tradeTracker.ts)
+
+
+DOCUMENTACAO:
+-------------
+- PROBLEMA_RESOLVIDO.md (detalhes completos)
+- CORRECOES_CIRURGICAS_ML.md
+- FIX_TRAILING_STOP_PROGRESSIVO.md
+
+
+========================================
+  EXECUTE AGORA: .\Fix-VPS-Deploy.ps1
+========================================

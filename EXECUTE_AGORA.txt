@@ -1,0 +1,45 @@
+========================================
+  DEPLOY PRONTO - EXECUTE AGORA!
+========================================
+
+PASSO 1: Execute o deploy
+--------------------------
+.\Deploy-SourceOnly.ps1
+
+(O script vai pedir a senha SSH ~10 vezes)
+
+
+PASSO 2: Monitore os logs
+--------------------------
+ssh root@212.85.10.239 'pm2 logs backend --lines 50'
+
+
+LOGS ESPERADOS:
+--------------------------
+[ML-CONFIDENCE] prob=0.73, predictedClass=1, model=BTCUSDT
+[MLRetrain] Backup criado
+[VETO VOLATILIDADE ALTA] BTCUSDT - ATR=850
+[TradeTracker] Stop atualizado: 50000 -> 51000
+
+
+CORRECOES APLICADAS:
+--------------------------
+1. Confidence invertido (mlPredictionService.ts)
+2. Retreinamento com backup (mlRetrainJob.ts)
+3. Isolamento por moeda (train_model.py + engines)
+4. Filtro volatilidade alta (volatilityTracker.ts)
+5. Trailing stop progressivo (tradeTracker.ts)
+
+
+VPS:
+--------------------------
+IP: 212.85.10.239
+User: root
+Path: /var/www/signal-dashboard
+
+
+DOCUMENTACAO:
+--------------------------
+- DEPLOY_READY.md (detalhes completos)
+- CORRECOES_CIRURGICAS_ML.md
+- FIX_TRAILING_STOP_PROGRESSIVO.md

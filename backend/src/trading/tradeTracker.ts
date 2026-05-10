@@ -436,19 +436,60 @@ export class TradeTracker {
     }
   }
 
+  private calculateNewStopAfterTP(signal: ActiveSignal, tpHit: TakeProfit): number {
+    const isLong = signal.type.toUpperCase() === 'LONG';
+    const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
+
+    if (tpHit.level === 1) {
+      // TP1 → breakeven
+      return isLong
+        ? Math.max(signal.stop_loss, entryAvg)
+        : Math.min(signal.stop_loss, entryAvg);
+    }
+
+    if (tpHit.level === 2) {
+      // TP2 → preço do TP1
+      const tp1 = signal.take_profits.find(t => t.level === 1);
+      if (tp1) {
+        return isLong
+          ? Math.max(signal.stop_loss, tp1.price)
+          : Math.min(signal.stop_loss, tp1.price);
+      }
+    }
+
+    if (tpHit.level === 3) {
+      // TP3 → preço do TP2
+      const tp2 = signal.take_profits.find(t => t.level === 2);
+      if (tp2) {
+        return isLong
+          ? Math.max(signal.stop_loss, tp2.price)
+          : Math.min(signal.stop_loss, tp2.price);
+      }
+    }
+
+    return signal.stop_loss; // fallback: manter stop atual
+  }
+
   private async handleTakeProfit(signal: ActiveSignal, tp: TakeProfit, currentPrice: number) {
     console.log(`[TradeTracker] TP${tp.level} hit for ${signal.pair} at ${currentPrice}`);
     tp.hit = true;
 
-    // Determine Breakeven / New SL
-    let oldSl = signal.stop_loss;
-    const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
+    // Atualizar stop loss progressivamente
+    const oldSL = signal.stop_loss;
+    const newSL = this.calculateNewStopAfterTP(signal, tp);
     
-    if (tp.level === 1) {
-      // Move to breakeven após TP1
-      signal.stop_loss = signal.type.toUpperCase() === 'LONG' 
-        ? Math.max(signal.stop_loss, entryAvg)
-        : Math.min(signal.stop_loss, entryAvg);
+    if (newSL !== oldSL) {
+      signal.stop_loss = newSL;
+      console.log(`[TradeTracker] ${signal.pair} Stop atualizado: ${oldSL.toFixed(4)} → ${newSL.toFixed(4)} (após TP${tp.level})`);
+      
+      // Notificar no Telegram
+      sendTrailingStopUpdate(
+        signal,
+        currentPrice,
+        oldSL,
+        newSL,
+        `🎯 TP${tp.level} atingido! Stop movido para ${tp.level === 1 ? 'entrada (breakeven)' : 'TP' + (tp.level - 1)}: ${newSL.toFixed(4)}`
+      ).catch(e => console.error('[TradeTracker] TG error trailing notify', e));
     }
 
     // Qualquer TP batido já é WIN para o ML
@@ -462,6 +503,7 @@ export class TradeTracker {
       // Primeira vez que bate qualquer TP = WIN
       this.submitFeedbackToML(signal, 1, currentPrice).catch(e => console.error('[TradeTracker] Error saving ML Feedback', e));
       
+      const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
       const pnl = signal.type === 'LONG' 
         ? ((currentPrice - entryAvg) / entryAvg) * 100 
         : ((entryAvg - currentPrice) / entryAvg) * 100;
@@ -515,7 +557,7 @@ export class TradeTracker {
             status: signal.status
           }
         });
-        this.logEvent(signal.id, 'TP_HIT', `TP${tp.level} hit at ${currentPrice}`, currentPrice).catch(()=>{});
+        this.logEvent(signal.id, 'TP_HIT', `TP${tp.level} hit at ${currentPrice} | novo SL: ${signal.stop_loss.toFixed(4)}`, currentPrice).catch(()=>{});
     } catch (e) { /* ignore */ }
 
     // Notify

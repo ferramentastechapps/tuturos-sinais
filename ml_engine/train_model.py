@@ -36,7 +36,6 @@ import json
 
 # Define the exact feature list order (MUST MATCH featureExtractor.ts)
 FEATURE_COLUMNS = [
-    'symbol_id',
     'rsi', 'adx', 'atr_rel', 'dist_ema20', 'dist_ema50', 'dist_ema200', 'dist_vwap',
     'volatility_24h', 'volume_rel', 'funding_rate', 'open_interest_var', 'long_short_ratio',
     'is_long', 'confidence', 'quality_score', 'confluence_count', 'stop_loss_pct', 
@@ -108,6 +107,50 @@ def train():
     # Save metrics for upload_model.py to use
     with open("model_metrics.json", "w") as f:
         json.dump(metrics, f)
+    
+    # 6. Treinar modelos específicos por símbolo (se houver coluna 'symbol')
+    if 'symbol' in df.columns:
+        print("\n=== Treinando modelos por símbolo ===")
+        import os
+        os.makedirs('ml_models', exist_ok=True)
+        
+        for symbol in df['symbol'].unique():
+            symbol_df = df[df['symbol'] == symbol]
+            if len(symbol_df) < 30:
+                continue  # Pular símbolos com poucos dados
+            
+            X_sym = symbol_df[FEATURE_COLUMNS]
+            y_sym = symbol_df['label']
+            
+            # Treinar modelo específico
+            model_sym = xgb.XGBClassifier(
+                n_estimators=100,
+                max_depth=5,
+                learning_rate=0.1,
+                objective='binary:logistic',
+                n_jobs=-1
+            )
+            model_sym.fit(X_sym.values, y_sym.values)
+            
+            # Validar accuracy
+            y_pred_sym = model_sym.predict(X_sym.values)
+            acc_sym = accuracy_score(y_sym, y_pred_sym)
+            
+            if acc_sym >= 0.55:
+                # Salvar modelo específico
+                symbol_dir = os.path.join('ml_models', symbol)
+                os.makedirs(symbol_dir, exist_ok=True)
+                
+                initial_type_sym = [('float_input', FloatTensorType([None, len(FEATURE_COLUMNS)]))]
+                onnx_model_sym = onnxmltools.convert_xgboost(
+                    model_sym,
+                    initial_types=initial_type_sym,
+                    target_opset=12
+                )
+                onnx.save_model(onnx_model_sym, os.path.join(symbol_dir, 'model.onnx'))
+                print(f"✅ {symbol}: accuracy={acc_sym:.3f}, samples={len(symbol_df)}")
+            else:
+                print(f"⚠️ {symbol}: accuracy={acc_sym:.3f} < 0.55 (rejeitado)")
         
     print("Training complete.")
 

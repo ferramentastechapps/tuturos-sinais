@@ -575,8 +575,7 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 entry_time: true,
                 features: true,
                 trade_type: true,
-                created_at: true
-            }
+                created_at: true            }
         });
 
         const learnings = history.map((h: any) => {
@@ -595,8 +594,7 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
 
             // 1 = WIN, 0 = LOSS
             const isWin = h.outcome_label === 1;
-            const result = isWin ? 'WIN' : 'LOSS';
-            
+            const result = isWin ? 'WIN' : 'LOSS';            
             // ML prediction (se disponível nos features)
             const predictedClass = parsedFeatures.ml_prediction ?? 1;
             const wasCorrect = (predictedClass === 1 && isWin) || (predictedClass === 0 && !isWin);
@@ -612,8 +610,7 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 entry_time: h.entry_time,
                 exit_time: h.entry_time, // ml_training_data não tem exit_time separado
                 all_indicators: parsedFeatures,
-                ml_data: parsedFeatures
-            };
+                ml_data: parsedFeatures            };
         });
 
         // Summary stats: Acurácia baseada nos dados de treino

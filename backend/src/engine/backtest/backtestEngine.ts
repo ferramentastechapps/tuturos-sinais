@@ -6,7 +6,7 @@
 
 import { OHLCPoint, TradeSignal, CryptoPair } from '../../types/trading.js';
 import { generateSignalFromData } from '../signalEngine.js';
-import { predictSignal, isModelLoaded, getSymbolId } from '../../ml/mlPredictionService.js';
+import { predictSignal, isModelLoaded } from '../../ml/mlPredictionService.js';
 import { getStrategy } from '../../strategies/registry.js';
 import { logger } from '../../lib/logger.js';
 import {
@@ -207,7 +207,6 @@ export class BacktestEngine {
                 if (this.config.signal.useMLFilter && isModelLoaded()) {
                     const precomputed = signal.mlData ?? {};
                     const features = {
-                        symbol_id: getSymbolId(symbol),
                         rsi:        precomputed._rsi        ?? 50,
                         adx:        precomputed._adx        ?? 25,
                         atr_rel:    precomputed._atr_rel    ?? 0,
@@ -234,7 +233,7 @@ export class BacktestEngine {
                         fear_greed: 50,
                     };
 
-                    const prediction = await predictSignal(features);
+                    const prediction = await predictSignal(features, symbol, 'backtest');
                     if (prediction) {
                         signal.mlData = {
                             ...features,

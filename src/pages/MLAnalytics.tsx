@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, BrainCircuit, CheckCircle2, XCircle, RefreshCw, TrendingUp, Database, Target, Info, Calendar, Filter } from 'lucide-react';
+import { Loader2, BrainCircuit, CheckCircle2, XCircle, RefreshCw, TrendingUp, Database, Target, Info, Calendar, Filter, ArrowUpCircle, ArrowDownCircle, Clock, Star, DollarSign, ShieldAlert, Activity } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -30,15 +30,26 @@ interface MLStats {
 interface MLLearning {
     id: string;
     symbol: string;
+    direction?: string;         // LONG / SHORT
     result: string;
     profit_percent: number;
     ml_was_correct: boolean;
     key_indicators: string[];
     trade_type?: string;
+    signal_created_at?: string; // When the signal was created
     entry_time?: string;
     exit_time?: string;
     all_indicators?: any;
     ml_data?: any;
+    // Price fields
+    entry_price?: number | null;
+    entry_range_low?: number | null;
+    entry_range_high?: number | null;
+    stop_loss?: number | null;
+    take_profits?: Array<{ level?: number; tp?: number; price: number; hit?: boolean }>;
+    // Quality
+    score?: number | null;
+    risk_reward?: number | null;
 }
 
 interface MLLearningHistory {
@@ -437,8 +448,13 @@ const MLAnalytics = () => {
                             <Badge variant={selectedLearning?.result === 'WIN' ? 'default' : 'destructive'}>
                                 {selectedLearning?.result}
                             </Badge>
+                            {selectedLearning?.direction && (
+                                <Badge variant="outline" className={`ml-1 text-xs font-bold ${selectedLearning.direction === 'LONG' ? 'border-green-500/60 text-green-400' : 'border-red-500/60 text-red-400'}`}>
+                                    {selectedLearning.direction === 'LONG' ? '▲' : '▼'} {selectedLearning.direction}
+                                </Badge>
+                            )}
                             {selectedLearning?.trade_type && (
-                                <Badge variant="outline" className="ml-2 text-xs">
+                                <Badge variant="outline" className="ml-1 text-xs">
                                     {selectedLearning.trade_type}
                                 </Badge>
                             )}
@@ -449,107 +465,214 @@ const MLAnalytics = () => {
                     </DialogHeader>
 
                     {selectedLearning && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                            <div className="space-y-4">
-                                <div>
-                                    <h4 className="text-sm font-semibold text-muted-foreground mb-1 flex items-center gap-1">
-                                        <Info className="h-4 w-4" /> Informações Básicas
-                                    </h4>
-                                    <div className="bg-muted/50 p-3 rounded-md space-y-2 text-sm border border-border/30">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-muted-foreground">Entrada:</span>
-                                            <span className="font-medium text-right">
-                                                {selectedLearning.entry_time ? new Date(selectedLearning.entry_time).toLocaleString('pt-BR') : 'N/A'}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-muted-foreground">Saída:</span>
-                                            <span className="font-medium text-right">
-                                                {selectedLearning.exit_time ? new Date(selectedLearning.exit_time).toLocaleString('pt-BR') : 'N/A'}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-center pt-2 border-t border-border/30">
-                                            <span className="text-muted-foreground">Resultado (%):</span>
-                                            <span className={`font-bold ${selectedLearning.profit_percent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                                {selectedLearning.profit_percent >= 0 ? '+' : ''}{selectedLearning.profit_percent.toFixed(2)}%
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-muted-foreground">IA Previu Certo?</span>
-                                            <span className="font-medium">
-                                                {selectedLearning.ml_was_correct ? (
-                                                    <span className="text-green-400 flex items-center gap-1 justify-end"><CheckCircle2 className="h-4 w-4" /> Sim</span>
-                                                ) : (
-                                                    <span className="text-red-400 flex items-center gap-1 justify-end"><XCircle className="h-4 w-4" /> Não</span>
-                                                )}
-                                            </span>
-                                        </div>
-                                    </div>
+                        <div className="space-y-4 mt-2">
+
+                            {/* ── Row 1: Timestamps + Score ── */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div className="bg-muted/40 rounded-lg p-3 border border-border/30 space-y-1">
+                                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 uppercase tracking-wide"><Clock className="h-3 w-3" /> Sinal Criado</p>
+                                    <p className="text-xs font-semibold">
+                                        {selectedLearning.signal_created_at
+                                            ? new Date(selectedLearning.signal_created_at).toLocaleString('pt-BR')
+                                            : 'N/A'}
+                                    </p>
                                 </div>
-                                
+                                <div className="bg-muted/40 rounded-lg p-3 border border-border/30 space-y-1">
+                                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 uppercase tracking-wide"><ArrowUpCircle className="h-3 w-3" /> Entrada</p>
+                                    <p className="text-xs font-semibold">
+                                        {selectedLearning.entry_time
+                                            ? new Date(selectedLearning.entry_time).toLocaleString('pt-BR')
+                                            : 'N/A'}
+                                    </p>
+                                </div>
+                                <div className="bg-muted/40 rounded-lg p-3 border border-border/30 space-y-1">
+                                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 uppercase tracking-wide"><ArrowDownCircle className="h-3 w-3" /> Saída</p>
+                                    <p className="text-xs font-semibold">
+                                        {selectedLearning.exit_time
+                                            ? new Date(selectedLearning.exit_time).toLocaleString('pt-BR')
+                                            : 'N/A'}
+                                    </p>
+                                </div>
+                                <div className="bg-muted/40 rounded-lg p-3 border border-border/30 space-y-1">
+                                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 uppercase tracking-wide"><Star className="h-3 w-3" /> Score IA</p>
+                                    <p className={`text-lg font-bold ${
+                                        selectedLearning.score != null
+                                            ? (selectedLearning.score >= 0.75 ? 'text-green-400' : selectedLearning.score >= 0.5 ? 'text-yellow-400' : 'text-red-400')
+                                            : 'text-muted-foreground'
+                                    }`}>
+                                        {selectedLearning.score != null
+                                            ? (selectedLearning.score > 1 ? selectedLearning.score.toFixed(1) : (selectedLearning.score * 100).toFixed(0) + '%')
+                                            : 'N/A'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* ── Row 2: Price Snapshot ── */}
+                            <div>
+                                <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                                    <DollarSign className="h-4 w-4" /> Preços da Operação
+                                </h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 space-y-1">
+                                        <p className="text-[10px] text-blue-400 uppercase tracking-wide">Entrada (midpoint)</p>
+                                        <p className="text-sm font-bold text-blue-300">
+                                            {selectedLearning.entry_price != null
+                                                ? `$${selectedLearning.entry_price.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}`
+                                                : 'N/A'}
+                                        </p>
+                                        {selectedLearning.entry_range_low != null && selectedLearning.entry_range_high != null && (
+                                            <p className="text-[10px] text-muted-foreground">
+                                                {`$${selectedLearning.entry_range_low.toLocaleString('pt-BR', { maximumFractionDigits: 4 })} – $${selectedLearning.entry_range_high.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}`}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 space-y-1">
+                                        <p className="text-[10px] text-red-400 uppercase tracking-wide flex items-center gap-1"><ShieldAlert className="h-3 w-3" /> Stop Loss</p>
+                                        <p className="text-sm font-bold text-red-300">
+                                            {selectedLearning.stop_loss != null
+                                                ? `$${selectedLearning.stop_loss.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}`
+                                                : 'N/A'}
+                                        </p>
+                                    </div>
+                                    {/* Take Profits */}
+                                    {(selectedLearning.take_profits && selectedLearning.take_profits.length > 0)
+                                        ? selectedLearning.take_profits.slice(0, 2).map((tp, i) => {
+                                            const lvl = tp.level ?? tp.tp ?? (i + 1);
+                                            return (
+                                                <div key={i} className={`rounded-lg p-3 space-y-1 border ${tp.hit ? 'bg-green-500/15 border-green-500/30' : 'bg-muted/40 border-border/30'}`}>
+                                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                                                        <Target className="h-3 w-3" /> TP{lvl} {tp.hit && <span className="text-green-400">✓</span>}
+                                                    </p>
+                                                    <p className={`text-sm font-bold ${tp.hit ? 'text-green-300' : ''}`}>
+                                                        ${tp.price.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                                                    </p>
+                                                </div>
+                                            );
+                                        })
+                                        : (
+                                            <div className="bg-muted/40 rounded-lg p-3 border border-border/30 space-y-1">
+                                                <p className="text-[10px] text-muted-foreground uppercase">Take Profit</p>
+                                                <p className="text-sm text-muted-foreground italic text-xs">Sem dados</p>
+                                            </div>
+                                        )
+                                    }
+                                </div>
+                                {/* Risk Reward */}
+                                {selectedLearning.risk_reward != null && (
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        <span className="text-foreground font-medium">Risk/Reward:</span> 1:{typeof selectedLearning.risk_reward === 'number' ? selectedLearning.risk_reward.toFixed(2) : selectedLearning.risk_reward}
+                                        {' '}• Resultado: <span className={`font-semibold ${selectedLearning.profit_percent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                            {selectedLearning.profit_percent >= 0 ? '+' : ''}{selectedLearning.profit_percent.toFixed(2)}%
+                                        </span>
+                                        {' '}• IA Previu: {selectedLearning.ml_was_correct
+                                            ? <span className="text-green-400 font-semibold">✓ Certo</span>
+                                            : <span className="text-red-400 font-semibold">✗ Errado</span>}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* ── Row 3: Indicators + AI Features ── */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Technical Indicators */}
                                 <div>
-                                    <h4 className="text-sm font-semibold text-muted-foreground mb-1 flex items-center gap-1">
-                                        <Target className="h-4 w-4" /> Indicadores Técnicos
+                                    <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                                        <Activity className="h-4 w-4" /> Indicadores Técnicos
                                     </h4>
-                                    <div className="bg-muted/50 p-3 rounded-md text-sm max-h-48 overflow-y-auto border border-border/30">
+                                    <div className="bg-muted/50 p-3 rounded-md text-sm max-h-52 overflow-y-auto border border-border/30">
                                         {selectedLearning.all_indicators && Array.isArray(selectedLearning.all_indicators) && selectedLearning.all_indicators.length > 0 ? (
-                                            <ul className="space-y-2">
+                                            <ul className="space-y-1.5">
                                                 {selectedLearning.all_indicators.map((ind: any, i: number) => {
-                                                    if (typeof ind === 'string') {
-                                                        return (
-                                                            <li key={i} className="flex items-center gap-2 border-b border-border/50 pb-1 last:border-0 last:pb-0">
-                                                                <CheckCircle2 className="h-3 w-3 text-green-400 flex-shrink-0" />
-                                                                <span className="font-medium text-sm text-foreground">{ind}</span>
-                                                            </li>
-                                                        );
-                                                    }
+                                                    if (typeof ind === 'string') return (
+                                                        <li key={i} className="flex items-center gap-2 text-xs border-b border-border/30 pb-1 last:border-0">
+                                                            <CheckCircle2 className="h-3 w-3 text-green-400 shrink-0" />
+                                                            <span className="font-medium">{ind}</span>
+                                                        </li>
+                                                    );
                                                     const name = ind.name || ind.indicator || Object.keys(ind)[0] || 'Ind';
                                                     const val = ind.value !== undefined ? ind.value : Object.values(ind)[0];
                                                     return (
-                                                        <li key={i} className="flex justify-between border-b border-border/50 pb-1 last:border-0 last:pb-0">
-                                                            <span className="text-muted-foreground">{name}:</span>
-                                                            <span className="font-medium font-mono">{typeof val === 'number' ? val.toFixed(4) : JSON.stringify(val)}</span>
+                                                        <li key={i} className="flex justify-between text-xs border-b border-border/30 pb-1 last:border-0">
+                                                            <span className="text-muted-foreground">{name}</span>
+                                                            <span className="font-mono font-medium">{typeof val === 'number' ? val.toFixed(4) : JSON.stringify(val)}</span>
                                                         </li>
                                                     );
                                                 })}
                                             </ul>
                                         ) : (
-                                            <p className="text-muted-foreground italic text-xs text-center py-2">Sem indicadores detalhados salvos para esta operação.</p>
+                                            <p className="text-muted-foreground italic text-xs text-center py-3">Sem indicadores detalhados salvos para esta operação.</p>
                                         )}
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <div className="space-y-4">
+
+                                {/* AI Features — formatted as key-value, NOT raw JSON */}
                                 <div>
-                                    <h4 className="text-sm font-semibold text-muted-foreground mb-1 flex items-center gap-1">
+                                    <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1">
                                         <BrainCircuit className="h-4 w-4" /> Dados da IA (Features)
                                     </h4>
-                                    <div className="bg-muted/50 p-3 rounded-md text-sm h-full max-h-[350px] overflow-y-auto border border-border/30">
-                                        {selectedLearning.ml_data ? (
-                                            <pre className="text-xs text-muted-foreground break-words whitespace-pre-wrap font-mono">
-                                                {JSON.stringify(selectedLearning.ml_data, null, 2)}
-                                            </pre>
-                                        ) : (
+                                    <div className="bg-muted/50 p-3 rounded-md text-sm max-h-52 overflow-y-auto border border-border/30">
+                                        {selectedLearning.ml_data && Object.keys(selectedLearning.ml_data).length > 0 ? (() => {
+                                            // Separate meta-fields from feature fields
+                                            const SKIP_KEYS = new Set(['predictedClass', 'probability', 'confidence']);
+                                            const metaKeys = ['predictedClass', 'probability', 'confidence'].filter(k => selectedLearning.ml_data[k] !== undefined);
+                                            const featureEntries = Object.entries(selectedLearning.ml_data).filter(([k]) => !SKIP_KEYS.has(k));
+                                            return (
+                                                <div className="space-y-3">
+                                                    {/* Meta summary */}
+                                                    {metaKeys.length > 0 && (
+                                                        <div className="flex gap-2 flex-wrap pb-2 border-b border-border/30">
+                                                            {selectedLearning.ml_data.predictedClass !== undefined && (
+                                                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${selectedLearning.ml_data.predictedClass === 1 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                    Previu: {selectedLearning.ml_data.predictedClass === 1 ? 'WIN' : 'LOSS'}
+                                                                </span>
+                                                            )}
+                                                            {selectedLearning.ml_data.probability !== undefined && (
+                                                                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-semibold">
+                                                                    Prob: {(selectedLearning.ml_data.probability * 100).toFixed(1)}%
+                                                                </span>
+                                                            )}
+                                                            {selectedLearning.ml_data.confidence !== undefined && (
+                                                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 font-semibold">
+                                                                    Conf: {(selectedLearning.ml_data.confidence * 100).toFixed(1)}%
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {/* Feature rows */}
+                                                    <ul className="space-y-1">
+                                                        {featureEntries.map(([key, val]) => (
+                                                            <li key={key} className="flex justify-between text-xs border-b border-border/20 pb-1 last:border-0">
+                                                                <span className="text-muted-foreground truncate max-w-[55%]">{key.replace(/_/g, ' ')}</span>
+                                                                <span className="font-mono font-medium text-right">
+                                                                    {typeof val === 'number'
+                                                                        ? (Math.abs(val as number) < 10 ? (val as number).toFixed(4) : (val as number).toLocaleString('pt-BR', { maximumFractionDigits: 2 }))
+                                                                        : typeof val === 'boolean'
+                                                                            ? (val ? '✓ sim' : '✗ não')
+                                                                            : String(val)}
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            );
+                                        })() : (
                                             <p className="text-muted-foreground italic text-xs text-center py-4">Sem dados de machine learning salvos.</p>
                                         )}
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
-                    
-                    {selectedLearning && (
-                        <div className="mt-2 pt-4 border-t border-border/50">
-                            <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1">
-                                <TrendingUp className="h-4 w-4" /> Gráfico da Operação
-                            </h4>
-                            <div className="h-72 w-full bg-muted/30 rounded-md overflow-hidden border border-border/30">
-                                <iframe 
-                                    src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol=${selectedLearning.symbol.replace('USDT', '')}USDT&interval=15&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=America%2FSao_Paulo`}
-                                    className="w-full h-full border-0"
-                                    title={`Gráfico ${selectedLearning.symbol}`}
-                                />
+
+                            {/* ── TradingView Chart ── */}
+                            <div className="pt-2 border-t border-border/40">
+                                <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                                    <TrendingUp className="h-4 w-4" /> Gráfico da Operação
+                                </h4>
+                                <div className="h-72 w-full bg-muted/30 rounded-md overflow-hidden border border-border/30">
+                                    <iframe
+                                        src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol=${selectedLearning.symbol.replace('USDT', '')}USDT&interval=15&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=America%2FSao_Paulo`}
+                                        className="w-full h-full border-0"
+                                        title={`Gráfico ${selectedLearning.symbol}`}
+                                    />
+                                </div>
                             </div>
                         </div>
                     )}

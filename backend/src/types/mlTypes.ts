@@ -32,6 +32,7 @@ export interface MLPrediction {
     probability: number;
     predictedClass: 0 | 1;
     confidence: number;
+    modelSource?: 'symbol_specific' | 'global_fallback';
     contribution?: Record<string, number>;
 }
 

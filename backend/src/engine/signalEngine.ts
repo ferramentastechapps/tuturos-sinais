@@ -3,7 +3,7 @@
 import { logger } from '../lib/logger.js';
 import { config } from '../lib/config.js';
 import { bybitConnector } from '../exchange/bybitConnector.js';
-import { predictSignal, isModelLoaded, getSymbolId } from '../ml/mlPredictionService.js';
+import { predictSignal, isModelLoaded } from '../ml/mlPredictionService.js';
 import { telegramService } from '../notifications/telegramService.js';
 import { db } from '../lib/dbClient.js';
 import { marketContextService } from '../lib/marketContextService.js';
@@ -12,6 +12,7 @@ import { tradeTracker } from '../trading/tradeTracker.js';
 import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
 import { isHighLiquidity } from '../config/highLiquiditySymbols.js'; // CORREÇÃO 5
+import { volatilityTracker } from '../services/volatilityTracker.js';
 
 // ──── State ────
 
@@ -497,6 +498,17 @@ export function generateSignalFromData(
         return null;
     }
 
+    // Calcular volatility_24h
+    const volatility_24h_calculated = high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0;
+
+    // Registrar e verificar volatilidade alta
+    volatilityTracker.record(symbol, atrPercentForVeto, volatility_24h_calculated);
+    const volCheck = volatilityTracker.isHighVolatility(symbol, atrPercentForVeto, volatility_24h_calculated, 1.3);
+    if (volCheck.isHigh) {
+        logger.debug(`[SIGNAL-VETO] ${symbol} ❌ VETO VOLATILIDADE ALTA: ${volCheck.reason}`);
+        return null;
+    }
+
     const lastEma20 = ema20[ema20.length - 1] || currentPrice;
     const lastEma50 = ema50[ema50.length - 1] || currentPrice;
     const lastEma200 = ema200[ema200.length - 1] || currentPrice;
@@ -931,7 +943,6 @@ async function runSignalCycle(): Promise<void> {
                 // Isso elimina o duplo recalculo de RSI, ADX, ATR, VWAP, RVOL, EMAs.
                 const precomputed = signal.mlData ?? {};
                 const features = {
-                    symbol_id: getSymbolId(symbol),
                     rsi:        precomputed._rsi        ?? 50,
                     adx:        precomputed._adx        ?? 25,
                     atr_rel:    precomputed._atr_rel    ?? 0,
@@ -964,13 +975,14 @@ async function runSignalCycle(): Promise<void> {
                 // ML enrichment
                 if (isModelLoaded()) {
                     try {
-                        const prediction = await predictSignal(features);
+                        const prediction = await predictSignal(features, symbol, 'swing');
                         if (prediction) {
                             signal.mlData = {
                                 ...signal.mlData,
                                 probability: prediction.probability,
                                 predictedClass: prediction.predictedClass,
                                 confidence: prediction.confidence,
+                                modelSource: prediction.modelSource,
                                 isFiltered: prediction.probability < 0.5,
                             };
 

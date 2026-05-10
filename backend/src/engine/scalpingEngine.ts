@@ -4,7 +4,7 @@
 import { logger } from '../lib/logger.js';
 import { config } from '../lib/config.js';
 import { bybitConnector } from '../exchange/bybitConnector.js';
-import { predictSignal, isModelLoaded, getSymbolId } from '../ml/mlPredictionService.js';
+import { predictSignal, isModelLoaded } from '../ml/mlPredictionService.js';
 import {
     calculateRSI,
     calculateEMA,
@@ -23,6 +23,7 @@ import type { TradeSignal, OHLCPoint } from '../types/trading.js';
 import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { tradeTracker } from '../trading/tradeTracker.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
+import { volatilityTracker } from '../services/volatilityTracker.js';
 
 // FASE 3: Apenas pares de alta liquidez para scalping
 const SCALPING_SYMBOLS = config.scalpingSymbols;
@@ -194,6 +195,15 @@ export function generateScalpingSignal(
     const atrPct = currentPrice > 0 ? (atr / currentPrice) * 100 : 0;
     if (atrPct < 0.3) {
         logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO: Volatilidade morta (ATR < 0.3%)`);
+        return null;
+    }
+
+    // Calcular volatility_24h e verificar volatilidade alta
+    const volatility_24h = high24h > 0 ? ((high24h - low24h) / ((high24h + low24h) / 2)) * 100 : 0;
+    volatilityTracker.record(symbol, atrPct, volatility_24h);
+    const volCheck = volatilityTracker.isHighVolatility(symbol, atrPct, volatility_24h, 1.4); // 1.4x para scalping
+    if (volCheck.isHigh) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO VOLATILIDADE ALTA: ${volCheck.reason}`);
         return null;
     }
 
@@ -458,7 +468,6 @@ export function generateScalpingSignal(
             isOrderBlock: usingStructuralStop,
         },
         mlData: {
-            symbol_id: getSymbolId(symbol),
             rsi,
             adx,
             atr_rel: atr / currentPrice,
@@ -522,9 +531,9 @@ async function runScalpingCycle(): Promise<void> {
 
             if (isModelLoaded() && signal.mlData) {
                 try {
-                    const prediction = await predictSignal(signal.mlData as unknown as Parameters<typeof predictSignal>[0]);
+                    const prediction = await predictSignal(signal.mlData as unknown as Parameters<typeof predictSignal>[0], symbol, 'scalping');
                     if (prediction) {
-                        signal.mlData = { ...signal.mlData, probability: prediction.probability, predictedClass: prediction.predictedClass };
+                        signal.mlData = { ...signal.mlData, probability: prediction.probability, predictedClass: prediction.predictedClass, modelSource: prediction.modelSource };
                         if (prediction.probability < config.scalpingBot.mlMinProb) {
                             logger.debug(`[Scalping] ${symbol} filtrado pelo ML (prob: ${prediction.probability.toFixed(3)} < ${config.scalpingBot.mlMinProb})`);
                             continue;

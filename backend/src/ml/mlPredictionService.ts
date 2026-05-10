@@ -13,28 +13,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let inferenceSession: ort.InferenceSession | null = null;
 let modelLoaded = false;
 
+// Cache de modelos específicos por símbolo
+const symbolSessions = new Map<string, { session: ort.InferenceSession; loadedAt: number }>();
+const SYMBOL_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 horas
+
 const FEATURE_COLUMNS = [
-    'symbol_id', // NOVO: Consciência de moeda
     'rsi', 'adx', 'atr_rel', 'dist_ema20', 'dist_ema50', 'dist_ema200', 'dist_vwap',
     'volatility_24h', 'volume_rel', 'funding_rate', 'open_interest_var', 'long_short_ratio',
     'is_long', 'confidence', 'quality_score', 'confluence_count', 'stop_loss_pct',
     'take_profit_pct', 'risk_reward', 'hour_of_day', 'day_of_week',
     'btc_trend', 'dominance_btc', 'fear_greed'
 ];
-
-/**
- * Cria um ID numérico simples a partir do nome do símbolo (ex: BTCUSDT -> 1832039)
- * Isso ajuda a ML a decorar o comportamento específico de ativos, sem explodir
- * o número de colunas (como no One-Hot Encoding).
- */
-export function getSymbolId(symbol: string): number {
-    let hash = 0;
-    for (let i = 0; i < symbol.length; i++) {
-        hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
-        hash = hash & hash; // Convert to 32bit int
-    }
-    return Math.abs(hash); // Garantir sempre positivo
-}
 
 export async function loadModel(): Promise<boolean> {
     if (!config.ml.enabled) {
@@ -77,11 +66,59 @@ export async function loadModel(): Promise<boolean> {
     }
 }
 
-export async function predictSignal(features: MLFeatureVector): Promise<MLPrediction | null> {
-    if (!inferenceSession) {
+async function loadSymbolModel(symbol: string): Promise<ort.InferenceSession | null> {
+    try {
+        const backendDir = path.resolve(__dirname, '../../');
+        const symbolModelPath = path.join(backendDir, 'ml_models', symbol, 'model.onnx');
+        
+        if (!fs.existsSync(symbolModelPath)) {
+            return null; // Modelo específico não existe
+        }
+        
+        // Verificar cache
+        const cached = symbolSessions.get(symbol);
+        if (cached && (Date.now() - cached.loadedAt) < SYMBOL_CACHE_TTL) {
+            return cached.session;
+        }
+        
+        // Carregar novo modelo
+        const session = await ort.InferenceSession.create(symbolModelPath);
+        symbolSessions.set(symbol, { session, loadedAt: Date.now() });
+        logger.info(`Loaded symbol-specific model for ${symbol}`);
+        return session;
+    } catch (error) {
+        logger.warn(`Failed to load symbol model for ${symbol}`, { error });
+        return null;
+    }
+}
+
+export function clearSymbolCache(): void {
+    symbolSessions.clear();
+    logger.info('Symbol model cache cleared');
+}
+
+export async function predictSignal(
+    features: MLFeatureVector,
+    symbol?: string,
+    tradeType?: string
+): Promise<MLPrediction | null> {
+    // Tentar carregar modelo específico do símbolo
+    let sessionToUse = inferenceSession;
+    let modelSource: 'symbol_specific' | 'global_fallback' = 'global_fallback';
+    
+    if (symbol) {
+        const symbolSession = await loadSymbolModel(symbol);
+        if (symbolSession) {
+            sessionToUse = symbolSession;
+            modelSource = 'symbol_specific';
+        }
+    }
+    
+    if (!sessionToUse) {
         if (!modelLoaded) {
             const success = await loadModel();
             if (!success) return null;
+            sessionToUse = inferenceSession;
         } else {
             return null;
         }
@@ -95,13 +132,13 @@ export async function predictSignal(features: MLFeatureVector): Promise<MLPredic
 
         const tensor = new ort.Tensor('float32', inputData, [1, FEATURE_COLUMNS.length]);
         const feeds: Record<string, ort.Tensor> = {};
-        const inputName = inferenceSession!.inputNames[0];
+        const inputName = sessionToUse!.inputNames[0];
         feeds[inputName] = tensor;
 
-        const results = await inferenceSession!.run(feeds);
+        const results = await sessionToUse!.run(feeds);
 
-        const labelTensor = results[inferenceSession!.outputNames[0]];
-        const probTensor = results[inferenceSession!.outputNames[1]];
+        const labelTensor = results[sessionToUse!.outputNames[0]];
+        const probTensor = results[sessionToUse!.outputNames[1]];
 
         const predictedClass = Number(labelTensor.data[0]);
 
@@ -110,11 +147,16 @@ export async function predictSignal(features: MLFeatureVector): Promise<MLPredic
             probability = Number(probTensor.data[1]);
         }
 
-        return {
+        const result = {
             predictedClass: predictedClass as 0 | 1,
             probability,
-            confidence: probability > 0.5 ? probability : 1 - probability,
+            confidence: probability,  // probabilidade direta de win — não inverter
+            modelSource,
         };
+        
+        logger.debug(`[ML-CONFIDENCE] ${symbol || 'unknown'}: prob=${probability.toFixed(4)}, predictedClass=${predictedClass}, model=${modelSource}`);
+        
+        return result;
     } catch (error) {
         logger.error('ML inference failed', { error });
         return null;
