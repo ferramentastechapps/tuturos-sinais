@@ -704,8 +704,11 @@ router.post('/ml/retrain', async (_req: Request, res: Response) => {
 // ──── ML Export Data ────
 router.get('/ml/export', async (req: Request, res: Response) => {
     try {
-        const data = await db.mLTrainingData.findMany({
-            orderBy: { entry_time: 'desc' }
+        const data = await db.tradeSignal.findMany({
+            where: {
+                status: { in: ['CLOSED_TP', 'CLOSED_SL'] }
+            },
+            orderBy: { exit_time: 'desc' }
         });
         
         if (!data || data.length === 0) {
@@ -713,41 +716,46 @@ router.get('/ml/export', async (req: Request, res: Response) => {
             return;
         }
 
-        // Buscar trade_types do banco para diferenciar os robôs
-        const signalIds = data.map((d: any) => d.signal_id);
-        const tradeSignals = await db.tradeSignal.findMany({
-            where: { id: { in: signalIds } },
-            select: { id: true, trade_type: true }
-        });
-        const tradeTypeMap = new Map(tradeSignals.map((s: any) => [s.id, s.trade_type]));
-
-        let csv = 'id,signal_id,symbol,trade_type,outcome_label,outcome_pnl,entry_time';
+        let csv = 'id,pair,trade_type,status,outcome,pnl,entry_time,exit_time';
         let featureKeys: string[] = [];
         
-        try {
-            if (data[0].features) {
-                const f = typeof data[0].features === 'string' ? JSON.parse(data[0].features) : data[0].features;
-                featureKeys = Object.keys(f);
-                csv += ',' + featureKeys.join(',');
+        // Descobrir chaves de features analisando os primeiros registros que tem ml_data
+        for (const row of data) {
+            if (row.ml_data) {
+                try {
+                    const f = typeof row.ml_data === 'string' ? JSON.parse(row.ml_data) : row.ml_data;
+                    const keys = Object.keys(f).filter(k => k !== 'probability' && k !== 'predictedClass' && k !== 'isFiltered');
+                    if (keys.length > featureKeys.length) {
+                        featureKeys = keys;
+                    }
+                } catch(e) {}
             }
-        } catch(e) {}
+        }
+        
+        if (featureKeys.length > 0) {
+            csv += ',' + featureKeys.join(',');
+        }
         
         csv += '\n';
 
         for (const row of data) {
             let featuresObj: any = {};
             try {
-                featuresObj = typeof row.features === 'string' ? JSON.parse(row.features) : (row.features || {});
+                featuresObj = typeof row.ml_data === 'string' ? JSON.parse(row.ml_data) : (row.ml_data || {});
             } catch(e) {}
             
             const featureValues = featureKeys.map(k => featuresObj[k] !== undefined ? featuresObj[k] : '');
-            const tradeType = tradeTypeMap.get(row.signal_id) || 'Desconhecido';
             
-            csv += `${row.id},${row.signal_id},${row.symbol},${tradeType},${row.outcome_label},${row.outcome_pnl},${row.entry_time},${featureValues.join(',')}\n`;
+            csv += `${row.id},${row.pair},${row.trade_type},${row.status},${row.outcome || ''},${row.pnl || 0},${row.entry_time ? new Date(row.entry_time).toISOString() : ''},${row.exit_time ? new Date(row.exit_time).toISOString() : ''}`;
+            
+            if (featureValues.length > 0) {
+                csv += ',' + featureValues.join(',');
+            }
+            csv += '\n';
         }
 
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=ml_training_data.csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="ml_training_data.csv"');
         res.send(csv);
     } catch (error: any) {
         logger.error('Error exporting ML data', { error: error.message });
