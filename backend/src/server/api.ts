@@ -562,13 +562,13 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             whereClause.trade_type = typePattern;
         }
         
-        // Fetch recently closed trades from ml_training_data
         const history = await db.mLTrainingData.findMany({
             where: whereClause,
             orderBy: { created_at: 'desc' },
             take: limit,
             select: {
                 id: true,
+                signal_id: true,
                 symbol: true,
                 outcome_label: true,
                 outcome_pnl: true,
@@ -577,6 +577,19 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 trade_type: true,
                 created_at: true            }
         });
+
+        // FETCH ORIGINAL SIGNALS to get price and date details
+        const signalIds = history.map((h: any) => h.signal_id).filter(Boolean);
+        let originalSignals: any[] = [];
+        if (signalIds.length > 0) {
+            originalSignals = await db.tradeSignal.findMany({
+                where: { id: { in: signalIds } }
+            });
+        }
+        const signalMap = new Map();
+        for (const s of originalSignals) {
+            signalMap.set(s.id, s);
+        }
 
         const learnings = history.map((h: any) => {
             let parsedFeatures: any = {};
@@ -596,8 +609,21 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             const isWin = h.outcome_label === 1;
             const result = isWin ? 'WIN' : 'LOSS';            
             // ML prediction (se disponível nos features)
-            const predictedClass = parsedFeatures.ml_prediction ?? 1;
+            const predictedClass = parsedFeatures.ml_prediction ?? parsedFeatures.predictedClass ?? 1;
             const wasCorrect = (predictedClass === 1 && isWin) || (predictedClass === 0 && !isWin);
+
+            const origSignal = signalMap.get(h.signal_id) || {};
+            let tps: any[] = [];
+            try { tps = origSignal.take_profits ? JSON.parse(origSignal.take_profits) : []; } catch(e) {}
+            
+            let parsedIndicators: any = [];
+            if (origSignal.indicators) {
+                try {
+                    parsedIndicators = typeof origSignal.indicators === 'string' ? JSON.parse(origSignal.indicators) : origSignal.indicators;
+                } catch(e) {}
+            } else {
+                parsedIndicators = parsedFeatures;
+            }
 
             return {
                 id: h.id,
@@ -606,11 +632,21 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 profit_percent: h.outcome_pnl || 0,
                 ml_was_correct: wasCorrect,
                 key_indicators,
-                trade_type: h.trade_type,
-                entry_time: h.entry_time,
-                exit_time: h.entry_time, // ml_training_data não tem exit_time separado
-                all_indicators: parsedFeatures,
-                ml_data: parsedFeatures            };
+                trade_type: h.trade_type || origSignal.trade_type,
+                signal_created_at: origSignal.created_at || h.created_at,
+                entry_time: origSignal.entry_time || h.entry_time,
+                exit_time: origSignal.exit_time || h.entry_time,
+                all_indicators: parsedIndicators,
+                ml_data: parsedFeatures,
+                entry_price: origSignal.entry_range_low ? (origSignal.entry_range_low + origSignal.entry_range_high) / 2 : null,
+                entry_range_low: origSignal.entry_range_low,
+                entry_range_high: origSignal.entry_range_high,
+                stop_loss: origSignal.stop_loss || origSignal.initial_stop_loss,
+                take_profits: tps,
+                score: origSignal.confidence || parsedFeatures.confidence || parsedFeatures.quality_score,
+                risk_reward: origSignal.risk_reward || parsedFeatures.risk_reward,
+                direction: origSignal.type ? origSignal.type.toUpperCase() : (parsedFeatures.is_long === 1 ? 'LONG' : parsedFeatures.is_long === 0 ? 'SHORT' : undefined)
+            };
         });
 
         // Summary stats: Acurácia baseada nos dados de treino

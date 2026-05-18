@@ -28,6 +28,9 @@ import { volatilityTracker } from '../services/volatilityTracker.js';
 // FASE 3: Apenas pares de alta liquidez para scalping
 const SCALPING_SYMBOLS = config.scalpingSymbols;
 
+const BLOCKED_HOURS = [4, 7, 9, 10, 20, 21, 22, 23];
+const GOOD_HOURS = [3, 6, 8, 12, 13, 14];
+
 // ──── State isolado do robô de scalping ────
 
 let scalpingActiveSignals: TradeSignal[] = [];
@@ -42,25 +45,19 @@ let enginePausedUntil = 0;
 const scalpingCooldowns = new Map<string, number>();
 
 // ──── Bônus de Janela (Agora retorna booleano em vez de vetar) ────
-// Foca nas sessões de maior liquidez: London (08–12 UTC) e Nova York (13–20 UTC).
 function isScalpingTradingWindow(): boolean {
-    const now = new Date();
-    const utcHour = now.getUTCHours();
-    const utcMinute = now.getUTCMinutes();
+    const h = new Date().getUTCHours();
 
-    const isLondon = utcHour >= 8 && utcHour < 13;
-    const isNewYork = utcHour >= 13 && utcHour < 20;
-    const isAsiaOpen = utcHour >= 0 && utcHour < 2;
+    // Mesmas horas proibidas do swing + 22h (scalping é mais sensível)
+    if (BLOCKED_HOURS.includes(h)) return false;
 
-    if (!isLondon && !isNewYork && !isAsiaOpen) return false;
+    return true;
+}
 
-    // Remove primeiros 10 min por causa de spike irracional
-    const isSessionOpen =
-        (utcHour === 8 && utcMinute < 10) ||
-        (utcHour === 13 && utcMinute < 10) ||
-        (utcHour === 0 && utcMinute < 10);
-
-    return !isSessionOpen;
+function isGoodScalpingHour(): boolean {
+    const h = new Date().getUTCHours();
+    // Scalping funciona melhor no London open e NY open
+    return GOOD_HOURS.includes(h);
 }
 
 // ──── Stochastic RSI ────
@@ -308,9 +305,9 @@ export function generateScalpingSignal(
     }
 
     // ── Bônus 1: Sessão de Pico de Liquidez (+1 Ponto) ──
-    if (isScalpingTradingWindow()) {
+    if (isGoodScalpingHour()) {
         rawScore += 1;
-        confluences.push('Sessão Liquidez (London/NY) +1');
+        confluences.push('Horário premium +1');
     }
 
     // ── Bônus 2: Divergência de RSI (Substitui o Veto Rígido do RSI) (+2 Pontos) ──
@@ -519,6 +516,11 @@ async function runScalpingCycle(): Promise<void> {
     const now = Date.now();
 
     for (const symbol of symbols) {
+        if (!isScalpingTradingWindow()) {
+            logger.debug(`[SCALPING] Horário bloqueado (${new Date().getUTCHours()}h UTC) — aguardando janela`);
+            break; // Sai do loop já que o bloqueio é global pelo horário
+        }
+
         try {
             const lastSignalTime = scalpingCooldowns.get(symbol) || 0;
             if (now - lastSignalTime < config.scalpingBot.cooldownMs) {

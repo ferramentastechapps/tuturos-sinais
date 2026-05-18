@@ -14,6 +14,9 @@ import { validateSignalContext } from './marketContext.js'; // FASE 3
 import { isHighLiquidity } from '../config/highLiquiditySymbols.js'; // CORREÇÃO 5
 import { volatilityTracker } from '../services/volatilityTracker.js';
 
+const BLOCKED_HOURS = [4, 7, 9, 10, 20, 21, 23];
+const GOOD_HOURS = [3, 6, 12, 13, 14];
+
 // ──── State ────
 
 let activeSignals: TradeSignal[] = [];
@@ -409,12 +412,25 @@ function getIndicatorSignal(name: string, value: number): 'bullish' | 'bearish' 
 }
 
 /**
- * Market Hours Filter — Avoids entries during low-liquidity Asian night session (00:00–06:00 UTC).
- * Crypto is 24/7 but institutional volume drops sharply in this window, increasing fake-outs.
+ * Market Hours Filter — Baseado em análise histórica de 657 sinais
  */
 function isWithinTradingHours(): boolean {
-    const utcHour = new Date().getUTCHours();
-    return utcHour >= 6 && utcHour < 23; // Block only 23:00-05:59 UTC (deepest dead zone)
+    const h = new Date().getUTCHours();
+
+    // Horas proibidas — 0% a 12% WR confirmado nos dados históricos
+    if (BLOCKED_HOURS.includes(h)) return false;
+
+    // Horas medianas — permitidas mas sem bônus de score
+    // (00, 01, 02, 05, 08, 15, 16, 17, 18, 19, 22)
+    // Horas boas — permitidas e ganham bônus de score
+    // (03, 06, 12, 13, 14)
+    return true;
+}
+
+// Função auxiliar para saber se é hora boa (ganha +1 ponto no score)
+function isGoodTradingHour(): boolean {
+    const h = new Date().getUTCHours();
+    return GOOD_HOURS.includes(h);
 }
 
 function detectEMA21Pullback(ohlc: OHLCPoint[], ema21: number[], type: 'long' | 'short'): boolean {
@@ -643,9 +659,9 @@ export function generateSignalFromData(
     }
 
     // 6. Sessão London/NY (+1)
-    if (isWithinTradingHours()) {
+    if (isGoodTradingHour()) {
         rawScore += 1;
-        confluences.push('Sessão Ativa (London/NY) +1');
+        confluences.push('Horário premium +1');
     }
 
     // 7. 4H não em tendência oposta forte (+1)
@@ -912,6 +928,11 @@ async function runSignalCycle(): Promise<void> {
     const newSignals: TradeSignal[] = [];
 
     for (const symbol of symbols) {
+        if (!isWithinTradingHours()) {
+            logger.debug(`[ENGINE] Horário bloqueado (${new Date().getUTCHours()}h UTC) — sem sinais até próxima janela`);
+            break; // Interrompe o ciclo para não analisar outros símbolos, o horário é global
+        }
+
         try {
             // CORREÇÃO 5: Filtrar símbolos de baixa liquidez
             if (!isHighLiquidity(symbol)) {
