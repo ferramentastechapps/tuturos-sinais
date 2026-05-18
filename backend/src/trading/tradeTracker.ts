@@ -751,6 +751,15 @@ export class TradeTracker {
       // Garantir campos essenciais sempre presentes
       if (!features.confidence) features.confidence = originalSignal.confidence ?? 0.5;
       if (!features.risk_reward) features.risk_reward = originalSignal.risk_reward ?? 1.5;
+
+      // Adicionar feedback de aprendizado por símbolo (symbol_weight)
+      const symStats = await getSymbolStats(activeSignal.pair);
+      let symbol_weight = 1.0;
+      if (symStats.total >= 5) {
+          if (symStats.winRate > 0.50) symbol_weight = 1.2;
+          else if (symStats.winRate < 0.30) symbol_weight = 0.7;
+      }
+      features.symbol_weight = symbol_weight;
       
       const entryPrice = (activeSignal.entry_range_low + activeSignal.entry_range_high) / 2;
       const pnl = activeSignal.type === 'LONG' 
@@ -803,3 +812,56 @@ export class TradeTracker {
 }
 
 export const tradeTracker = new TradeTracker();
+
+// --- NOVAS FUNÇÕES PARA FILTROS E ML ---
+
+/** Retorna o Win Rate Global das últimas 20 operações concluídas */
+export async function getRecentGlobalWinRate(): Promise<number | null> {
+  const recent = await db.tradeSignal.findMany({
+    where: { status: { in: ['CLOSED_TP', 'CLOSED_SL'] }, outcome: { not: null } },
+    orderBy: { exit_time: 'desc' },
+    take: 20,
+    select: { outcome: true }
+  });
+  if (recent.length < 10) return null;
+  const wins = recent.filter(r => r.outcome === 'WIN').length;
+  return wins / recent.length;
+}
+
+/** Retorna o histórico dos últimos 10 trades de um símbolo */
+export async function getSymbolStats(symbol: string): Promise<{ winRate: number, total: number }> {
+  const recent = await db.tradeSignal.findMany({
+    where: { pair: symbol, status: { in: ['CLOSED_TP', 'CLOSED_SL'] }, outcome: { not: null } },
+    orderBy: { exit_time: 'desc' },
+    take: 10,
+    select: { outcome: true }
+  });
+  if (recent.length === 0) return { winRate: 0, total: 0 };
+  const wins = recent.filter(r => r.outcome === 'WIN').length;
+  return { winRate: wins / recent.length, total: recent.length };
+}
+
+/** Retorna as perdas e ganhos do dia atual (UTC) */
+export async function getDailyStats(): Promise<{ wins: number, losses: number, winRate: number }> {
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+
+  const tradesToday = await db.tradeSignal.findMany({
+    where: {
+      status: { in: ['CLOSED_TP', 'CLOSED_SL'] },
+      outcome: { not: null },
+      exit_time: { gte: startOfDay }
+    },
+    select: { outcome: true }
+  });
+
+  const wins = tradesToday.filter(r => r.outcome === 'WIN').length;
+  const losses = tradesToday.filter(r => r.outcome === 'LOSS').length;
+  const total = wins + losses;
+
+  return {
+    wins,
+    losses,
+    winRate: total > 0 ? wins / total : 0
+  };
+}

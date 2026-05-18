@@ -8,7 +8,7 @@ import { telegramService } from '../notifications/telegramService.js';
 import { db } from '../lib/dbClient.js';
 import { marketContextService } from '../lib/marketContextService.js';
 import type { TradeSignal, TechnicalIndicator, OHLCPoint, CryptoPair } from '../types/trading.js';
-import { tradeTracker } from '../trading/tradeTracker.js';
+import { tradeTracker, getDailyStats, getSymbolStats } from '../trading/tradeTracker.js';
 import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
 import { isHighLiquidity } from '../config/highLiquiditySymbols.js'; // CORREÇÃO 5
@@ -23,6 +23,10 @@ let signalsSent = 0;
 let lastSignalAt: string | null = null;
 let engineRunning = false;
 let engineInterval: NodeJS.Timeout | null = null;
+
+// Filtros de Pausa e Cooldown
+let enginePausedUntil = 0;
+const symbolCooldowns = new Map<string, number>();
 
 // Rastreia quais moedas já geraram sinal hoje (evita repetição e força diversificação)
 const symbolsSignaledToday = new Set<string>();
@@ -594,6 +598,16 @@ export function generateSignalFromData(
     let rawScore = 0;
     const confluences: string[] = [];
 
+    // VETO: Volume consistente muito baixo
+    let lowVolCount = 0;
+    for (let i = Math.max(0, ohlc.length - 5); i < ohlc.length; i++) {
+        if (calculateRVOL(ohlc.slice(0, i + 1), 20) < 0.7) lowVolCount++;
+    }
+    if (lowVolCount >= 3) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ Veto volume baixo consistente: >3/5 candles com RVOL < 0.7`);
+        return null;
+    }
+
     // 1. EMA Alinhada 1H e 4H (+2)
     if (trend4h === type) {
         rawScore += 2;
@@ -684,10 +698,13 @@ export function generateSignalFromData(
     rawScore = Math.max(0, Math.min(rawScore, 10));
 
     // Regra de Aprovação: Score >= limiar
-    // customMinScore está em escala 0-100, rawScore em 0-10 → converter
-    const scoreThreshold = customMinScore !== undefined ? Math.floor(customMinScore / 10) : 6;
+    let scoreThreshold = customMinScore !== undefined ? Math.floor(customMinScore / 10) : 7;
+    if (strongContradict4H) {
+        scoreThreshold = 8;
+    }
+    
     if (rawScore < scoreThreshold) {
-        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO SCORE: Pontuação ${rawScore}/10 < ${scoreThreshold} (min=${customMinScore ?? 60}).`);
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO SCORE: Pontuação ${rawScore}/10 < ${scoreThreshold} (min=${customMinScore ?? 70}).`);
         return null;
     }
 
@@ -864,8 +881,21 @@ export function generateSignalFromData(
 async function runSignalCycle(): Promise<void> {
     logger.info('Running signal generation cycle...');
 
+    if (Date.now() < enginePausedUntil) {
+        logger.info(`[Engine] Pausado temporariamente (Restam ${Math.round((enginePausedUntil - Date.now()) / 60000)} min)`);
+        return;
+    }
+
     // Reseta contadores diários se mudou o dia
     checkAndResetDailyCounters();
+
+    // Filtro de Consistência Diária
+    const dailyStats = await getDailyStats();
+    if (dailyStats.losses >= 3 && dailyStats.winRate < 0.30) {
+        enginePausedUntil = Date.now() + 2 * 60 * 60 * 1000; // Pausa por 2 horas
+        logger.info(`[Engine] Pausado por sequência de losses: ${dailyStats.losses} losses hoje, WR=${(dailyStats.winRate * 100).toFixed(1)}%`);
+        return;
+    }
 
     // Limite diário: qualidade > quantidade
     if (signalsToday >= config.engine.maxSignalsPerDay) {
@@ -886,6 +916,18 @@ async function runSignalCycle(): Promise<void> {
             // CORREÇÃO 5: Filtrar símbolos de baixa liquidez
             if (!isHighLiquidity(symbol)) {
                 logger.debug(`[Engine] ${symbol} ignorado - baixa liquidez (< $100M volume diário)`);
+                continue;
+            }
+
+            // Filtro de Cooldown do Símbolo
+            if (symbolCooldowns.has(symbol) && Date.now() < symbolCooldowns.get(symbol)!) {
+                continue;
+            }
+
+            const symStats = await getSymbolStats(symbol);
+            if (symStats.total >= 5 && symStats.winRate < 0.20) {
+                symbolCooldowns.set(symbol, Date.now() + 4 * 60 * 60 * 1000); // 4 horas
+                logger.info(`[Engine] Símbolo ${symbol} em cooldown por baixo WR histórico (${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais)`);
                 continue;
             }
             
@@ -986,10 +1028,15 @@ async function runSignalCycle(): Promise<void> {
                                 isFiltered: prediction.probability < 0.5,
                             };
 
+                            // Obter threshold adaptativo
+                            const { getAdaptiveThreshold } = await import('../ml/mlPredictionService.js');
+                            const { getRecentGlobalWinRate } = await import('../trading/tradeTracker.js');
+                            const recentWR = await getRecentGlobalWinRate();
+                            const threshold = getAdaptiveThreshold(recentWR);
+
                             // Filter out signals rejected by ML
-                            // FASE 1: Aumentado de 55% para 65% (vantagem real sobre random)
-                            if (prediction.probability < 0.65) {
-                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)} < 0.65)`);
+                            if (prediction.probability < threshold) {
+                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)} < ${threshold.toFixed(2)})`);
                                 continue;
                             }
                         }

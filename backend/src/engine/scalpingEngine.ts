@@ -21,7 +21,7 @@ import {
 } from './signalEngine.js';
 import type { TradeSignal, OHLCPoint } from '../types/trading.js';
 import { indicatorLearner } from '../ml/indicatorLearner.js';
-import { tradeTracker } from '../trading/tradeTracker.js';
+import { tradeTracker, getDailyStats, getSymbolStats } from '../trading/tradeTracker.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
 import { volatilityTracker } from '../services/volatilityTracker.js';
 
@@ -36,6 +36,7 @@ let scalpingSignalsToday = 0;
 let scalpingRunning = false;
 let scalpingInterval: NodeJS.Timeout | null = null;
 let lastScalpingSignalAt: string | null = null;
+let enginePausedUntil = 0;
 
 // Cooldown por par: evita spam no mesmo par (30 min por padrão)
 const scalpingCooldowns = new Map<string, number>();
@@ -204,6 +205,16 @@ export function generateScalpingSignal(
     const volCheck = volatilityTracker.isHighVolatility(symbol, atrPct, volatility_24h, 1.4); // 1.4x para scalping
     if (volCheck.isHigh) {
         logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO VOLATILIDADE ALTA: ${volCheck.reason}`);
+        return null;
+    }
+
+    // VETO: Volume consistente muito baixo
+    let lowVolCount = 0;
+    for (let i = Math.max(0, ohlc5m.length - 5); i < ohlc5m.length; i++) {
+        if (calculateRVOL(ohlc5m.slice(0, i + 1), 20) < 0.7) lowVolCount++;
+    }
+    if (lowVolCount >= 3) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ Veto volume baixo consistente: >3/5 candles com RVOL < 0.7`);
         return null;
     }
 
@@ -491,6 +502,18 @@ async function runScalpingCycle(): Promise<void> {
         return;
     }
 
+    if (Date.now() < enginePausedUntil) {
+        logger.info(`[Scalping] Pausado temporariamente (Restam ${Math.round((enginePausedUntil - Date.now()) / 60000)} min)`);
+        return;
+    }
+
+    const dailyStats = await getDailyStats();
+    if (dailyStats.losses >= 3 && dailyStats.winRate < 0.30) {
+        enginePausedUntil = Date.now() + 2 * 60 * 60 * 1000;
+        logger.info(`[Scalping] Pausado por sequência de losses: ${dailyStats.losses} losses hoje, WR=${(dailyStats.winRate * 100).toFixed(1)}%`);
+        return;
+    }
+
     // FASE 3: Usar apenas pares de alta liquidez
     const symbols = SCALPING_SYMBOLS;
     const now = Date.now();
@@ -500,6 +523,13 @@ async function runScalpingCycle(): Promise<void> {
             const lastSignalTime = scalpingCooldowns.get(symbol) || 0;
             if (now - lastSignalTime < config.scalpingBot.cooldownMs) {
                 logger.debug(`[Scalping] ${symbol} em cooldown (${Math.round((config.scalpingBot.cooldownMs - (now - lastSignalTime)) / 60000)}min restante)`);
+                continue;
+            }
+
+            const symStats = await getSymbolStats(symbol);
+            if (symStats.total >= 5 && symStats.winRate < 0.20) {
+                scalpingCooldowns.set(symbol, Date.now() + 4 * 60 * 60 * 1000); // 4 horas de cooldown
+                logger.info(`[Scalping] Símbolo ${symbol} em cooldown por baixo WR histórico (${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais)`);
                 continue;
             }
 
@@ -534,8 +564,14 @@ async function runScalpingCycle(): Promise<void> {
                     const prediction = await predictSignal(signal.mlData as unknown as Parameters<typeof predictSignal>[0], symbol, 'scalping');
                     if (prediction) {
                         signal.mlData = { ...signal.mlData, probability: prediction.probability, predictedClass: prediction.predictedClass, modelSource: prediction.modelSource };
-                        if (prediction.probability < config.scalpingBot.mlMinProb) {
-                            logger.debug(`[Scalping] ${symbol} filtrado pelo ML (prob: ${prediction.probability.toFixed(3)} < ${config.scalpingBot.mlMinProb})`);
+                        
+                        const { getAdaptiveThreshold } = await import('../ml/mlPredictionService.js');
+                        const { getRecentGlobalWinRate } = await import('../trading/tradeTracker.js');
+                        const recentWR = await getRecentGlobalWinRate();
+                        const threshold = getAdaptiveThreshold(recentWR);
+
+                        if (prediction.probability < threshold) {
+                            logger.debug(`[Scalping] ${symbol} filtrado pelo ML (prob: ${prediction.probability.toFixed(3)} < ${threshold.toFixed(2)})`);
                             continue;
                         }
                     }

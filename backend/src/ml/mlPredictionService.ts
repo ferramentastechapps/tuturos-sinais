@@ -166,3 +166,20 @@ export async function predictSignal(
 export function isModelLoaded(): boolean {
     return modelLoaded && inferenceSession !== null;
 }
+
+export function getAdaptiveThreshold(recentWinRate: number | null): number {
+    if (recentWinRate === null) {
+        logger.debug(`[ML] Threshold adaptativo: prob_min=0.65 (Sem histórico suficiente)`);
+        return 0.65;
+    }
+    
+    let threshold = 0.65;
+    if (recentWinRate < 0.35) {
+        threshold = 0.72; // Mais rigoroso em fase ruim
+    } else if (recentWinRate > 0.50) {
+        threshold = 0.60; // Mais permissivo em fase boa
+    }
+    
+    logger.debug(`[ML] Threshold adaptativo: prob_min=${threshold} (WR recente=${(recentWinRate * 100).toFixed(1)}%)`);
+    return threshold;
+}

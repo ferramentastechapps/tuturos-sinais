@@ -52,11 +52,47 @@ def train():
         print("No data available for training.")
         return
 
+    # 1.5 Filtro de Qualidade de Dados
+    original_size = len(df)
+    
+    # Remover operações que empataram (ruído)
+    df = df[~((df['pnl'] >= -0.1) & (df['pnl'] <= 0.1))]
+    
+    if 'confluence_count' in df.columns:
+        df = df[df['confluence_count'] >= 3]
+        
+    if 'confidence' in df.columns:
+        df = df[df['confidence'] >= 0.5]
+        
+    filtered_size = len(df)
+    print(f"Filtrados {original_size - filtered_size} de {original_size} registros ({((original_size - filtered_size) / original_size * 100):.1f}%)")
+    
+    if len(df) < 20:
+        print("Dados insuficientes após o filtro de qualidade.")
+        return
+
     X = df[FEATURE_COLUMNS]
     y = df['label']
     
+    # Pesos temporais (Sinais recentes importam mais)
+    df['entry_time'] = pd.to_datetime(df['entry_time'], errors='coerce', utc=True)
+    now = pd.Timestamp.utcnow()
+    age_days = (now - df['entry_time']).dt.days
+    
+    sample_weights = np.where(age_days <= 7, 1.0, 
+                     np.where(age_days <= 30, 0.6, 0.3))
+    
+    # Balanceamento de classes (SMOTE simplificado com scale_pos_weight)
+    win_rate = y.mean()
+    scale_pos_weight = 1.0
+    if 0 < win_rate < 0.4:
+        scale_pos_weight = (1 - win_rate) / win_rate
+    print(f"Class balance: WIN={win_rate*100:.1f}%, LOSS={(1-win_rate)*100:.1f}%, scale_pos_weight={scale_pos_weight:.2f}")
+
     # Split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
+        X, y, sample_weights, test_size=0.2, random_state=42
+    )
     
     print(f"Dataset size: {len(df)} samples")
     print(f"Training set: {len(X_train)} samples")
@@ -68,10 +104,11 @@ def train():
         max_depth=5,
         learning_rate=0.1,
         objective='binary:logistic',
+        scale_pos_weight=scale_pos_weight,
         n_jobs=-1
     )
     
-    model.fit(X_train.values, y_train.values)
+    model.fit(X_train.values, y_train.values, sample_weight=w_train)
     
     # 4. Evaluate
     y_pred = model.predict(X_test)
@@ -122,15 +159,23 @@ def train():
             X_sym = symbol_df[FEATURE_COLUMNS]
             y_sym = symbol_df['label']
             
+            # Balanceamento e pesos para o símbolo
+            w_sym = sample_weights[symbol_df.index]
+            wr_sym = y_sym.mean()
+            spw_sym = 1.0
+            if 0 < wr_sym < 0.4:
+                spw_sym = (1 - wr_sym) / wr_sym
+            
             # Treinar modelo específico
             model_sym = xgb.XGBClassifier(
                 n_estimators=100,
                 max_depth=5,
                 learning_rate=0.1,
                 objective='binary:logistic',
+                scale_pos_weight=spw_sym,
                 n_jobs=-1
             )
-            model_sym.fit(X_sym.values, y_sym.values)
+            model_sym.fit(X_sym.values, y_sym.values, sample_weight=w_sym)
             
             # Validar accuracy
             y_pred_sym = model_sym.predict(X_sym.values)
