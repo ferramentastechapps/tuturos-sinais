@@ -1,4 +1,4 @@
-import { Target, BarChart2, FlaskConical, Wallet, ClipboardList } from 'lucide-react';
+import { Target, BarChart2, BrainCircuit, Wallet, ClipboardList } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,7 +13,7 @@ export const BottomNav = () => {
   const tabs = [
     { name: 'Sinais', path: '/m/sinais', icon: Target },
     { name: 'Gráfico', path: '/m/grafico', icon: BarChart2 },
-    { name: 'Backtest', path: '/m/backtest', icon: FlaskConical },
+    { name: 'ML', path: '/ml-analytics', icon: BrainCircuit },
     { name: 'Posições', path: '/m/posicoes', icon: Wallet },
     { name: 'Resultados', path: '/m/resultados', icon: ClipboardList },
   ];
