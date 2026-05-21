@@ -49,7 +49,6 @@ if MISSING:
     sys.exit(1)
 
 FEATURE_COLUMNS = [
-    'symbol_id',
     'rsi', 'adx', 'atr_rel', 'dist_ema20', 'dist_ema50', 'dist_ema200', 'dist_vwap',
     'volatility_24h', 'volume_rel', 'funding_rate', 'open_interest_var', 'long_short_ratio',
     'is_long', 'confidence', 'quality_score', 'confluence_count', 'stop_loss_pct',
@@ -210,11 +209,54 @@ def main():
 
     try:
         df = fetch_from_sqlite(db_path)
+        
+        # 1. Treinar Modelo Global
+        print("\n=== 🌍 TREINANDO MODELO GLOBAL FALLBACK ===")
         X, y = build_feature_matrix(df)
         validate(X, y, args.min_samples)
         pipeline, metrics = train(X, y)
         export_onnx(pipeline, output_path, len(FEATURE_COLUMNS))
         save_report(metrics, str(Path(output_path).parent), len(y))
+        
+        # 2. Treinar Modelos por Criptomoeda (Isolados)
+        print("\n=== 🎯 TREINANDO MODELOS ISOLADOS POR MOEDA ===")
+        
+        # Garantir coluna symbol existe no DataFrame
+        if 'symbol' not in df.columns:
+            print("⚠️ Coluna 'symbol' não encontrada no banco. Modelos individuais por moeda pulados.")
+        else:
+            unique_symbols = df['symbol'].unique()
+            trained_symbols = []
+            
+            # Pasta de modelos por moeda
+            ml_models_dir = backend_dir / 'ml_models'
+            ml_models_dir.mkdir(parents=True, exist_ok=True)
+            
+            for sym in unique_symbols:
+                sym_df = df[df['symbol'] == sym]
+                if len(sym_df) < 20: # Limiar de 20 trades
+                    print(f"   ⚠️ {sym}: {len(sym_df)} trades (< 20). Ignorando, usará modelo global.")
+                    continue
+                    
+                print(f"\n   💎 Treinando modelo individual para {sym} ({len(sym_df)} trades)...")
+                try:
+                    sym_X, sym_y = build_feature_matrix(sym_df)
+                    validate(sym_X, sym_y, 20)
+                    sym_pipeline, sym_metrics = train(sym_X, sym_y)
+                    
+                    # Salvar em ml_models/<SYMBOL>/model.onnx
+                    sym_dir = ml_models_dir / sym
+                    sym_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    sym_output_path = sym_dir / 'model.onnx'
+                    export_onnx(sym_pipeline, str(sym_output_path), len(FEATURE_COLUMNS))
+                    save_report(sym_metrics, str(sym_dir), len(sym_y))
+                    trained_symbols.append(sym)
+                except Exception as e:
+                    print(f"   ❌ Erro ao treinar modelo para {sym}: {e}")
+                    
+            print(f"\n✅ Treinamento concluído! Modelos isolados criados para: {', '.join(trained_symbols)}")
+            
         print("\n🚀 Reinicie o backend: pm2 restart signal-engine\n")
     except ValueError as e:
         print(f"\n⚠️  {e}\n")

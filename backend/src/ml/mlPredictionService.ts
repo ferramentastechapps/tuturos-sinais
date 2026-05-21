@@ -68,10 +68,20 @@ export async function loadModel(): Promise<boolean> {
 
 async function loadSymbolModel(symbol: string): Promise<ort.InferenceSession | null> {
     try {
-        const backendDir = path.resolve(__dirname, '../../');
-        const symbolModelPath = path.join(backendDir, 'ml_models', symbol, 'model.onnx');
-        
-        if (!fs.existsSync(symbolModelPath)) {
+        const searchPaths = [
+            path.join(path.resolve(__dirname, '../../'), 'ml_models', symbol, 'model.onnx'),
+            path.join(path.resolve(__dirname, '../../../'), 'ml_models', symbol, 'model.onnx'),
+        ];
+
+        let symbolModelPath: string | null = null;
+        for (const p of searchPaths) {
+            if (fs.existsSync(p)) {
+                symbolModelPath = p;
+                break;
+            }
+        }
+
+        if (!symbolModelPath) {
             return null; // Modelo específico não existe
         }
         
@@ -84,7 +94,7 @@ async function loadSymbolModel(symbol: string): Promise<ort.InferenceSession | n
         // Carregar novo modelo
         const session = await ort.InferenceSession.create(symbolModelPath);
         symbolSessions.set(symbol, { session, loadedAt: Date.now() });
-        logger.info(`Loaded symbol-specific model for ${symbol}`);
+        logger.info(`Loaded symbol-specific model for ${symbol} from ${symbolModelPath}`);
         return session;
     } catch (error) {
         logger.warn(`Failed to load symbol model for ${symbol}`, { error });

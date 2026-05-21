@@ -75,6 +75,7 @@ export interface SignalNotificationData {
         micro: string[];
     };
     performanceSummary?: string;
+    isAnalysisOnly?: boolean;
 }
 
 export interface TakeProfitNotificationData {

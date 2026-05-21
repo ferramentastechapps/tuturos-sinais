@@ -978,6 +978,7 @@ async function runSignalCycle(): Promise<void> {
                 if (isBadCoin) {
                     signal.indicators = ['⚠️ Moeda Ruim (WR < 20%)', ...signal.indicators];
                     signal.contextNarrative = `⚠️ <b>MOEDA COM HISTÓRICO RUIM (Win Rate: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} trades)</b>. Gerada apenas para análise e estudos. ${signal.contextNarrative || ''}`;
+                    signal.status = 'BLOCKED';
                 }
 
                 // FASE 3: Validar contexto de mercado ANTES de processar o sinal
@@ -1061,8 +1062,10 @@ async function runSignalCycle(): Promise<void> {
 
                             // Filter out signals rejected by ML
                             if (prediction.probability < threshold) {
-                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)} < ${threshold.toFixed(2)})`);
-                                continue;
+                                logger.debug(`Signal ${symbol} filtered by ML (prob: ${prediction.probability.toFixed(3)} < ${threshold.toFixed(2)}). Marking as BLOCKED for analysis.`);
+                                signal.status = 'BLOCKED';
+                                signal.indicators = ['⚠️ Rejeitado por IA (Confiança Baixa)', ...signal.indicators];
+                                signal.contextNarrative = `⚠️ <b>SINAL VETADO PELA INTELIGÊNCIA ARTIFICIAL (Confiança: ${(prediction.probability * 100).toFixed(1)}% < ${(threshold * 100).toFixed(1)}%)</b>. Gerado apenas para fins de análise e estudos estatísticos. ${signal.contextNarrative || ''}`;
                             }
                         }
                     } catch (mlError) {
@@ -1109,7 +1112,7 @@ async function runSignalCycle(): Promise<void> {
                 }
 
                 // Send Telegram notification
-                if (signal.status !== 'BLOCKED' && telegramService.isEnabled && signal.quality.score >= config.telegram.minScore) {
+                if (telegramService.isEnabled && (signal.status === 'BLOCKED' || signal.quality.score >= config.telegram.minScore)) {
                     try {
                         const tgResult = await telegramService.sendNewSignal({
                             type: signal.type,
@@ -1138,6 +1141,7 @@ async function runSignalCycle(): Promise<void> {
                             expectedDuration: anySignal.expectedDuration,
                             mtfContext: anySignal.mtfContext,
                             contextNarrative: `${anySignal.contextNarrative} ${isSweep ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : isOB ? '**ORDER BLOCK ICT CONFIRMADO.** Entrada na zona institucional com Stop no swing estrutural. TPs por extensões Fibonacci.' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`,
+                            isAnalysisOnly: signal.status === 'BLOCKED',
                         });
                         signalsSent++;
 

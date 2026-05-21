@@ -193,8 +193,12 @@ class TelegramService {
         }
 
         const textLines = [
-            `${emoji} <b>ORDEM PENDENTE ${dir} — ${data.symbol}</b>`,
-            `⚠️ <i>Aguardando entrada na zona...</i>`,
+            data.isAnalysisOnly
+                ? `⚠️ <b>SINAL APENAS PARA ANÁLISE — ${data.symbol}</b>`
+                : `${emoji} <b>ORDEM PENDENTE ${dir} — ${data.symbol}</b>`,
+            data.isAnalysisOnly
+                ? `⚠️ <i>Este sinal foi filtrado pela IA ou possui histórico ruim. NÃO OPERAR, apenas para estudos!</i>`
+                : `⚠️ <i>Aguardando entrada na zona...</i>`,
             rankBadge ? `${rankBadge}` : null,
             data.tradeType ? `⏱️ Estilo: ${data.tradeType} (Aprox. ${data.expectedDuration})` : null,
             `🎯 Score: ${data.score}/100 (${data.scoreLabel})`,
@@ -232,8 +236,10 @@ class TelegramService {
 
         // Dispara o Push Notification paralelamente
         broadcastPushNotification({
-            title: `Pendente ${dir} — ${data.symbol}`,
-            body: `Entrada: $${formatPrice(data.entryZone.min)} | Alvo: $${formatPrice(data.takeProfits[0]?.price)} | Risco: ${data.riskPercent.toFixed(1)}%`,
+            title: data.isAnalysisOnly ? `⚠️ Análise ${dir} — ${data.symbol}` : `Pendente ${dir} — ${data.symbol}`,
+            body: data.isAnalysisOnly
+                ? `[BLOQUEADO] Apenas para acompanhamento estatístico e estudos.`
+                : `Entrada: $${formatPrice(data.entryZone.min)} | Alvo: $${formatPrice(data.takeProfits[0]?.price)} | Risco: ${data.riskPercent.toFixed(1)}%`,
         }).catch(err => logger.error('Web Push failed to broadcast', { error: err.message }));
 
         return this.send(text, 'new_signal', data.symbol);
@@ -450,9 +456,14 @@ class TelegramService {
             logger.warn('Error fetching rank for telegram', (e as Error).message);
         }
 
+        const isAnalysisOnly = signal.status === 'BLOCKED' || signal.isAnalysisOnly === true;
         const lines = [
-            `⚡ <b>SCALPING ${dir} — ${signal.pair}</b>`,
-            `📊 Score: ${signal.confidence}/100 | TF: 5m | Aprox. 15–60 min`,
+            isAnalysisOnly
+                ? `⚠️ <b>SCALPING PARA ANÁLISE — ${signal.pair}</b>`
+                : `⚡ <b>SCALPING ${dir} — ${signal.pair}</b>`,
+            isAnalysisOnly
+                ? `⚠️ <i>Este sinal de Scalping foi filtrado pela IA ou possui histórico ruim. NÃO OPERAR!</i>`
+                : `📊 Score: ${signal.confidence}/100 | TF: 5m | Aprox. 15–60 min`,
             rankBadge ? `${rankBadge}` : null,
             ``,
             `💰 Entrada: <b>$${fmt(signal.entry)}</b>`,

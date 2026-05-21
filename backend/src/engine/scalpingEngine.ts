@@ -556,6 +556,7 @@ async function runScalpingCycle(): Promise<void> {
             if (isBadCoin) {
                 signal.indicators = ['⚠️ Moeda Ruim (WR < 20%)', ...signal.indicators];
                 signal.contextNarrative = `⚠️ <b>MOEDA COM HISTÓRICO RUIM (Win Rate: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais)</b>. Gerada apenas para análise. ${signal.contextNarrative || ''}`;
+                signal.status = 'BLOCKED';
             }
 
             // FASE 3: Validar contexto de mercado ANTES de processar o sinal
@@ -577,8 +578,10 @@ async function runScalpingCycle(): Promise<void> {
                         const threshold = getAdaptiveThreshold(recentWR);
 
                         if (prediction.probability < threshold) {
-                            logger.debug(`[Scalping] ${symbol} filtrado pelo ML (prob: ${prediction.probability.toFixed(3)} < ${threshold.toFixed(2)})`);
-                            continue;
+                            logger.debug(`[Scalping] ${symbol} filtrado pelo ML (prob: ${prediction.probability.toFixed(3)} < ${threshold.toFixed(2)}). Marking as BLOCKED for analysis.`);
+                            signal.status = 'BLOCKED';
+                            signal.indicators = ['⚠️ Rejeitado por IA (Confiança Baixa)', ...signal.indicators];
+                            signal.contextNarrative = `⚠️ <b>SINAL VETADO PELA INTELIGÊNCIA ARTIFICIAL (Confiança: ${(prediction.probability * 100).toFixed(1)}% < ${(threshold * 100).toFixed(1)}%)</b>. Gerado apenas para fins de análise e estudos estatísticos. ${signal.contextNarrative || ''}`;
                         }
                     }
                 } catch (mlError) {
@@ -599,16 +602,14 @@ async function runScalpingCycle(): Promise<void> {
             lastScalpingSignalAt = new Date().toISOString();
             scalpingCooldowns.set(symbol, now);
 
-            // Envia para o canal de scalping se não estiver bloqueado
-            if (signal.status !== 'BLOCKED' && config.scalpingBot.chatId) {
+            // Envia para o canal de scalping
+            if (config.scalpingBot.chatId) {
                 try {
                     const { telegramService } = await import('../notifications/telegramService.js');
-                    // Atenção: A validação aqui compara com o minScore do Telegram, 
-                    // Se o usuário permitiu >= 6, espera-se que a config tenha sido reduzida para 60 no .env
-                    if (telegramService.isEnabled && signal.confidence >= config.telegram.minScore) {
+                    if (telegramService.isEnabled && (signal.status === 'BLOCKED' || signal.confidence >= config.telegram.minScore)) {
                         await telegramService.sendScalpingSignal(signal);
                         scalpingSignalsSent++;
-                        logger.info(`[Scalping] Sinal enviado: ${signal.type.toUpperCase()} ${symbol} | score=${signal.confidence}`);
+                        logger.info(`[Scalping] Sinal enviado (${signal.status}): ${signal.type.toUpperCase()} ${symbol} | score=${signal.confidence}`);
                     }
                 } catch (tError) {
                     logger.warn(`[Scalping] Falha ao enviar telegram para ${symbol}`, { error: tError });
