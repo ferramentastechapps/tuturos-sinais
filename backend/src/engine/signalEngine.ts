@@ -412,18 +412,10 @@ function getIndicatorSignal(name: string, value: number): 'bullish' | 'bearish' 
 }
 
 /**
- * Market Hours Filter — Baseado em análise histórica de 657 sinais
+ * Market Hours Filter — Baseado em análise histórica de 657 sinais (Desativado por solicitação do usuário)
  */
 function isWithinTradingHours(): boolean {
-    const h = new Date().getUTCHours();
-
-    // Horas proibidas — 0% a 12% WR confirmado nos dados históricos
-    if (BLOCKED_HOURS.includes(h)) return false;
-
-    // Horas medianas — permitidas mas sem bônus de score
-    // (00, 01, 02, 05, 08, 15, 16, 17, 18, 19, 22)
-    // Horas boas — permitidas e ganham bônus de score
-    // (03, 06, 12, 13, 14)
+    // Retorna sempre true para remover o bloqueio de horário, mantendo apenas o filtro de liquidez
     return true;
 }
 

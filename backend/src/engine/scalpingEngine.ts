@@ -44,13 +44,9 @@ let enginePausedUntil = 0;
 // Cooldown por par: evita spam no mesmo par (30 min por padrão)
 const scalpingCooldowns = new Map<string, number>();
 
-// ──── Bônus de Janela (Agora retorna booleano em vez de vetar) ────
+// ──── Bônus de Janela (Desativado por solicitação do usuário) ────
 function isScalpingTradingWindow(): boolean {
-    const h = new Date().getUTCHours();
-
-    // Mesmas horas proibidas do swing + 22h (scalping é mais sensível)
-    if (BLOCKED_HOURS.includes(h)) return false;
-
+    // Retorna sempre true para remover o bloqueio de horário, mantendo apenas o filtro de liquidez
     return true;
 }
 
