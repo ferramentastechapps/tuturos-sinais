@@ -529,10 +529,9 @@ async function runScalpingCycle(): Promise<void> {
             }
 
             const symStats = await getSymbolStats(symbol);
-            if (symStats.total >= 5 && symStats.winRate < 0.20) {
-                scalpingCooldowns.set(symbol, Date.now() + 4 * 60 * 60 * 1000); // 4 horas de cooldown
-                logger.info(`[Scalping] Símbolo ${symbol} em cooldown por baixo WR histórico (${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais)`);
-                continue;
+            const isBadCoin = symStats.total >= 5 && symStats.winRate < 0.20;
+            if (isBadCoin) {
+                logger.info(`[Scalping] Símbolo ${symbol} identificado com baixo WR histórico (${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais), prosseguindo apenas para análise.`);
             }
 
             const [ohlc5m, ohlc15m] = await Promise.all([
@@ -553,6 +552,11 @@ async function runScalpingCycle(): Promise<void> {
             const signal = generateScalpingSignal(symbol, ohlc5m, ohlc15m, currentPrice, high24h, low24h, fundingRate, perf);
 
             if (!signal) continue;
+
+            if (isBadCoin) {
+                signal.indicators = ['⚠️ Moeda Ruim (WR < 20%)', ...signal.indicators];
+                signal.contextNarrative = `⚠️ <b>MOEDA COM HISTÓRICO RUIM (Win Rate: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais)</b>. Gerada apenas para análise. ${signal.contextNarrative || ''}`;
+            }
 
             // FASE 3: Validar contexto de mercado ANTES de processar o sinal
             const contextValidation = await validateSignalContext(symbol, signal.type);

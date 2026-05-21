@@ -946,10 +946,9 @@ async function runSignalCycle(): Promise<void> {
             }
 
             const symStats = await getSymbolStats(symbol);
-            if (symStats.total >= 5 && symStats.winRate < 0.20) {
-                symbolCooldowns.set(symbol, Date.now() + 4 * 60 * 60 * 1000); // 4 horas
-                logger.info(`[Engine] Símbolo ${symbol} em cooldown por baixo WR histórico (${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais)`);
-                continue;
+            const isBadCoin = symStats.total >= 5 && symStats.winRate < 0.20;
+            if (isBadCoin) {
+                logger.info(`[Engine] Símbolo ${symbol} identificado com baixo WR histórico (${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais), prosseguindo apenas para análise.`);
             }
             
             // Get OHLC data - prefer cached WebSocket data, fallback to REST
@@ -976,6 +975,11 @@ async function runSignalCycle(): Promise<void> {
             );
 
             if (signal && signal.quality && signal.quality.score >= 60) {
+                if (isBadCoin) {
+                    signal.indicators = ['⚠️ Moeda Ruim (WR < 20%)', ...signal.indicators];
+                    signal.contextNarrative = `⚠️ <b>MOEDA COM HISTÓRICO RUIM (Win Rate: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} trades)</b>. Gerada apenas para análise e estudos. ${signal.contextNarrative || ''}`;
+                }
+
                 // FASE 3: Validar contexto de mercado ANTES de processar o sinal
                 const contextValidation = await validateSignalContext(symbol, signal.type);
                 if (!contextValidation.allowed) {
