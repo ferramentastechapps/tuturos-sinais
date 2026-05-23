@@ -458,7 +458,7 @@ router.get('/metrics', (_req: Request, res: Response) => {
 
 router.get('/ml/stats', async (req: Request, res: Response) => {
     try {
-        const { startDate, endDate, robotType } = req.query;
+        const { startDate, endDate, robotType, symbol } = req.query;
         
         // Construir filtros dinâmicos para ml_training_data
         const whereClause: any = {};
@@ -476,6 +476,11 @@ router.get('/ml/stats', async (req: Request, res: Response) => {
                 ? { contains: 'swing', mode: 'insensitive' as const }
                 : { contains: 'scalp', mode: 'insensitive' as const };
             whereClause.trade_type = typePattern;
+        }
+
+        // Filtro de moeda/símbolo
+        if (symbol && symbol !== 'all' && symbol !== 'ALL') {
+            whereClause.symbol = symbol as string;
         }
         
         // Buscar dados de treino ML (sinais históricos fechados)
@@ -556,7 +561,7 @@ router.get('/ml/stats', async (req: Request, res: Response) => {
 router.get('/ml/learning-history', async (req: Request, res: Response) => {
     try {
         const limit = parseInt(getStringParam(req.query.limit)) || 5;
-        const { startDate, endDate, robotType } = req.query;
+        const { startDate, endDate, robotType, symbol } = req.query;
         
         // Construir filtros dinâmicos para ml_training_data
         const whereClause: any = {};
@@ -574,6 +579,11 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 ? { contains: 'swing', mode: 'insensitive' as const }
                 : { contains: 'scalp', mode: 'insensitive' as const };
             whereClause.trade_type = typePattern;
+        }
+
+        // Filtro de moeda/símbolo
+        if (symbol && symbol !== 'all' && symbol !== 'ALL') {
+            whereClause.symbol = symbol as string;
         }
         
         const history = await db.mLTrainingData.findMany({
@@ -770,15 +780,39 @@ router.post('/ml/retrain', async (_req: Request, res: Response) => {
 // ──── ML Export Data ────
 router.get('/ml/export', async (req: Request, res: Response) => {
     try {
+        const { startDate, endDate, robotType, symbol } = req.query;
+        
+        const whereClause: any = {
+            status: { in: ['CLOSED_TP', 'CLOSED_SL'] }
+        };
+        
+        // Date filter
+        if (startDate || endDate) {
+            whereClause.entry_time = {};
+            if (startDate) whereClause.entry_time.gte = new Date(startDate as string);
+            if (endDate) whereClause.entry_time.lte = new Date(endDate as string);
+        }
+        
+        // Robot type filter
+        if (robotType && robotType !== 'all') {
+            const typePattern = robotType === 'swing' 
+                ? { contains: 'swing', mode: 'insensitive' as const }
+                : { contains: 'scalp', mode: 'insensitive' as const };
+            whereClause.trade_type = typePattern;
+        }
+
+        // Symbol filter
+        if (symbol && symbol !== 'all' && symbol !== 'ALL') {
+            whereClause.pair = symbol as string;
+        }
+
         const data = await db.tradeSignal.findMany({
-            where: {
-                status: { in: ['CLOSED_TP', 'CLOSED_SL'] }
-            },
+            where: whereClause,
             orderBy: { exit_time: 'desc' }
         });
         
         if (!data || data.length === 0) {
-            res.status(404).send('No data found');
+            res.status(404).send('No data found for the selected filters');
             return;
         }
 

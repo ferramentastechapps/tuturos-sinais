@@ -69,6 +69,25 @@ const MLAnalytics = () => {
     // Filtros
     const [dateFilter, setDateFilter] = useState<DateFilter>('all');
     const [robotFilter, setRobotFilter] = useState<RobotFilter>('all');
+    const [symbolFilter, setSymbolFilter] = useState<string>('all');
+    const [monitoredSymbols, setMonitoredSymbols] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchSymbols = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/symbols`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.symbols) {
+                        setMonitoredSymbols(data.symbols);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch monitored symbols', err);
+            }
+        };
+        fetchSymbols();
+    }, []);
 
     const getDateRange = (filter: DateFilter): { start?: string; end?: string } => {
         const now = new Date();
@@ -102,6 +121,7 @@ const MLAnalytics = () => {
             if (dateRange.start) params.append('startDate', dateRange.start);
             if (dateRange.end) params.append('endDate', dateRange.end);
             if (robotFilter !== 'all') params.append('robotType', robotFilter);
+            if (symbolFilter !== 'all') params.append('symbol', symbolFilter);
             
             const queryString = params.toString();
             
@@ -116,7 +136,7 @@ const MLAnalytics = () => {
         } finally {
             setLoading(false);
         }
-    }, [dateFilter, robotFilter]);
+    }, [dateFilter, robotFilter, symbolFilter]);
 
     useEffect(() => {
         loadData();
@@ -144,7 +164,16 @@ const MLAnalytics = () => {
     const handleExportCSV = async () => {
         try {
             toast({ title: 'Exportando', description: 'Gerando arquivo CSV...' });
-            const res = await fetch(`${API_BASE}/api/ml/export`);
+            
+            const dateRange = getDateRange(dateFilter);
+            const params = new URLSearchParams();
+            if (dateRange.start) params.append('startDate', dateRange.start);
+            if (dateRange.end) params.append('endDate', dateRange.end);
+            if (robotFilter !== 'all') params.append('robotType', robotFilter);
+            if (symbolFilter !== 'all') params.append('symbol', symbolFilter);
+            
+            const queryString = params.toString();
+            const res = await fetch(`${API_BASE}/api/ml/export${queryString ? `?${queryString}` : ''}`);
             if (!res.ok) throw new Error('Falha ao exportar os dados do ML');
             
             const blob = await res.blob();
@@ -246,13 +275,31 @@ const MLAnalytics = () => {
                             </Select>
                         </div>
 
-                        {(dateFilter !== 'all' || robotFilter !== 'all') && (
+                        <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                            <Select value={symbolFilter} onValueChange={(v) => setSymbolFilter(v)}>
+                                <SelectTrigger className="w-[160px] h-9">
+                                    <SelectValue placeholder="Todas Moedas" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todas Moedas</SelectItem>
+                                    {monitoredSymbols.map((sym) => (
+                                        <SelectItem key={sym} value={sym}>
+                                            {sym}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {(dateFilter !== 'all' || robotFilter !== 'all' || symbolFilter !== 'all') && (
                             <Button 
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => {
                                     setDateFilter('all');
                                     setRobotFilter('all');
+                                    setSymbolFilter('all');
                                 }}
                                 className="text-xs"
                             >
