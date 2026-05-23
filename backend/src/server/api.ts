@@ -517,18 +517,45 @@ router.get('/ml/stats', async (req: Request, res: Response) => {
             ? uniqueTrainingData.reduce((sum: number, d: any) => sum + (d.outcome_pnl || 0), 0) / totalSignals
             : 0;
 
-        // Calcular TP hits dos features
+        // FETCH ORIGINAL SIGNALS to get take_profits details
+        const signalIds = uniqueTrainingData.map((d: any) => d.signal_id).filter(Boolean);
+        let originalSignals: any[] = [];
+        if (signalIds.length > 0) {
+            originalSignals = await db.tradeSignal.findMany({
+                where: { id: { in: signalIds } },
+                select: { id: true, take_profits: true }
+            });
+        }
+        const signalMap = new Map();
+        for (const s of originalSignals) {
+            signalMap.set(s.id, s);
+        }
+
+        // Calcular TP hits dos signals originais
         let tp1Hits = 0, tp2Hits = 0, tp3Hits = 0;
         for (const data of uniqueTrainingData) {
             if (data.outcome_label === 1) {
-                try {
-                    const features = JSON.parse(data.features);
-                    // Tentar extrair info de TP dos features
-                    if (features.tp1_hit || features.tp_1_hit) tp1Hits++;
-                    if (features.tp2_hit || features.tp_2_hit) tp2Hits++;
-                    if (features.tp3_hit || features.tp_3_hit) tp3Hits++;
-                } catch (e) {
-                    // Se não conseguir parsear, assume que bateu pelo menos TP1
+                const origSignal = signalMap.get(data.signal_id);
+                if (origSignal && origSignal.take_profits) {
+                    try {
+                        const tps = typeof origSignal.take_profits === 'string'
+                            ? JSON.parse(origSignal.take_profits)
+                            : origSignal.take_profits;
+                        if (Array.isArray(tps)) {
+                            const tp1 = tps.find((t: any) => t.level === 1 || t.tp === 1);
+                            const tp2 = tps.find((t: any) => t.level === 2 || t.tp === 2);
+                            const tp3 = tps.find((t: any) => t.level === 3 || t.tp === 3);
+                            
+                            if (tp1?.hit === true || tp1?.hit === 'true') tp1Hits++;
+                            if (tp2?.hit === true || tp2?.hit === 'true') tp2Hits++;
+                            if (tp3?.hit === true || tp3?.hit === 'true') tp3Hits++;
+                        } else {
+                            tp1Hits++;
+                        }
+                    } catch (e) {
+                        tp1Hits++;
+                    }
+                } else {
                     tp1Hits++;
                 }
             }
