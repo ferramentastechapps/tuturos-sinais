@@ -56,6 +56,8 @@ npm install -q
 npm run build
 npx prisma generate
 npx prisma db push --accept-data-loss
+echo '  🧹 removing duplicate ML entries...'
+node scripts/remove_duplicates.mjs
 cd ..
 
 echo '  ♻️  pm2 cleanup & restart...'

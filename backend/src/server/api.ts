@@ -482,25 +482,39 @@ router.get('/ml/stats', async (req: Request, res: Response) => {
         const trainingData = await db.mLTrainingData.findMany({
             where: whereClause,
             select: {
+                signal_id: true,
                 outcome_label: true,
                 outcome_pnl: true,
                 features: true,
             }
         });
 
-        const wins = trainingData.filter((d: any) => d.outcome_label === 1).length;
-        const losses = trainingData.filter((d: any) => d.outcome_label === 0).length;
+        // De-duplicate in memory by signal_id to ensure stats are not distorted by duplicate rows
+        const uniqueTrainingData: typeof trainingData = [];
+        const seenSignalIds = new Set<string>();
+        for (const d of trainingData) {
+            if (d.signal_id) {
+                if (seenSignalIds.has(d.signal_id)) {
+                    continue;
+                }
+                seenSignalIds.add(d.signal_id);
+            }
+            uniqueTrainingData.push(d);
+        }
+
+        const wins = uniqueTrainingData.filter((d: any) => d.outcome_label === 1).length;
+        const losses = uniqueTrainingData.filter((d: any) => d.outcome_label === 0).length;
         const totalSignals = wins + losses;
         const winRate = totalSignals > 0 ? (wins / totalSignals) * 100 : 0;
 
         // PnL médio
         const avgPnl = totalSignals > 0
-            ? trainingData.reduce((sum: number, d: any) => sum + (d.outcome_pnl || 0), 0) / totalSignals
+            ? uniqueTrainingData.reduce((sum: number, d: any) => sum + (d.outcome_pnl || 0), 0) / totalSignals
             : 0;
 
         // Calcular TP hits dos features
         let tp1Hits = 0, tp2Hits = 0, tp3Hits = 0;
-        for (const data of trainingData) {
+        for (const data of uniqueTrainingData) {
             if (data.outcome_label === 1) {
                 try {
                     const features = JSON.parse(data.features);
@@ -565,7 +579,7 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
         const history = await db.mLTrainingData.findMany({
             where: whereClause,
             orderBy: { created_at: 'desc' },
-            take: limit,
+            take: Math.max(limit * 3, 50),
             select: {
                 id: true,
                 signal_id: true,
@@ -578,8 +592,24 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 created_at: true            }
         });
 
+        // Filter out duplicate signal_ids to avoid showing repeated entries
+        const uniqueHistory: typeof history = [];
+        const seenSignalIds = new Set<string>();
+        for (const item of history) {
+            if (item.signal_id) {
+                if (seenSignalIds.has(item.signal_id)) {
+                    continue;
+                }
+                seenSignalIds.add(item.signal_id);
+            }
+            uniqueHistory.push(item);
+            if (uniqueHistory.length >= limit) {
+                break;
+            }
+        }
+
         // FETCH ORIGINAL SIGNALS to get price and date details
-        const signalIds = history.map((h: any) => h.signal_id).filter(Boolean);
+        const signalIds = uniqueHistory.map((h: any) => h.signal_id).filter(Boolean);
         let originalSignals: any[] = [];
         if (signalIds.length > 0) {
             originalSignals = await db.tradeSignal.findMany({
@@ -591,7 +621,7 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
             signalMap.set(s.id, s);
         }
 
-        const learnings = history.map((h: any) => {
+        const learnings = uniqueHistory.map((h: any) => {
             let parsedFeatures: any = {};
             try { if (h.features) parsedFeatures = JSON.parse(h.features); } catch(e){}
             

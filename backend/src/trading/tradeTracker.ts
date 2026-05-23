@@ -783,7 +783,18 @@ export class TradeTracker {
       
       let insertErr: any = null;
       try {
-        await db.mLTrainingData.create({ data: dbRowSave as any });
+        const existing = await db.mLTrainingData.findFirst({
+          where: { signal_id: activeSignal.id }
+        });
+        if (existing) {
+          console.log(`[TradeTracker] ML Training Data already exists for signal ${activeSignal.id}. Updating with final PnL.`);
+          await db.mLTrainingData.update({
+            where: { id: existing.id },
+            data: dbRowSave as any
+          });
+        } else {
+          await db.mLTrainingData.create({ data: dbRowSave as any });
+        }
       } catch (err: any) {
         insertErr = err;
       }
