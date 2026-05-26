@@ -38,8 +38,8 @@ let engineInterval: NodeJS.Timeout | null = null;
 let enginePausedUntil = 0;
 const symbolCooldowns = new Map<string, number>();
 
-// Rastreia quais moedas já geraram sinal hoje (evita repetição e força diversificação)
-const symbolsSignaledToday = new Set<string>();
+// Rastreia a quantidade de sinais gerados por moeda hoje (limite de 3 se forem de alta qualidade)
+const symbolsSignaledToday = new Map<string, number>();
 let lastDayReset = new Date().toDateString();
 
 function checkAndResetDailyCounters(): void {
@@ -1030,21 +1030,27 @@ async function runSignalCycle(): Promise<void> {
                     continue;
                 }
                 
-                // Não gerar segundo sinal da mesma moeda no mesmo dia
-                if (symbolsSignaledToday.has(symbol)) {
-                    logger.debug(`[Engine] ${symbol} já gerou sinal hoje — rotação de moedas ativa`);
+                // Limite de até 3 sinais por moeda por dia, exigindo maior qualidade a cada novo sinal
+                const countSignaled = symbolsSignaledToday.get(symbol) || 0;
+                if (countSignaled >= 3) {
+                    logger.debug(`[Engine] ${symbol} já gerou o limite máximo de ${countSignaled} sinais hoje`);
                     continue;
                 }
 
-                // Prevent duplicate spam: check if we already have a recent signal for this same pair and direction
-                const existingRecent = activeSignals.find(s => 
-                    s.pair === symbol && 
-                    s.type === signal.type && 
-                    (Date.now() - new Date(s.createdAt).getTime()) < 12 * 60 * 60 * 1000 // 12 hours cooldown
-                );
+                if (countSignaled === 1 && signal.quality.score < 75) {
+                    logger.debug(`[Engine] ${symbol} já gerou 1 sinal hoje e o novo sinal tem score ${signal.quality.score} < 75 (não é considerado 'bom' o suficiente para o 2º sinal)`);
+                    continue;
+                }
 
-                if (existingRecent) {
-                    logger.debug(`Skipping duplicate signal for ${symbol} (${signal.type}) - cooldown active`);
+                if (countSignaled === 2 && signal.quality.score < 80) {
+                    logger.debug(`[Engine] ${symbol} já gerou 2 sinais hoje e o novo sinal tem score ${signal.quality.score} < 80 (não é considerado 'bom' o suficiente para o 3º sinal)`);
+                    continue;
+                }
+
+                // Se já tiver qualquer sinal ativo (ou pendente) da moeda, não gera outro
+                const existingActive = activeSignals.find(s => s.pair === symbol);
+                if (existingActive) {
+                    logger.debug(`Skipping signal for ${symbol} - already has an active/pending signal (${existingActive.id})`);
                     continue;
                 }
 
@@ -1144,7 +1150,7 @@ async function runSignalCycle(): Promise<void> {
 
                 newSignals.push(signal);
                 signalsToday++;
-                symbolsSignaledToday.add(symbol); // Bloquear segunda análise desta moeda hoje
+                symbolsSignaledToday.set(symbol, (symbolsSignaledToday.get(symbol) || 0) + 1); // Incrementar contagem de sinais desta moeda hoje
                 lastSignalAt = new Date().toISOString();
 
                 // Verificar limite diário após cada novo sinal

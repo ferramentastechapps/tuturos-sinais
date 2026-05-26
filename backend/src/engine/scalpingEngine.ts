@@ -585,11 +585,9 @@ async function runScalpingCycle(): Promise<void> {
                 }
             }
 
-            const existingRecent = scalpingActiveSignals.find(s =>
-                s.pair === symbol && s.type === signal.type
-            );
-            if (existingRecent) {
-                logger.debug(`[Scalping] Sinal duplicado ignorado: ${symbol}`);
+            const existingActive = scalpingActiveSignals.find(s => s.pair === symbol);
+            if (existingActive) {
+                logger.debug(`[Scalping] Skipping signal for ${symbol} - already has an active scalping signal (${existingActive.id})`);
                 continue;
             }
 
