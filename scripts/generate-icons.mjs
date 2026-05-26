@@ -3,6 +3,7 @@
  * Generates all PWA icons and favicons from public/logo.png using Sharp.
  */
 import sharp from 'sharp';
+import ico from 'sharp-ico';
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -62,6 +63,15 @@ async function generateIcons() {
     .png()
     .toFile(resolve(OUT, 'favicon-16x16.png'));
   console.log('  ✅ favicon-16x16.png e favicon-32x32.png');
+
+  // Favicon.ico using sharp-ico
+  const icoIcons = [
+    sharp(SRC).resize(16, 16, { fit: 'contain', background: { r: 10, g: 14, b: 39, alpha: 1 } }),
+    sharp(SRC).resize(32, 32, { fit: 'contain', background: { r: 10, g: 14, b: 39, alpha: 1 } }),
+    sharp(SRC).resize(48, 48, { fit: 'contain', background: { r: 10, g: 14, b: 39, alpha: 1 } })
+  ];
+  await ico.sharpsToIco(icoIcons, resolve(OUT, 'favicon.ico'));
+  console.log('  ✅ favicon.ico');
 
   // OG Image (1200x630)
   await sharp(SRC)
