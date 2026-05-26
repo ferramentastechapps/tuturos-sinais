@@ -13,6 +13,13 @@ import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
 import { isHighLiquidity } from '../config/highLiquiditySymbols.js'; // CORREÇÃO 5
 import { volatilityTracker } from '../services/volatilityTracker.js';
+import {
+    aplicarMultiplicadoresStop,
+    calcularDistanciaResistencia,
+    getStopMultiplierPorPar,
+    analisarStopPrematuro,
+    ajustarMultiplicadorPorPar,
+} from '../trading/stopCalibrationService.js';
 
 const BLOCKED_HOURS = [4, 7, 9, 10, 20, 21, 23];
 const GOOD_HOURS = [3, 6, 12, 13, 14];
@@ -482,7 +489,9 @@ export function generateSignalFromData(
     ohlc15m?: OHLCPoint[],
     ohlc4h?: OHLCPoint[],
     customMinScore?: number,
-    indicatorPerf?: Record<string, { winRate: number, avgPnl: number, totalTrades: number }>
+    indicatorPerf?: Record<string, { winRate: number, avgPnl: number, totalTrades: number }>,
+    stopMultiplierPar: number = 1.0,    // Lido de BotConfigStop antes de chamar esta função
+    distanciaResistencia: number = 0,   // Calculado async antes de chamar esta função
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
@@ -772,6 +781,30 @@ export function generateSignalFromData(
         stopLossDistance = Math.max(atrBasedSLDistance, sweepDistance);
     }
     
+    // MELHORIA STOP v2: Aplicar multiplicadores de volatilidade 24h, ADX e calibração por par
+    {
+        const volatility_24h_val = high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0;
+        // Infere a categoria do trade neste ponto (tradeType será declarado abaixo)
+        const tipoStop = type === macroTrend ? 'Swing Trade' : 'Swing Trade'; // Scalping vem do scalpingEngine
+        const { stop_loss_pct: stopAjustado } = aplicarMultiplicadoresStop({
+            stop_loss_pct: stopLossDistance,
+            volatility_24h: volatility_24h_val,
+            adx,
+            trade_type: tipoStop,
+            stop_multiplier_par: stopMultiplierPar,
+        });
+
+        // Ajuste por resistência/suporte próximo: stop vai 0.3% além do nível
+        if (distanciaResistencia > 0) {
+            const stopPorResistencia = distanciaResistencia + 0.3;
+            stopLossDistance = Math.max(stopAjustado, stopPorResistencia);
+        } else {
+            stopLossDistance = stopAjustado;
+        }
+
+        logger.debug(`[STOP-MULT] ${symbol} SL ajustado: ${stopAjustado.toFixed(3)}% (vol=${volatility_24h_val.toFixed(1)}% adx=${adx.toFixed(0)} mult=${stopMultiplierPar} res=${distanciaResistencia.toFixed(3)}%)`);
+    }
+
     // CORREÇÃO 1: TPs baseados em múltiplos de ATR
     let tp1Distance: number, tp2Distance: number, tp3Distance: number;
     if (usingStructuralStop) {
@@ -962,8 +995,25 @@ async function runSignalCycle(): Promise<void> {
 
             const perf = await indicatorLearner.getPairPerformance(symbol);
 
+            // MELHORIA STOP v2: busca async (paralela) do multiplicador calibrado e das distâncias de resistência
+            // A direção real só é determinada dentro de generateSignalFromData (alinhamento EMAs),
+            // por isso calculamos para long e short e usamos o mínimo (nível mais próximo do preço)
+            const [stopMultiplierPar, distResLong, distResShort] = await Promise.all([
+                getStopMultiplierPorPar(symbol),
+                calcularDistanciaResistencia({ pair: symbol, preco_entrada: currentPrice, is_long: true }),
+                calcularDistanciaResistencia({ pair: symbol, preco_entrada: currentPrice, is_long: false }),
+            ]);
+            // Usa o menor dos dois (suporte ou resistência mais próximo)
+            const distanciaResistencia = Math.min(
+                distResLong > 0 ? distResLong : Infinity,
+                distResShort > 0 ? distResShort : Infinity,
+            );
+            const distResistenciaFinal = isFinite(distanciaResistencia) ? distanciaResistencia : 0;
+
+
             const signal = generateSignalFromData(
-                symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, undefined, perf
+                symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, undefined, perf,
+                stopMultiplierPar, distResistenciaFinal
             );
 
             if (signal && signal.quality && signal.quality.score >= 60) {

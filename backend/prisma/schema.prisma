@@ -210,3 +210,27 @@ model IndicatorPerformance {
   
   @@unique([pair, indicator])
 }
+
+// ----------------------------------------------------
+// Stop Loss Calibration & Feedback Loop
+// ----------------------------------------------------
+
+model StopCalibration {
+  id                      String   @id @default(uuid())
+  trade_id                String
+  pair                    String
+  foi_prematuro           Boolean
+  tp_atingido             String?  // 'TP1', 'TP2', 'TP3' ou null
+  tempo_ate_tp_horas      Float?
+  ajuste_sugerido_stop_pct Float   @default(0)
+  analisado_em            DateTime @default(now())
+
+  @@index([pair])
+  @@index([foi_prematuro])
+}
+
+model BotConfigStop {
+  pair             String   @id
+  stop_multiplier  Float    @default(1.0)
+  atualizado_em    DateTime @default(now()) @updatedAt
+}

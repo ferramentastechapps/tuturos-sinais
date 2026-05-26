@@ -243,13 +243,14 @@ class BybitConnector extends EventEmitter {
 
     // ──── REST API Methods ────
 
-    async fetchKlines(symbol: string, interval: string = '60', limit: number = 200): Promise<OHLCPoint[]> {
+    async fetchKlines(symbol: string, interval: string = '60', limit: number = 200, startTime?: number): Promise<OHLCPoint[]> {
         try {
             const response = await this.restClient.getKline({
                 category: 'linear',
                 symbol,
                 interval: interval as any,
                 limit,
+                ...(startTime ? { start: startTime * 1000 } : {}), // Bybit espera milliseconds
             });
 
             if (response.retCode !== 0) {

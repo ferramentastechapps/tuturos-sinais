@@ -7,6 +7,7 @@ import { sendActivationNotification, sendTrailingStopUpdate, sendTPNotification,
 import { calculateTrailingStop, calculatePartialProfit, formatTrailingStopMessage, shouldNotifyTrailingUpdate, type TrailingStopConfig } from './trailingStopManager.js';
 import { bybitConnector } from '../exchange/bybitConnector.js';
 import { calculateATR } from '../engine/signalEngine.js';
+import { analisarStopPrematuro, ajustarMultiplicadorPorPar } from './stopCalibrationService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -629,6 +630,31 @@ export class TradeTracker {
         });
         this.logEvent(signal.id, 'SL_HIT', `Stop Loss hit at ${currentPrice} (PnL: ${pnl.toFixed(2)}%)`, currentPrice).catch(()=>{});
     } catch (e) { /* skip */ }
+
+    // MELHORIA STOP v2: Análise de stop prematuro após CLOSED_SL com prejuízo
+    // Roda em background (sem await) para não bloquear o fluxo principal
+    if (!isWin) {
+      const tp1 = signal.take_profits.find(t => t.level === 1);
+      const tp2 = signal.take_profits.find(t => t.level === 2);
+      const tp3 = signal.take_profits.find(t => t.level === 3);
+
+      if (tp1 && tp2) {
+        analisarStopPrematuro({
+          trade_id: signal.id,
+          pair: signal.pair,
+          entry_price: entryAvg,
+          stop_price: currentPrice,
+          exit_time: new Date(),
+          take_profit_1: tp1.price,
+          take_profit_2: tp2.price,
+          take_profit_3: tp3?.price,
+          is_long: signal.type === 'LONG',
+          janela_analise_horas: 24,
+        })
+        .then(() => ajustarMultiplicadorPorPar(signal.pair))
+        .catch(err => console.error('[StopCalibration] Erro na análise pós-SL:', err));
+      }
+    }
 
     // Rate Limiting para evitar spam no Telegram
     const now = Date.now();
