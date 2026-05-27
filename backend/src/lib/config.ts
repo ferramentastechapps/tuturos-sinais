@@ -8,6 +8,7 @@ export const config = {
     port: parseInt(process.env.PORT || '3001', 10),
     nodeEnv: process.env.NODE_ENV || 'development',
     corsOrigin: process.env.CORS_ORIGIN || 'https://sinaiscripto.ftech-apps.com.br,http://212.85.10.239,http://localhost:5173,http://localhost:3000,http://192.168.15.35:8080,http://192.168.18.209:8080,http://localhost:8080',
+    allowCounterTrend: process.env.ALLOW_COUNTER_TREND === 'true',
 
     // Bybit
     bybit: {

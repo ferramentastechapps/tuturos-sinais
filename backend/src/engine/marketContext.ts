@@ -12,6 +12,7 @@
 import axios from 'axios';
 import { logger } from '../lib/logger.js';
 import { bybitConnector } from '../exchange/bybitConnector.js';
+import { config } from '../lib/config.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // TIPOS
@@ -284,6 +285,16 @@ export async function validateSignalContext(
     type: 'long' | 'short'
 ): Promise<{ allowed: boolean; reason?: string }> {
     
+    // 0. VETO: Bloqueio de horário institucional (00:00 - 00:45 UTC) para evitar ruído de funding rate e fechamento diário
+    const currentHour = new Date().getUTCHours();
+    const currentMinutes = new Date().getUTCMinutes();
+    if (currentHour === 0 && currentMinutes < 45) {
+        return {
+            allowed: false,
+            reason: `Bloqueio de horário de Funding Rate (00:00 - 00:45 UTC) para evitar ruído no fechamento de velas diárias`,
+        };
+    }
+
     // 1. Buscar contexto de mercado
     const context = await getMarketContext();
     
@@ -303,44 +314,41 @@ export async function validateSignalContext(
         };
     }
     
-    // 4. VETO: BTC em queda forte → bloquear LONGs em altcoins (Desativado a pedido do usuário)
-    /*
-    if (type === 'long' && context.btcTrend === 'STRONG_DOWN') {
-        return {
-            allowed: false,
-            reason: `BTC em queda forte (${context.btcTrend}) - altcoins seguem BTC`,
-        };
+    // Filtros condicionais baseados no sinal contra-tendência
+    if (!config.allowCounterTrend) {
+        // 4. VETO: BTC em queda/baixa → bloquear LONGs em altcoins
+        if (type === 'long' && (context.btcTrend === 'STRONG_DOWN' || context.btcTrend === 'DOWN')) {
+            return {
+                allowed: false,
+                reason: `BTC em tendência de queda (${context.btcTrend}) - altcoins seguem BTC`,
+            };
+        }
+        
+        // 5. VETO: BTC em alta → bloquear SHORTs em altcoins
+        if (type === 'short' && (context.btcTrend === 'STRONG_UP' || context.btcTrend === 'UP')) {
+            return {
+                allowed: false,
+                reason: `BTC em tendência de alta (${context.btcTrend}) - altcoins seguem BTC`,
+            };
+        }
+        
+        // 6. VETO: Confirmação Daily (EMA 200)
+        const dailyConfirmation = await getDailyConfirmation(symbol);
+        
+        if (type === 'long' && !dailyConfirmation.aboveEma200) {
+            return {
+                allowed: false,
+                reason: `Preço abaixo da EMA200 Daily (${dailyConfirmation.price.toFixed(4)} < ${dailyConfirmation.ema200Daily.toFixed(4)})`,
+            };
+        }
+        
+        if (type === 'short' && dailyConfirmation.aboveEma200) {
+            return {
+                allowed: false,
+                reason: `Preço acima da EMA200 Daily (${dailyConfirmation.price.toFixed(4)} > ${dailyConfirmation.ema200Daily.toFixed(4)})`,
+            };
+        }
     }
-    */
-    
-    // 5. VETO: BTC em alta forte → bloquear SHORTs em altcoins (Desativado a pedido do usuário)
-    /*
-    if (type === 'short' && context.btcTrend === 'STRONG_UP') {
-        return {
-            allowed: false,
-            reason: `BTC em alta forte (${context.btcTrend}) - altcoins seguem BTC`,
-        };
-    }
-    */
-    
-    // 6. VETO: Confirmação Daily (EMA 200) (Desativado a pedido do usuário para permitir contra-tendência)
-    /*
-    const dailyConfirmation = await getDailyConfirmation(symbol);
-    
-    if (type === 'long' && !dailyConfirmation.aboveEma200) {
-        return {
-            allowed: false,
-            reason: `Preço abaixo da EMA200 Daily (${dailyConfirmation.price.toFixed(4)} < ${dailyConfirmation.ema200Daily.toFixed(4)})`,
-        };
-    }
-    
-    if (type === 'short' && dailyConfirmation.aboveEma200) {
-        return {
-            allowed: false,
-            reason: `Preço acima da EMA200 Daily (${dailyConfirmation.price.toFixed(4)} > ${dailyConfirmation.ema200Daily.toFixed(4)})`,
-        };
-    }
-    */
     
     // ✅ Todos os filtros passaram
     return { allowed: true };

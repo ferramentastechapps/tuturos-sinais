@@ -798,6 +798,7 @@ export class TradeTracker {
         outcome_label: outcomeLabel,
         outcome_pnl: pnl,
         entry_time: (originalSignal.created_at ? new Date(originalSignal.created_at) : new Date()).toISOString(),
+        trade_type: activeSignal.trade_type,
         features: features
       };
 
@@ -825,7 +826,56 @@ export class TradeTracker {
         insertErr = err;
       }
 
-      // 3. Keep local JSONL updated for VPS local training
+      // 3. Sync to Supabase ml_training_data table
+      try {
+        const { supabase } = await import('../lib/supabaseClient.js');
+        if (supabase) {
+          const rowSupabase = {
+            signal_id: rowToSave.signal_id,
+            symbol: rowToSave.symbol,
+            outcome_label: rowToSave.outcome_label,
+            outcome_pnl: rowToSave.outcome_pnl,
+            entry_time: rowToSave.entry_time,
+            trade_type: rowToSave.trade_type,
+            features: rowToSave.features
+          };
+
+          const { data: existingSg, error: selErr } = await supabase
+            .from('ml_training_data')
+            .select('id')
+            .eq('signal_id', activeSignal.id)
+            .maybeSingle();
+
+          if (!selErr) {
+            if (existingSg) {
+              const { error: upErr } = await supabase
+                .from('ml_training_data')
+                .update(rowSupabase)
+                .eq('id', existingSg.id);
+              if (upErr) {
+                console.error(`[TradeTracker] Failed to update ML feedback on Supabase:`, upErr);
+              } else {
+                console.log(`[TradeTracker] ML Feedback updated on Supabase successfully!`);
+              }
+            } else {
+              const { error: insErr } = await supabase
+                .from('ml_training_data')
+                .insert(rowSupabase);
+              if (insErr) {
+                console.error(`[TradeTracker] Failed to insert ML feedback into Supabase:`, insErr);
+              } else {
+                console.log(`[TradeTracker] ML Feedback inserted into Supabase successfully!`);
+              }
+            }
+          } else {
+            console.error(`[TradeTracker] Supabase select check failed:`, selErr);
+          }
+        }
+      } catch (sbErr) {
+        console.error(`[TradeTracker] Supabase submission error:`, sbErr);
+      }
+
+      // 4. Keep local JSONL updated for VPS local training
       try {
         const dataPath = path.join(__dirname, '../../../ml_engine/data/historical_ml_data.jsonl');
         fs.appendFileSync(dataPath, JSON.stringify(rowToSave) + '\n', 'utf-8');
@@ -836,7 +886,7 @@ export class TradeTracker {
       if (insertErr) {
         console.error(`[TradeTracker] Failed to insert ML Feedback:`, insertErr);
       } else {
-        console.log(`[TradeTracker] ML Feedback Saved Successfully (Supabase + Local JSONL)!`);
+        console.log(`[TradeTracker] ML Feedback Saved Successfully (Supabase + SQLite + Local JSONL)!`);
         // Retreinamento agora é feito diariamente às 23:55 UTC via mlRetrainJob
       }
     } catch (err) {

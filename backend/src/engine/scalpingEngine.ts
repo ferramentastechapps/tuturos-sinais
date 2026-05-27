@@ -22,8 +22,9 @@ import {
 import type { TradeSignal, OHLCPoint } from '../types/trading.js';
 import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { tradeTracker, getDailyStats, getSymbolStats } from '../trading/tradeTracker.js';
-import { validateSignalContext } from './marketContext.js'; // FASE 3
+import { validateSignalContext, getDailyConfirmation } from './marketContext.js'; // FASE 3
 import { volatilityTracker } from '../services/volatilityTracker.js';
+import { marketContextService } from '../lib/marketContextService.js';
 
 // FASE 3: Apenas pares de alta liquidez para scalping
 const SCALPING_SYMBOLS = config.scalpingSymbols;
@@ -488,6 +489,7 @@ export function generateScalpingSignal(
 
 async function runScalpingCycle(): Promise<void> {
     logger.info('[Scalping] Running scalping signal cycle...');
+    const globalCtx = await marketContextService.getGlobalContext();
 
     // FASE 1: Limite diário reduzido de 8 para 5 (qualidade > quantidade)
     if (scalpingSignalsToday >= 5) {
@@ -562,11 +564,54 @@ async function runScalpingCycle(): Promise<void> {
                 continue;
             }
 
+            // Buscar a confirmação diária para calcular a distância real até a EMA200 Daily
+            const dailyConfirmation = await getDailyConfirmation(symbol);
+            const ema200val = dailyConfirmation.ema200Daily;
+            const dist_ema200 = ema200val > 0 ? ((currentPrice - ema200val) / ema200val) * 100 : 0;
+
+            // Enriquecer dados do ML com o vetor completo de 24 features
+            if (signal.mlData) {
+                const precomputed = signal.mlData as any;
+                const features = {
+                    rsi:        precomputed.rsi        ?? 50,
+                    adx:        precomputed.adx        ?? 25,
+                    atr_rel:    precomputed.atr_rel    ?? 0,
+                    dist_ema20: precomputed.dist_ema20 ?? 0,
+                    dist_ema50: precomputed.dist_ema50 ?? 0,
+                    dist_ema200: dist_ema200,
+                    dist_vwap:  precomputed.dist_vwap  ?? 0,
+                    volatility_24h: high24h > 0 ? (high24h - low24h) / ((high24h + low24h) / 2) * 100 : 0,
+                    volume_rel: precomputed.volume_rel ?? 1,
+                    funding_rate: fundingRate,
+                    open_interest_var: await marketContextService.getOpenInterestVar(symbol),
+                    long_short_ratio: 1,
+                    is_long: signal.type === 'long' ? 1 : 0,
+                    confidence: signal.confidence / 100,
+                    quality_score: (signal.quality?.score ?? signal.confidence) / 100,
+                    confluence_count: signal.indicators.length,
+                    stop_loss_pct: Math.abs(signal.entry - signal.stopLoss) / signal.entry * 100,
+                    take_profit_pct: Math.abs(signal.takeProfit - signal.entry) / signal.entry * 100,
+                    risk_reward: signal.riskReward,
+                    hour_of_day: new Date().getHours(),
+                    day_of_week: new Date().getDay(),
+                    btc_trend: globalCtx.btcTrend,
+                    dominance_btc: globalCtx.dominanceBtc,
+                    fear_greed: globalCtx.fearGreed,
+                };
+                signal.mlData = { ...features };
+            }
+
             if (isModelLoaded() && signal.mlData) {
                 try {
                     const prediction = await predictSignal(signal.mlData as unknown as Parameters<typeof predictSignal>[0], symbol, 'scalping');
                     if (prediction) {
-                        signal.mlData = { ...signal.mlData, probability: prediction.probability, predictedClass: prediction.predictedClass, modelSource: prediction.modelSource };
+                        signal.mlData = {
+                            ...signal.mlData,
+                            probability: prediction.probability,
+                            predictedClass: prediction.predictedClass,
+                            modelSource: prediction.modelSource,
+                            isFiltered: prediction.probability < 0.5,
+                        };
                         
                         const { getAdaptiveThreshold } = await import('../ml/mlPredictionService.js');
                         const { getRecentGlobalWinRate } = await import('../trading/tradeTracker.js');
