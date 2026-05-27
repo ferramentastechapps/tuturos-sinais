@@ -12,6 +12,7 @@ import { tradeTracker, getDailyStats, getSymbolStats } from '../trading/tradeTra
 import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
 import { isHighLiquidity } from '../config/highLiquiditySymbols.js'; // CORREÇÃO 5
+import { getSymbolConfig, getDynamicSymbolConfig } from '../config/symbolConfig.js';
 import { volatilityTracker } from '../services/volatilityTracker.js';
 import {
     aplicarMultiplicadoresStop,
@@ -495,7 +496,10 @@ export function generateSignalFromData(
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
+    // Calibração dinâmica por moeda (ENGINE universal, parâmetros específicos)
     const closes = ohlc.map(c => c.close);
+    const symConfig = getDynamicSymbolConfig(symbol, closes);
+
     const rsi = calculateRSI(closes);
     const macd = calculateMACD(closes);
     const bb = calculateBollingerBands(closes);
@@ -634,10 +638,10 @@ export function generateSignalFromData(
         mtfContext.macro.push('Tendência 4H neutra/oposta ⚠️');
     }
 
-    // 2. Volume RVOL > 1.0 (+2)
-    if (rvol > 1.0) {
+    // 2. Volume RVOL > minVolumeRatio calibrado por símbolo (+2)
+    if (rvol >= symConfig.minVolumeRatio) {
         rawScore += 2;
-        confluences.push('Volume RVOL > 1.0 +2');
+        confluences.push(`Volume RVOL ≥ ${symConfig.minVolumeRatio} +2`);
     }
 
     // 3. RSI em zona favorável (40-60) (+1)
@@ -976,15 +980,22 @@ async function runSignalCycle(): Promise<void> {
                 logger.info(`[Engine] Símbolo ${symbol} identificado com baixo WR histórico (${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais), prosseguindo apenas para análise.`);
             }
             
-            // Get OHLC data - prefer cached WebSocket data, fallback to REST
+            // Calibração por símbolo: timeframe e lookback específicos por ativo
+            const symCfg = getSymbolConfig(symbol);
+            const klineInterval = symCfg.timeframe;       // ex: '5', '15', '60', '240'
+            const klineLimit    = symCfg.lookback + 200;  // lookback + buffer para indicadores
+
+            // Get OHLC data — usa o timeframe calibrado por símbolo
             let ohlc = bybitConnector.getKlineData(symbol);
             if (ohlc.length < 50) {
-                ohlc = await bybitConnector.fetchKlines(symbol, '60', 200);
+                ohlc = await bybitConnector.fetchKlines(symbol, klineInterval, klineLimit);
             }
             if (ohlc.length < 50) continue;
 
+            logger.debug(`[Engine] ${symbol} usando timeframe=${klineInterval} lookback=${symCfg.lookback} minVol=${symCfg.minVolumeRatio}`);
+
             const ohlc15m = await bybitConnector.fetchKlines(symbol, '15', 50);
-            const ohlc4h = await bybitConnector.fetchKlines(symbol, '240', 200);
+            const ohlc4h  = await bybitConnector.fetchKlines(symbol, '240', 200);
 
             const ticker = bybitConnector.getTicker(symbol);
             const currentPrice = ticker?.lastPrice || ohlc[ohlc.length - 1].close;
