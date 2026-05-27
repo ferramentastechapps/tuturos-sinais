@@ -25,6 +25,7 @@ import { tradeTracker, getDailyStats, getSymbolStats } from '../trading/tradeTra
 import { validateSignalContext, getDailyConfirmation } from './marketContext.js'; // FASE 3
 import { volatilityTracker } from '../services/volatilityTracker.js';
 import { marketContextService } from '../lib/marketContextService.js';
+import { generateStructureSignal, getStructureScore, getStructureConfluences } from './structureEngine.js';
 
 // FASE 3: Apenas pares de alta liquidez para scalping
 const SCALPING_SYMBOLS = config.scalpingSymbols;
@@ -329,6 +330,15 @@ export function generateScalpingSignal(
         if (isBearishFvg) { ictScore += 1; confluences.push('Bearish FVG +1'); }
     }
     rawScore += Math.min(ictScore, 2); // Capa o limite de ICT para não distorcer o teto do score
+
+    // ── Bônus 4: Estrutura S/R (ENGINE UNIVERSAL) ──
+    const structureResult5m = generateStructureSignal(symbol, ohlc5m);
+    const structureScore5m  = getStructureScore(structureResult5m);
+    if (structureScore5m > 0) {
+        const structureLabels5m = getStructureConfluences(structureResult5m!);
+        confluences.push(...structureLabels5m);
+        rawScore += Math.min(structureScore5m, 2);
+    }
 
     // --- Lógica de Aprendizado de Máquina Dinâmica ---
     // (Bônus/Penalidade baseada na eficácia histórica do indicador, agora ponderado em +/- 1 ponto)

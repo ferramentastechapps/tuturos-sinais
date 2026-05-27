@@ -13,6 +13,7 @@ import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
 import { isHighLiquidity } from '../config/highLiquiditySymbols.js'; // CORREÇÃO 5
 import { getSymbolConfig, getDynamicSymbolConfig } from '../config/symbolConfig.js';
+import { generateStructureSignal, getStructureScore, getStructureConfluences } from './structureEngine.js';
 import { volatilityTracker } from '../services/volatilityTracker.js';
 import {
     aplicarMultiplicadoresStop,
@@ -615,6 +616,17 @@ export function generateSignalFromData(
     const pullback = detectEMA21Pullback(ohlc, ema20, type); // Utiliza a EMA20 como proxy para a EMA21
     const { isEngulfing, isPinBar } = detectReversalCandles(ohlc, type);
 
+    // --- ENGINE UNIVERSAL DE ESTRUTURA (S/R) ---
+    // Mesma lógica para todas as moedas; parâmetros vêm do symConfig
+    const structureResult = generateStructureSignal(symbol, ohlc);
+    const structureScore  = getStructureScore(structureResult);
+    const structureLabels = getStructureConfluences(structureResult ?? { direction: null, level: null, levelTest: { level: null, tested: false, confirmed: false, distancePct: Infinity, direction: null, reason: '' }, volumeConfirmed: false, rvol: 0, allLevels: [], confluenceLabel: '' });
+
+    // Aviso se a estrutura contradiz o trend das EMAs (não veta, apenas loga)
+    if (structureResult?.direction && structureResult.direction !== type) {
+        logger.debug(`[STRUCTURE] ${symbol} ⚠️ Estrutura (${structureResult.direction}) contra EMA trend (${type}) — mantendo EMA como direção`);
+    }
+
     // --- SISTEMA DE PONTUAÇÃO (SCORE 0 a 10) ---
     let rawScore = 0;
     const confluences: string[] = [];
@@ -697,6 +709,12 @@ export function generateSignalFromData(
     // Limita cada categoria de bônus independentemente a +2 pontos
     rawScore += Math.min(ictScore, 2);
     rawScore += Math.min(candleScore, 2);
+
+    // 9. Bônus Estrutura S/R (ENGINE UNIVERSAL — até +3 pontos, capped em +2)
+    if (structureScore > 0) {
+        confluences.push(...structureLabels);
+        rawScore += Math.min(structureScore, 2);
+    }
 
     // --- LÓGICA DE APRENDIZADO (INDICATOR LEARNER) ---
     if (indicatorPerf) {
