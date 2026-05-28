@@ -35,10 +35,15 @@ export interface ActiveSignal {
   score?: number;
   indicators?: string[];
   mlData?: any;
-  // FASE 2: Campos para trailing stop
-  positionRemaining?: number; // % da posição ainda aberta (100 = total)
-  lastNotifiedSL?: number; // Último SL notificado (evita spam)
-  trailingActive?: boolean; // Se trailing stop está ativo
+  // Trailing stop por nível de TP
+  tp1Hit?: boolean;        // TP1 atingido → stop vai para entrada
+  tp2Hit?: boolean;        // TP2 atingido → stop vai para TP1
+  tp3Hit?: boolean;        // TP3 atingido → stop vai para TP3 + extende alvo
+  currentTarget?: number;  // Alvo atual (pode ser extendido após TP3)
+  // Legado — mantido para compatibilidade
+  positionRemaining?: number;
+  lastNotifiedSL?: number;
+  trailingActive?: boolean;
 }
 
 export class TradeTracker {
@@ -80,9 +85,15 @@ export class TradeTracker {
         const signal = {
           ...rawSignal,
           take_profits: typeof rawSignal.take_profits === 'string' ? JSON.parse(rawSignal.take_profits) : rawSignal.take_profits,
-          context: typeof rawSignal.context === 'string' ? JSON.parse(rawSignal.context) : rawSignal.context
+          context: typeof rawSignal.context === 'string' ? JSON.parse(rawSignal.context) : rawSignal.context,
+          // Mapear flags de trailing stop do banco para camelCase
+          tp1Hit: (rawSignal as any).tp1_hit ?? false,
+          tp2Hit: (rawSignal as any).tp2_hit ?? false,
+          tp3Hit: (rawSignal as any).tp3_hit ?? false,
+          currentTarget: (rawSignal as any).current_target ?? undefined,
         } as any as ActiveSignal;
         this.addSignalToMemory(signal);
+
       }
       console.log(`[TradeTracker] Loaded ${seenPairs.size} unique active signals.`);
     } catch (error) {
@@ -118,13 +129,12 @@ export class TradeTracker {
         fullSignal.id = `${signal.pair}-${Date.now()}`;
     }
 
-    // FASE 2: Inicializar campos de trailing stop
-    if (!fullSignal.positionRemaining) {
-      fullSignal.positionRemaining = 100; // 100% da posição inicialmente
-    }
-    if (fullSignal.trailingActive === undefined) {
-      fullSignal.trailingActive = false;
-    }
+    // Inicializar flags de TP e campos de trailing stop por nível
+    if (fullSignal.tp1Hit === undefined) fullSignal.tp1Hit = false;
+    if (fullSignal.tp2Hit === undefined) fullSignal.tp2Hit = false;
+    if (fullSignal.tp3Hit === undefined) fullSignal.tp3Hit = false;
+    if (!fullSignal.positionRemaining) fullSignal.positionRemaining = 100;
+    if (fullSignal.trailingActive === undefined) fullSignal.trailingActive = false;
 
     // 0. CANCELAR SINAIS ANTIGOS DA MESMA MOEDA
     await this.cancelOldSignalsForPair(signal.pair!);
@@ -437,19 +447,26 @@ export class TradeTracker {
     }
   }
 
+  /**
+   * Calcula o novo stop loss baseado no nível de TP atingido.
+   *
+   * TP1 → Stop vai para ENTRADA (breakeven, zero risco)
+   * TP2 → Stop vai para TP1 (lucro mínimo garantido)
+   * TP3 → Stop vai para TP3 (alvo extendido, trailing no lucro)
+   */
   private calculateNewStopAfterTP(signal: ActiveSignal, tpHit: TakeProfit): number {
     const isLong = signal.type.toUpperCase() === 'LONG';
     const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
 
     if (tpHit.level === 1) {
-      // TP1 → breakeven
+      // TP1 → stop na entrada (breakeven)
       return isLong
         ? Math.max(signal.stop_loss, entryAvg)
         : Math.min(signal.stop_loss, entryAvg);
     }
 
     if (tpHit.level === 2) {
-      // TP2 → preço do TP1
+      // TP2 → stop no TP1 (lucro garantido)
       const tp1 = signal.take_profits.find(t => t.level === 1);
       if (tp1) {
         return isLong
@@ -459,37 +476,109 @@ export class TradeTracker {
     }
 
     if (tpHit.level === 3) {
-      // TP3 → preço do TP2
-      const tp2 = signal.take_profits.find(t => t.level === 2);
-      if (tp2) {
-        return isLong
-          ? Math.max(signal.stop_loss, tp2.price)
-          : Math.min(signal.stop_loss, tp2.price);
-      }
+      // TP3 → stop no próprio TP3 (trailing no lucro máximo)
+      return isLong
+        ? Math.max(signal.stop_loss, tpHit.price)
+        : Math.min(signal.stop_loss, tpHit.price);
     }
 
-    return signal.stop_loss; // fallback: manter stop atual
+    return signal.stop_loss;
   }
 
   private async handleTakeProfit(signal: ActiveSignal, tp: TakeProfit, currentPrice: number) {
     console.log(`[TradeTracker] TP${tp.level} hit for ${signal.pair} at ${currentPrice}`);
     tp.hit = true;
 
-    // Atualizar stop loss progressivamente
+    const isLong = signal.type.toUpperCase() === 'LONG';
+    const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
+    const tp1 = signal.take_profits.find(t => t.level === 1);
+    const tp2 = signal.take_profits.find(t => t.level === 2);
+    const tp3 = signal.take_profits.find(t => t.level === 3);
+
+    // Atualizar stop loss e flags de TP por nível
     const oldSL = signal.stop_loss;
     const newSL = this.calculateNewStopAfterTP(signal, tp);
-    
-    if (newSL !== oldSL) {
+    let tgMessage = '';
+
+    if (tp.level === 1) {
+      signal.tp1Hit = true;
       signal.stop_loss = newSL;
-      console.log(`[TradeTracker] ${signal.pair} Stop atualizado: ${oldSL.toFixed(4)} → ${newSL.toFixed(4)} (após TP${tp.level})`);
-      
-      // Notificar no Telegram
+
+      const profitPct = isLong
+        ? ((tp.price - entryAvg) / entryAvg * 100).toFixed(2)
+        : ((entryAvg - tp.price) / entryAvg * 100).toFixed(2);
+
+      tgMessage = [
+        `🎯 TP1 ATINGIDO — ${signal.pair}`,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `💰 Lucro parcial: +${profitPct}%`,
+        ``,
+        `🔒 Stop movido para ENTRADA: $${entryAvg.toFixed(4)}`,
+        `🎯 Aguardando TP2: $${tp2?.price.toFixed(4) ?? '—'}`,
+        ``,
+        `Trade agora SEM RISCO! 🔒`,
+      ].join('\n');
+
+      console.log(`[TradeTracker] ${signal.pair} TP1 → stop breakeven: $${newSL.toFixed(4)}`);
+
+    } else if (tp.level === 2) {
+      signal.tp2Hit = true;
+      signal.stop_loss = newSL;
+
+      const profitPct = isLong
+        ? ((tp.price - entryAvg) / entryAvg * 100).toFixed(2)
+        : ((entryAvg - tp.price) / entryAvg * 100).toFixed(2);
+      const minGuaranteed = isLong
+        ? ((newSL - entryAvg) / entryAvg * 100).toFixed(2)
+        : ((entryAvg - newSL) / entryAvg * 100).toFixed(2);
+
+      tgMessage = [
+        `✅ TP2 ATINGIDO — ${signal.pair}`,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `💰 Lucro parcial: +${profitPct}%`,
+        ``,
+        `🔒 Stop movido para TP1: $${newSL.toFixed(4)}`,
+        `🎯 Aguardando TP3: $${tp3?.price.toFixed(4) ?? '—'}`,
+        ``,
+        `Mínimo garantido: +${minGuaranteed}% ✅`,
+      ].join('\n');
+
+      console.log(`[TradeTracker] ${signal.pair} TP2 → stop no TP1: $${newSL.toFixed(4)}`);
+
+    } else if (tp.level === 3) {
+      signal.tp3Hit = true;
+      signal.stop_loss = newSL; // stop no próprio TP3
+
+      // Extender alvo em +3% (LONG) ou -3% (SHORT)
+      const extendedTarget = isLong ? tp.price * 1.03 : tp.price * 0.97;
+      signal.currentTarget = extendedTarget;
+
+      const profitPct = isLong
+        ? ((tp.price - entryAvg) / entryAvg * 100).toFixed(2)
+        : ((entryAvg - tp.price) / entryAvg * 100).toFixed(2);
+
+      tgMessage = [
+        `🚀 TP3 ATINGIDO — ${signal.pair}`,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `✅ Lucro: +${profitPct}%`,
+        ``,
+        `🔒 Stop movido para TP3: $${newSL.toFixed(4)}`,
+        `🎯 Novo alvo: $${extendedTarget.toFixed(4)} (+3% extra)`,
+        ``,
+        `Deixe correr! 🔥`,
+      ].join('\n');
+
+      console.log(`[TradeTracker] ${signal.pair} TP3 → stop no TP3: $${newSL.toFixed(4)} | novo alvo: $${extendedTarget.toFixed(4)}`);
+    }
+
+    // Notificar Telegram apenas se houve mudança real no stop
+    if (newSL !== oldSL && tgMessage) {
       sendTrailingStopUpdate(
         signal,
         currentPrice,
         oldSL,
         newSL,
-        `🎯 TP${tp.level} atingido! Stop movido para ${tp.level === 1 ? 'entrada (breakeven)' : 'TP' + (tp.level - 1)}: ${newSL.toFixed(4)}`
+        tgMessage
       ).catch(e => console.error('[TradeTracker] TG error trailing notify', e));
     }
 
@@ -548,15 +637,27 @@ export class TradeTracker {
       this.removeSignalFromMemory(signal.id, signal.pair);
     }
 
-    // Save to DB Safely
+    // Persistir no banco: stop, flags de TP nativos, alvo extendido e status
     try {
         await db.activeSignal.update({
           where: { id: signal.id },
           data: {
             take_profits: JSON.stringify(signal.take_profits),
             stop_loss: signal.stop_loss,
-            status: signal.status
-          }
+            status: signal.status,
+            // Colunas nativas para trailing stop (sobrevivem ao restart da VPS)
+            tp1_hit: signal.tp1Hit ?? false,
+            tp2_hit: signal.tp2Hit ?? false,
+            tp3_hit: signal.tp3Hit ?? false,
+            current_target: signal.currentTarget ?? null,
+            context: JSON.stringify({
+              ...(typeof signal.context === 'string' ? JSON.parse(signal.context || '{}') : (signal.context || {})),
+              tp1Hit: signal.tp1Hit ?? false,
+              tp2Hit: signal.tp2Hit ?? false,
+              tp3Hit: signal.tp3Hit ?? false,
+              currentTarget: signal.currentTarget ?? null,
+            }),
+          } as any
         });
         this.logEvent(signal.id, 'TP_HIT', `TP${tp.level} hit at ${currentPrice} | novo SL: ${signal.stop_loss.toFixed(4)}`, currentPrice).catch(()=>{});
     } catch (e) { /* ignore */ }

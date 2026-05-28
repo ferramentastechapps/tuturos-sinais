@@ -29,12 +29,14 @@ export interface TrailingStopResult {
 }
 
 /**
- * FASE 2: Calcula trailing stop dinâmico baseado nos TPs atingidos
- * 
- * Lógica:
- * 1. TP1 atingido → Fecha 40%, move SL para break-even, trailing 50% ATR
- * 2. TP2 atingido → Fecha 30%, move SL para TP1, trailing 30% ATR
- * 3. TP3 atingido → Trailing livre até reversão
+ * Calcula trailing stop dinâmico baseado nos TPs atingidos.
+ *
+ * Lógica por nível:
+ * 1. TP1 atingido → Stop vai para ENTRADA (breakeven, zero risco)
+ * 2. TP2 atingido → Stop vai para TP1 (lucro mínimo garantido)
+ * 3. TP3 atingido → Stop vai para TP3 + alvo extendido em +3%
+ *
+ * Entre TPs: trailing dinâmico por ATR para não perder o lucro.
  */
 export function calculateTrailingStop(config: TrailingStopConfig): TrailingStopResult {
     const {
@@ -71,17 +73,17 @@ export function calculateTrailingStop(config: TrailingStopConfig): TrailingStopR
         ? currentPrice >= tp1 
         : currentPrice <= tp1;
 
-    if (tp1Reached && !tp1Hit && positionRemaining === 100) {
-        // Primeira vez que TP1 é atingido
-        const newStopLoss = entry; // Break-even
+    if (tp1Reached && !tp1Hit) {
+        // TP1 atingido: stop vai para entrada (breakeven)
+        // O fechamento parcial e a notificação são geridos pelo handleTakeProfit
+        const newStopLoss = entry;
         
-        logger.info(`[TrailingStop] ${symbol} TP1 atingido! Fechando 40%, SL → break-even (${entry.toFixed(2)})`);
+        logger.info(`[TrailingStop] ${symbol} TP1 atingido! SL → breakeven (${entry.toFixed(2)})`);
         
         return {
-            action: 'CLOSE_PARTIAL',
+            action: 'MOVE_SL',
             newStopLoss,
-            closePercent: 40,
-            reason: 'TP1 atingido: Fechando 40% e movendo SL para break-even',
+            reason: 'TP1 atingido: Stop movido para entrada (breakeven)',
             trailingActive: true,
         };
     }
@@ -91,17 +93,16 @@ export function calculateTrailingStop(config: TrailingStopConfig): TrailingStopR
         ? currentPrice >= tp2 
         : currentPrice <= tp2;
 
-    if (tp2Reached && tp1Hit && !tp2Hit && positionRemaining === 60) {
-        // TP2 atingido após TP1
-        const newStopLoss = tp1; // Move SL para TP1
+    if (tp2Reached && tp1Hit && !tp2Hit) {
+        // TP2 atingido: stop vai para TP1
+        const newStopLoss = tp1;
         
-        logger.info(`[TrailingStop] ${symbol} TP2 atingido! Fechando 30%, SL → TP1 (${tp1.toFixed(2)})`);
+        logger.info(`[TrailingStop] ${symbol} TP2 atingido! SL → TP1 (${tp1.toFixed(2)})`);
         
         return {
-            action: 'CLOSE_PARTIAL',
+            action: 'MOVE_SL',
             newStopLoss,
-            closePercent: 30,
-            reason: 'TP2 atingido: Fechando 30% e movendo SL para TP1',
+            reason: 'TP2 atingido: Stop movido para TP1 (lucro garantido)',
             trailingActive: true,
         };
     }
@@ -112,15 +113,15 @@ export function calculateTrailingStop(config: TrailingStopConfig): TrailingStopR
         : currentPrice <= tp3;
 
     if (tp3Reached && tp2Hit && !tp3Hit) {
-        // TP3 atingido - trailing livre
-        const newStopLoss = tp2; // Move SL para TP2
+        // TP3 atingido: stop vai para TP3, alvo extendido +3%
+        const newStopLoss = tp3;
         
-        logger.info(`[TrailingStop] ${symbol} TP3 atingido! SL → TP2 (${tp2.toFixed(2)}), trailing livre ativado`);
+        logger.info(`[TrailingStop] ${symbol} TP3 atingido! SL → TP3 (${tp3.toFixed(2)}), alvo extendido`);
         
         return {
             action: 'MOVE_SL',
             newStopLoss,
-            reason: 'TP3 atingido: Movendo SL para TP2, trailing livre ativo',
+            reason: 'TP3 atingido: Stop movido para TP3, deixe correr!',
             trailingActive: true,
         };
     }

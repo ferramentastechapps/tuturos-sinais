@@ -27,6 +27,12 @@ model ActiveSignal {
   context             String?  // JSON string
   score               Float?
 
+  // Trailing stop por nível de TP
+  tp1_hit             Boolean  @default(false)
+  tp2_hit             Boolean  @default(false)
+  tp3_hit             Boolean  @default(false)
+  current_target      Float?   // Alvo atual (extendido após TP3)
+
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
 }
