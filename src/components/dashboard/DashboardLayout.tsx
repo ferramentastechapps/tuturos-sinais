@@ -21,8 +21,7 @@ export const DashboardLayout = ({
 
     return (
         <div className="relative">
-            {/* Main 3-Column Grid */}
-            <div className="dashboard-grid">
+            <div className={cn("dashboard-grid", bottomBar && "has-bottom-bar")}>
                 {/* ── Left Sidebar (always visible on xl+, drawer on smaller) ── */}
                 <aside
                     className={cn(

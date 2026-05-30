@@ -60,17 +60,17 @@ export function MLLearningCard() {
   const { learnings, stats, loading } = useMLLearning(5);
 
   return (
-    <Card className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-blue-500/20">
+    <Card className="bg-gradient-to-br from-warning/10 to-orange-500/5 border-warning/20">
       <CardHeader className="pb-3 px-4 pt-4">
         <CardTitle className="flex items-center justify-between text-sm font-medium">
           <span className="flex items-center gap-2">
-            <Brain className="h-4 w-4 text-blue-400" />
+            <Brain className="h-4 w-4 text-warning" />
             Aprendizado Recente da IA
           </span>
           <Button 
             variant="ghost" 
             size="sm" 
-            className="h-6 px-2 text-xs text-blue-400 hover:text-blue-300"
+            className="h-6 px-2 text-xs text-warning hover:text-warning/80"
             onClick={() => navigate('/ml-analytics')}
           >
             Ver todos <ArrowUpRight className="ml-1 h-3 w-3" />
@@ -90,7 +90,7 @@ export function MLLearningCard() {
           </div>
         ) : (
           <>
-            <div className="space-y-2.5">
+            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
               {learnings.map((learning, idx) => (
                 <LearningItem key={learning.id} learning={learning} index={idx} />
               ))}
@@ -109,7 +109,7 @@ export function MLLearningCard() {
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                   Op. Analisadas
                 </div>
-                <div className="text-lg font-bold text-blue-400 mt-0.5">
+                <div className="text-lg font-bold text-warning mt-0.5">
                   {stats.total}
                 </div>
               </div>

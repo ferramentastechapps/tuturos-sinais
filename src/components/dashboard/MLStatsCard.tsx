@@ -7,10 +7,10 @@ export function MLStatsCard() {
 
   if (loading) {
     return (
-      <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
+      <Card className="bg-gradient-to-br from-warning/10 to-orange-500/5 border-warning/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <BrainCircuit className="h-4 w-4 text-purple-400" />
+            <BrainCircuit className="h-4 w-4 text-warning" />
             ML Performance
           </CardTitle>
         </CardHeader>
@@ -26,10 +26,10 @@ export function MLStatsCard() {
 
   if (!stats || stats.totalSignals === 0) {
     return (
-      <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
+      <Card className="bg-gradient-to-br from-warning/10 to-orange-500/5 border-warning/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <BrainCircuit className="h-4 w-4 text-purple-400" />
+            <BrainCircuit className="h-4 w-4 text-warning" />
             ML Performance
           </CardTitle>
         </CardHeader>
@@ -46,10 +46,10 @@ export function MLStatsCard() {
   }
 
   return (
-    <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
+    <Card className="bg-gradient-to-br from-warning/10 to-orange-500/5 border-warning/20">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <BrainCircuit className="h-4 w-4 text-purple-400" />
+          <BrainCircuit className="h-4 w-4 text-warning" />
           ML Performance
         </CardTitle>
       </CardHeader>

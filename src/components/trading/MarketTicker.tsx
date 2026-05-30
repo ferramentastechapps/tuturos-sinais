@@ -19,7 +19,7 @@ export const MarketTicker = ({ onSelectPair }: MarketTickerProps) => {
   }
 
   return (
-    <div className="h-8 sm:h-10 bg-secondary/30 border-b border-border overflow-hidden group">
+    <div className="h-8 sm:h-10 bg-card/85 backdrop-blur-md border-t border-border/50 overflow-hidden group">
       <div className="flex items-center h-full animate-ticker whitespace-nowrap group-hover:[animation-play-state:paused]">
         {duplicatedPairs.map((pair, index) => (
           <button

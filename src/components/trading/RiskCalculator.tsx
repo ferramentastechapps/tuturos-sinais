@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Calculator, DollarSign, Percent, Scale, AlertTriangle } from 'lucide-react';
+import { Calculator, DollarSign, Percent, Scale, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export const RiskCalculator = () => {
+  const [isOpen, setIsOpen] = useState(false);
   const [accountBalance, setAccountBalance] = useState(10000);
   const [riskPercent, setRiskPercent] = useState(2);
   const [entryPrice, setEntryPrice] = useState(67500);
@@ -33,130 +35,151 @@ export const RiskCalculator = () => {
   }, [accountBalance, riskPercent, entryPrice, stopLoss, takeProfit]);
 
   return (
-    <div className="trading-card h-full">
-      <div className="flex items-center gap-2 mb-4">
-        <Calculator className="w-5 h-5 text-primary" />
-        <h2 className="text-lg font-semibold text-foreground">Calculadora de Risco</h2>
+    <div className="trading-card transition-all duration-300">
+      <div 
+        className="flex items-center justify-between cursor-pointer group select-none"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center gap-2">
+          <Calculator className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+          <h2 className="text-sm sm:text-base font-semibold text-foreground">Calculadora de Risco</h2>
+        </div>
+        <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-7 sm:w-7 hover:bg-muted/50">
+          {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </Button>
       </div>
 
-      {/* Warning */}
-      <div className="flex items-start gap-2 p-3 mb-4 rounded-lg bg-warning/10 border border-warning/20">
-        <AlertTriangle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
-        <p className="text-xs text-warning">
-          Trading de futuros envolve alto risco. Nunca opere com dinheiro que não pode perder.
-        </p>
-      </div>
+      {isOpen && (
+        <div className="mt-4 space-y-3.5 animate-fade-up">
+          {/* Warning */}
+          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-warning/5 border border-warning/15">
+            <AlertTriangle className="w-3.5 h-3.5 text-warning mt-0.5 flex-shrink-0" />
+            <p className="text-[10px] sm:text-xs text-warning leading-normal">
+              Futuros envolvem alto risco. Nunca opere com dinheiro que não pode perder.
+            </p>
+          </div>
 
-      <div className="space-y-4">
-        {/* Account Balance */}
-        <div className="space-y-2">
-          <Label className="text-muted-foreground flex items-center gap-1">
-            <DollarSign className="w-3 h-3" />
-            Saldo da Conta (USDT)
-          </Label>
-          <Input
-            type="number"
-            value={accountBalance}
-            onChange={(e) => setAccountBalance(Number(e.target.value))}
-            className="font-mono"
-          />
-        </div>
-
-        {/* Risk Percent */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-muted-foreground flex items-center gap-1">
-              <Percent className="w-3 h-3" />
-              Risco por Trade
-            </Label>
-            <span className="text-sm font-mono text-primary">{riskPercent}%</span>
-          </div>
-          <Slider
-            value={[riskPercent]}
-            onValueChange={([value]) => setRiskPercent(value)}
-            min={0.5}
-            max={10}
-            step={0.5}
-            className="py-2"
-          />
-          <p className="text-xs text-muted-foreground">
-            Risco máximo: ${calculations.riskAmount.toFixed(2)}
-          </p>
-        </div>
-
-        {/* Price Inputs */}
-        <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Entrada</Label>
-            <Input
-              type="number"
-              value={entryPrice}
-              onChange={(e) => setEntryPrice(Number(e.target.value))}
-              className="font-mono text-sm"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-destructive">Stop Loss</Label>
-            <Input
-              type="number"
-              value={stopLoss}
-              onChange={(e) => setStopLoss(Number(e.target.value))}
-              className="font-mono text-sm border-destructive/30"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-success">Take Profit</Label>
-            <Input
-              type="number"
-              value={takeProfit}
-              onChange={(e) => setTakeProfit(Number(e.target.value))}
-              className="font-mono text-sm border-success/30"
-            />
-          </div>
-        </div>
-
-        {/* Results */}
-        <div className="pt-4 border-t border-border space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Tamanho da Posição</span>
-            <span className="font-mono font-semibold text-foreground">
-              {calculations.positionSize.toFixed(6)} BTC
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Valor da Posição</span>
-            <span className="font-mono font-semibold text-foreground">
-              ${calculations.positionValue.toFixed(2)}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Lucro Potencial</span>
-            <span className="font-mono font-semibold text-success">
-              +${calculations.potentialProfit.toFixed(2)}
-            </span>
-          </div>
-          <div className="flex justify-between items-center p-2 rounded-lg bg-primary/10">
-            <div className="flex items-center gap-1">
-              <Scale className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary">Risco/Retorno</span>
+          {/* Account Balance & Risk Percent */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <DollarSign className="w-2.5 h-2.5" /> Saldo (USDT)
+              </Label>
+              <Input
+                type="number"
+                value={accountBalance}
+                onChange={(e) => setAccountBalance(Number(e.target.value))}
+                className="font-mono text-xs h-8 px-2 bg-secondary/30 border-border/50 focus-visible:ring-1"
+              />
             </div>
-            <span className="font-mono font-bold text-primary">
-              1:{calculations.riskReward.toFixed(2)}
-            </span>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <Percent className="w-2.5 h-2.5" /> Risco
+                </Label>
+                <span className="text-[10px] font-mono text-primary font-bold">{riskPercent}%</span>
+              </div>
+              <Input
+                type="number"
+                value={riskPercent}
+                onChange={(e) => setRiskPercent(Number(e.target.value))}
+                className="font-mono text-xs h-8 px-2 bg-secondary/30 border-border/50 focus-visible:ring-1"
+                min={0.5}
+                max={10}
+                step={0.5}
+              />
+            </div>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Alavancagem Recomendada</span>
-            <span
-              className={cn(
-                'font-mono font-semibold',
-                calculations.leverageRecommended > 10 ? 'text-warning' : 'text-foreground'
-              )}
-            >
-              {calculations.leverageRecommended}x
-            </span>
+
+          {/* Slider for Risk */}
+          <div className="space-y-1">
+            <Slider
+              value={[riskPercent]}
+              onValueChange={([value]) => setRiskPercent(value)}
+              min={0.5}
+              max={10}
+              step={0.5}
+              className="py-1"
+            />
+            <p className="text-[9px] text-muted-foreground text-right">
+              Risco máx: <span className="font-mono font-bold text-foreground">${calculations.riskAmount.toFixed(2)}</span>
+            </p>
+          </div>
+
+          {/* Price Inputs */}
+          <div className="grid grid-cols-3 gap-1.5 pt-1">
+            <div className="space-y-0.5">
+              <Label className="text-[9px] text-muted-foreground">Entrada</Label>
+              <Input
+                type="number"
+                value={entryPrice}
+                onChange={(e) => setEntryPrice(Number(e.target.value))}
+                className="font-mono text-xs h-7 px-1.5 bg-secondary/30 border-border/50"
+              />
+            </div>
+            <div className="space-y-0.5">
+              <Label className="text-[9px] text-destructive">Stop Loss</Label>
+              <Input
+                type="number"
+                value={stopLoss}
+                onChange={(e) => setStopLoss(Number(e.target.value))}
+                className="font-mono text-xs h-7 px-1.5 border-destructive/20 bg-destructive/5 text-destructive font-semibold"
+              />
+            </div>
+            <div className="space-y-0.5">
+              <Label className="text-[9px] text-success">Take Profit</Label>
+              <Input
+                type="number"
+                value={takeProfit}
+                onChange={(e) => setTakeProfit(Number(e.target.value))}
+                className="font-mono text-xs h-7 px-1.5 border-success/20 bg-success/5 text-success font-semibold"
+              />
+            </div>
+          </div>
+
+          {/* Results Table */}
+          <div className="pt-3.5 border-t border-border/45 space-y-2">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-muted-foreground">Tamanho da Posição</span>
+              <span className="font-mono font-bold text-foreground">
+                {calculations.positionSize.toFixed(6)} BTC
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-muted-foreground">Valor da Posição</span>
+              <span className="font-mono font-semibold text-foreground">
+                ${calculations.positionValue.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-muted-foreground">Lucro Potencial</span>
+              <span className="font-mono font-bold text-success">
+                +${calculations.potentialProfit.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center p-2 rounded-lg bg-primary/10 border border-primary/20">
+              <div className="flex items-center gap-1">
+                <Scale className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold text-primary">Risco/Retorno</span>
+              </div>
+              <span className="font-mono font-bold text-primary text-sm">
+                1:{calculations.riskReward.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-muted-foreground text-xs">Alavancagem Recomendada</span>
+              <span
+                className={cn(
+                  'font-mono font-bold text-xs',
+                  calculations.leverageRecommended > 10 ? 'text-warning' : 'text-foreground'
+                )}
+              >
+                {calculations.leverageRecommended}x
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -345,9 +345,16 @@
     overflow: hidden;
   }
 
+  .dashboard-grid.has-bottom-bar {
+    height: calc(100vh - 3.5rem - 2.5rem);
+  }
+
   @media (max-width: 1279px) {
     .dashboard-grid {
       grid-template-columns: 260px 1fr;
+    }
+    .dashboard-grid.has-bottom-bar {
+      height: calc(100vh - 3.5rem - 2rem); /* adjust height slightly for mobile bottom bar */
     }
   }
 
@@ -363,5 +370,21 @@
         hsl(var(--signal-sell)) 0%,
         hsl(var(--signal-alert)) 50%,
         hsl(var(--signal-buy)) 100%);
+  }
+
+  /* Custom minimal scrollbar utility */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border) / 0.6);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.5);
   }
 }
