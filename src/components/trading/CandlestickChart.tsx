@@ -51,6 +51,17 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
     return { bullish, bearish, neutral };
   }, [patterns]);
 
+  const [activeFilter, setActiveFilter] = useState<'all' | 'bullish' | 'neutral' | 'bearish'>('all');
+
+  useEffect(() => {
+    setActiveFilter('all');
+  }, [symbol]);
+
+  const filteredPatternsList = useMemo(() => {
+    if (activeFilter === 'all') return patterns;
+    return patterns.filter(p => p.signal === activeFilter);
+  }, [patterns, activeFilter]);
+
   useEffect(() => {
     if (!chartContainerRef.current || !ohlcData || ohlcData.length === 0) return;
 
@@ -283,27 +294,51 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2 mb-4">
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-success/10">
+            <button
+              onClick={() => setActiveFilter(activeFilter === 'bullish' ? 'all' : 'bullish')}
+              className={cn(
+                "flex items-center gap-2 p-2 rounded-lg text-left transition-all border outline-none focus-visible:ring-1 focus-visible:ring-success",
+                activeFilter === 'bullish'
+                  ? "bg-success/20 border-success/45 ring-1 ring-success/30"
+                  : "bg-success/10 border-transparent hover:bg-success/15"
+              )}
+            >
               <TrendingUp className="w-4 h-4 text-success" />
               <div>
-                <p className="text-lg font-bold text-success">{patternSummary.bullish}</p>
-                <p className="text-xs text-success/80">Padrões Altistas</p>
+                <p className="text-lg font-bold text-success leading-none mb-1">{patternSummary.bullish}</p>
+                <p className="text-[10px] sm:text-xs text-success/80 leading-none">Padrões Altistas</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted">
+            </button>
+            <button
+              onClick={() => setActiveFilter(activeFilter === 'neutral' ? 'all' : 'neutral')}
+              className={cn(
+                "flex items-center gap-2 p-2 rounded-lg text-left transition-all border outline-none focus-visible:ring-1 focus-visible:ring-muted-foreground",
+                activeFilter === 'neutral'
+                  ? "bg-muted/85 border-muted-foreground/30 ring-1 ring-muted-foreground/20"
+                  : "bg-muted border-transparent hover:bg-muted/80"
+              )}
+            >
               <Minus className="w-4 h-4 text-muted-foreground" />
               <div>
-                <p className="text-lg font-bold text-muted-foreground">{patternSummary.neutral}</p>
-                <p className="text-xs text-muted-foreground">Neutros</p>
+                <p className="text-lg font-bold text-muted-foreground leading-none mb-1">{patternSummary.neutral}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-none">Neutros</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-destructive/10">
+            </button>
+            <button
+              onClick={() => setActiveFilter(activeFilter === 'bearish' ? 'all' : 'bearish')}
+              className={cn(
+                "flex items-center gap-2 p-2 rounded-lg text-left transition-all border outline-none focus-visible:ring-1 focus-visible:ring-destructive",
+                activeFilter === 'bearish'
+                  ? "bg-destructive/20 border-destructive/45 ring-1 ring-destructive/30"
+                  : "bg-destructive/10 border-transparent hover:bg-destructive/15"
+              )}
+            >
               <TrendingDown className="w-4 h-4 text-destructive" />
               <div>
-                <p className="text-lg font-bold text-destructive">{patternSummary.bearish}</p>
-                <p className="text-xs text-destructive/80">Padrões Baixistas</p>
+                <p className="text-lg font-bold text-destructive leading-none mb-1">{patternSummary.bearish}</p>
+                <p className="text-[10px] sm:text-xs text-destructive/80 leading-none">Padrões Baixistas</p>
               </div>
-            </div>
+            </button>
           </div>
 
           <div className="h-[400px] mb-4 relative w-full" ref={!isExpanded ? chartContainerRef : undefined} />
@@ -319,44 +354,60 @@ export const CandlestickChart = ({ symbol, name }: CandlestickChartProps) => {
             <div className="border-t border-border pt-4">
               <div className="flex items-center gap-2 mb-3">
                 <Info className="w-4 h-4 text-primary" />
-                <h4 className="text-sm font-semibold text-foreground">Padrões Detectados</h4>
-                <Badge variant="outline" className="ml-auto">{patterns.length}</Badge>
+                <h4 className="text-sm font-semibold text-foreground">
+                  Padrões Detectados {activeFilter !== 'all' && `(${activeFilter === 'bullish' ? 'Altistas' : activeFilter === 'bearish' ? 'Baixistas' : 'Neutros'})`}
+                </h4>
+                {activeFilter !== 'all' && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground ml-1"
+                    onClick={() => setActiveFilter('all')}
+                  >
+                    Limpar Filtro
+                  </Button>
+                )}
+                <Badge variant="outline" className="ml-auto">{filteredPatternsList.length}</Badge>
               </div>
               <ScrollArea className="h-[120px]">
                 <div className="space-y-2 pr-4">
-                  {patterns.slice().reverse().map((pattern, idx) => (
-                    <TooltipProvider key={idx}>
-                      <UITooltip>
-                        <TooltipTrigger asChild>
-                          <div
-                            className={cn(
-                              "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors",
-                              pattern.signal === 'bullish' && "bg-success/5 hover:bg-success/10",
-                              pattern.signal === 'bearish' && "bg-destructive/5 hover:bg-destructive/10",
-                              pattern.signal === 'neutral' && "bg-muted/50 hover:bg-muted"
-                            )}
-                          >
-                            <span className="text-lg">{getPatternEmoji(pattern.type)}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-foreground truncate">{pattern.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {new Date(pattern.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            </div>
-                            <Badge
-                              variant={pattern.signal === 'bullish' ? 'default' : pattern.signal === 'bearish' ? 'destructive' : 'secondary'}
-                              className="text-xs"
+                  {filteredPatternsList.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-4 text-center">Nenhum padrão deste tipo detectado.</p>
+                  ) : (
+                    filteredPatternsList.slice().reverse().map((pattern, idx) => (
+                      <TooltipProvider key={idx}>
+                        <UITooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className={cn(
+                                "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors",
+                                pattern.signal === 'bullish' && "bg-success/5 hover:bg-success/10",
+                                pattern.signal === 'bearish' && "bg-destructive/5 hover:bg-destructive/10",
+                                pattern.signal === 'neutral' && "bg-muted/50 hover:bg-muted"
+                              )}
                             >
-                              {pattern.signal === 'bullish' ? 'ALTA' : pattern.signal === 'bearish' ? 'BAIXA' : 'NEUTRO'}
-                            </Badge>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="left" className="max-w-[200px]">
-                          <p>{pattern.description}</p>
-                        </TooltipContent>
-                      </UITooltip>
-                    </TooltipProvider>
-                  ))}
+                              <span className="text-lg">{getPatternEmoji(pattern.type)}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{pattern.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(pattern.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                              <Badge
+                                variant={pattern.signal === 'bullish' ? 'default' : pattern.signal === 'bearish' ? 'destructive' : 'secondary'}
+                                className="text-xs"
+                              >
+                                {pattern.signal === 'bullish' ? 'ALTA' : pattern.signal === 'bearish' ? 'BAIXA' : 'NEUTRO'}
+                              </Badge>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-[200px]">
+                            <p>{pattern.description}</p>
+                          </TooltipContent>
+                        </UITooltip>
+                      </TooltipProvider>
+                    ))
+                  )}
                 </div>
               </ScrollArea>
             </div>
