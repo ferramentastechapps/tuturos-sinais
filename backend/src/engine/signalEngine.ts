@@ -993,9 +993,39 @@ async function runSignalCycle(): Promise<void> {
             }
 
             const symStats = await getSymbolStats(symbol);
-            const isBadCoin = symStats.total >= 5 && symStats.winRate < 0.20;
-            if (isBadCoin) {
-                logger.info(`[Engine] Símbolo ${symbol} identificado com baixo WR histórico (${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais), prosseguindo apenas para análise.`);
+            
+            // Check if coin was previously quarantined
+            const lastSignal = await db.tradeSignal.findFirst({
+                where: { pair: symbol },
+                orderBy: { created_at: 'desc' }
+            });
+            
+            const wasQuarantined = lastSignal && (
+                lastSignal.status === 'BLOCKED' ||
+                lastSignal.status === 'BLOCKED_ACTIVE' ||
+                (lastSignal.indicators && lastSignal.indicators.includes('⚠️ Moeda Ruim'))
+            );
+            
+            let isBadCoin = false;
+            if (wasQuarantined) {
+                // If it was quarantined, it remains quarantined unless its recent WR is >= 30%
+                isBadCoin = symStats.total < 5 || symStats.winRate < 0.30;
+                if (!isBadCoin) {
+                    logger.info(`[Engine] Símbolo ${symbol} PROMOVIDO da quarentena! WR recente: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais.`);
+                    if (telegramService.isEnabled) {
+                        const promoMsg = `📈 <b>Moeda Recuperada: ${symbol}</b>\n\n` +
+                                         `O par acumulou um Win Rate de <b>${(symStats.winRate * 100).toFixed(1)}%</b> nos últimos ${symStats.total} sinais e foi promovido de volta ao fluxo principal de sinais!`;
+                        telegramService.send(promoMsg, 'daily_summary').catch(e => logger.warn(`[Engine] Failed to send promotion notification`, e));
+                    }
+                } else {
+                    logger.info(`[Engine] Símbolo ${symbol} continua em quarentena (WR recente: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais).`);
+                }
+            } else {
+                // If it was NOT quarantined, it enters quarentine if its WR is < 20%
+                isBadCoin = symStats.total >= 5 && symStats.winRate < 0.20;
+                if (isBadCoin) {
+                    logger.info(`[Engine] Símbolo ${symbol} ENTRANDO em quarentena! WR recente: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais.`);
+                }
             }
             
             // Calibração por símbolo: timeframe e lookback específicos por ativo
@@ -1188,8 +1218,8 @@ async function runSignalCycle(): Promise<void> {
                     break;
                 }
 
-                // Send Telegram notification
-                if (telegramService.isEnabled && (signal.status === 'BLOCKED' || signal.quality.score >= config.telegram.minScore)) {
+                // Send Telegram notification — ONLY if not blocked
+                if (telegramService.isEnabled && (signal.status as string) !== 'BLOCKED' && signal.quality.score >= config.telegram.minScore) {
                     try {
                         const tgResult = await telegramService.sendNewSignal({
                             type: signal.type,
@@ -1218,7 +1248,7 @@ async function runSignalCycle(): Promise<void> {
                             expectedDuration: anySignal.expectedDuration,
                             mtfContext: anySignal.mtfContext,
                             contextNarrative: `${anySignal.contextNarrative} ${isSweep ? '**ESTRUTURA ICT E CAÇA DE STOPS DETECTADA.** O Alvo 3 funcionará como Trailing Stop para espremer a tendência real!' : isOB ? '**ORDER BLOCK ICT CONFIRMADO.** Entrada na zona institucional com Stop no swing estrutural. TPs por extensões Fibonacci.' : 'Utilize o trailing stop após o Alvo 2 para garantir o lucro.'}`,
-                            isAnalysisOnly: signal.status === 'BLOCKED',
+                            isAnalysisOnly: (signal.status as string) === 'BLOCKED',
                         });
                         signalsSent++;
 

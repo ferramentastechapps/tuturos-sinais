@@ -106,7 +106,7 @@ router.get('/status', (_req: Request, res: Response) => {
 
 // ──── Signals ────
 
-import { tradeTracker } from '../trading/tradeTracker.js';
+import { tradeTracker, getSymbolStats } from '../trading/tradeTracker.js';
 
 router.get('/signals', (req: Request, res: Response) => {
     const limit = parseInt(getStringParam(req.query.limit)) || 20;
@@ -302,6 +302,162 @@ router.get('/signals/history', async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         logger.error('Error fetching signals history', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ──── Blocked Signals ────
+
+router.get('/signals/blocked', async (req: Request, res: Response) => {
+    try {
+        const page = parseInt(getStringParam(req.query.page)) || 1;
+        const limit = parseInt(getStringParam(req.query.limit)) || 20;
+        
+        // 1. Get stats for all monitored symbols to find the ones that are bad coins (quarantined)
+        const blockedCoins = [];
+        const allSymbols = config.monitoredSymbols;
+        
+        for (const symbol of allSymbols) {
+            const symStats = await getSymbolStats(symbol);
+            
+            // Check if it's currently quarantined
+            const lastSignal = await db.tradeSignal.findFirst({
+                where: { pair: symbol },
+                orderBy: { created_at: 'desc' }
+            });
+            
+            if (!lastSignal) continue;
+            
+            const wasQuarantined = lastSignal.status === 'BLOCKED' || 
+                                   lastSignal.status === 'BLOCKED_ACTIVE' || 
+                                   (lastSignal.indicators && lastSignal.indicators.includes('⚠️ Moeda Ruim'));
+            
+            if (wasQuarantined) {
+                // Check if it's still quarantined (winRate < 30%)
+                const isStillBlocked = symStats.total < 5 || symStats.winRate < 0.30;
+                if (isStillBlocked) {
+                    // Recent stats (last 10 signals)
+                    const recentSignals = await db.tradeSignal.findMany({
+                        where: { pair: symbol, status: { in: ['CLOSED_TP', 'CLOSED_SL'] }, outcome: { not: null } },
+                        orderBy: { exit_time: 'desc' },
+                        take: 10
+                    });
+                    
+                    const recentWins = recentSignals.filter(s => s.outcome === 'WIN').length;
+                    const recentLosses = recentSignals.filter(s => s.outcome === 'LOSS').length;
+                    
+                    // Historical stats
+                    const allSignals = await db.tradeSignal.findMany({
+                        where: { pair: symbol, status: { in: ['CLOSED_TP', 'CLOSED_SL'] }, outcome: { not: null } }
+                    });
+                    const totalWins = allSignals.filter(s => s.outcome === 'WIN').length;
+                    const totalLosses = allSignals.filter(s => s.outcome === 'LOSS').length;
+                    const historicalWinRate = allSignals.length > 0 ? (totalWins / allSignals.length) * 100 : 0;
+                    
+                    // Trend based on recent signals
+                    let trend = 'stable';
+                    if (recentSignals.length >= 4) {
+                        const mid = Math.ceil(recentSignals.length / 2);
+                        const firstHalf = recentSignals.slice(0, mid);
+                        const secondHalf = recentSignals.slice(mid);
+                        const firstWR = firstHalf.filter(s => s.outcome === 'WIN').length / firstHalf.length;
+                        const secondWR = secondHalf.filter(s => s.outcome === 'WIN').length / secondHalf.length;
+                        if (firstWR > secondWR) trend = 'improving';
+                        else if (firstWR < secondWR) trend = 'worsening';
+                    }
+                    
+                    const recentWR = symStats.winRate * 100;
+                    const promotionProgress = Math.min(100, Math.round((recentWR / 30) * 100));
+                    
+                    blockedCoins.push({
+                        pair: symbol,
+                        totalSignals: allSignals.length,
+                        wins: totalWins,
+                        losses: totalLosses,
+                        winRate: parseFloat(historicalWinRate.toFixed(1)),
+                        recentWinRate: parseFloat(recentWR.toFixed(1)),
+                        trend,
+                        promotionProgress,
+                        lastSignal: {
+                            id: lastSignal.id,
+                            type: lastSignal.type,
+                            status: lastSignal.status,
+                            createdAt: lastSignal.created_at,
+                            pnl: lastSignal.pnl
+                        }
+                    });
+                }
+            }
+        }
+        
+        // 2. Get all signals that are BLOCKED or BLOCKED_ACTIVE or CLOSED from a blocked signal
+        const blockedSignals = await db.tradeSignal.findMany({
+            where: {
+                OR: [
+                    { status: { in: ['BLOCKED', 'BLOCKED_ACTIVE'] } },
+                    { indicators: { contains: '⚠️ Moeda Ruim' } },
+                    { indicators: { contains: 'Rejeitado por IA' } }
+                ]
+            },
+            orderBy: { created_at: 'desc' },
+            skip: (page - 1) * limit,
+            take: limit
+        });
+        
+        const totalSignalsCount = await db.tradeSignal.count({
+            where: {
+                OR: [
+                    { status: { in: ['BLOCKED', 'BLOCKED_ACTIVE'] } },
+                    { indicators: { contains: '⚠️ Moeda Ruim' } },
+                    { indicators: { contains: 'Rejeitado por IA' } }
+                ]
+            }
+        });
+        
+        res.json({
+            coins: blockedCoins,
+            signals: blockedSignals.map(s => {
+                let tps: any[] = [];
+                try { tps = s.take_profits ? JSON.parse(s.take_profits) : []; } catch(e) {}
+                let inds: string[] = [];
+                try { inds = s.indicators ? JSON.parse(s.indicators) : []; } catch(e) {}
+                return {
+                    id: s.id,
+                    pair: s.pair,
+                    type: s.type.toUpperCase(),
+                    trade_type: s.trade_type,
+                    entry: (s.entry_range_low + s.entry_range_high) / 2,
+                    entry_range_low: s.entry_range_low,
+                    entry_range_high: s.entry_range_high,
+                    takeProfit: tps[0]?.price || s.entry_range_high,
+                    takeProfits: tps,
+                    takeProfit1: tps.find((t: any) => t.level === 1)?.price,
+                    takeProfit2: tps.find((t: any) => t.level === 2)?.price,
+                    takeProfit3: tps.find((t: any) => t.level === 3)?.price,
+                    stopLoss: s.stop_loss,
+                    initial_stop_loss: s.initial_stop_loss,
+                    status: s.status,
+                    createdAt: s.created_at,
+                    score: s.confidence,
+                    quality: { score: s.confidence || 0 },
+                    pnl: s.pnl,
+                    outcome: s.outcome,
+                    indicators: inds
+                };
+            }),
+            stats: {
+                total: totalSignalsCount,
+                pairs: blockedCoins.length
+            },
+            pagination: {
+                page,
+                limit,
+                total: totalSignalsCount,
+                totalPages: Math.ceil(totalSignalsCount / limit)
+            }
+        });
+    } catch (error: any) {
+        logger.error('Error fetching blocked signals', { error: error.message });
         res.status(500).json({ error: error.message });
     }
 });

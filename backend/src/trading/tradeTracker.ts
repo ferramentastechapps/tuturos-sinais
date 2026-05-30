@@ -215,7 +215,7 @@ export class TradeTracker {
       if (!this.activeSignals.get(update.symbol)?.find(s => s.id === signal.id)) {
         continue; // Sinal já foi processado/removido
       }
-      if (signal.status === 'PENDING') {
+      if (signal.status === 'PENDING' || signal.status === 'BLOCKED') {
          // Activate only when price enters the defined entry zone
          const isEntered = update.price >= signal.entry_range_low && update.price <= signal.entry_range_high;
 
@@ -225,15 +225,18 @@ export class TradeTracker {
                  continue; // Já foi ativado, pular
              }
              
-             console.log(`[TradeTracker] Signal ${signal.pair} ACTIVATED at ${update.price}`);
-             signal.status = 'ACTIVE';
+             const isBlocked = signal.status === 'BLOCKED';
+             const nextStatus = isBlocked ? 'BLOCKED_ACTIVE' : 'ACTIVE';
+             
+             console.log(`[TradeTracker] Signal ${signal.pair} ACTIVATED at ${update.price} (Blocked: ${isBlocked})`);
+             signal.status = nextStatus;
              
              // Marcar como ativado ANTES de enviar notificação
              this.activatedSignals.add(signal.id);
              
              try {
-                await db.activeSignal.update({ where: { id: signal.id }, data: { status: 'ACTIVE' } });
-                await db.tradeSignal.update({ where: { id: signal.id }, data: { entry_time: new Date() } }); // SALVAR ENTRY_TIME
+                await db.activeSignal.update({ where: { id: signal.id }, data: { status: nextStatus } });
+                await db.tradeSignal.update({ where: { id: signal.id }, data: { entry_time: new Date(), status: nextStatus } }); // SALVAR ENTRY_TIME e status
                 this.logEvent(signal.id, 'ACTIVATED', `Order activated at ${update.price}`, update.price).catch(()=>{});
              } catch (e) { /* ignore pg error */ }
              
@@ -246,7 +249,7 @@ export class TradeTracker {
          }
       }
 
-      if (signal.status !== 'ACTIVE') continue;
+      if (signal.status !== 'ACTIVE' && signal.status !== 'BLOCKED_ACTIVE') continue;
 
       // Check Stop Loss
       const tradeDir = signal.type.toUpperCase();
@@ -256,7 +259,7 @@ export class TradeTracker {
 
       if (isSLHit) {
         // Verificar se já foi processado (proteção adicional)
-        if (signal.status !== 'ACTIVE') {
+        if (signal.status !== 'ACTIVE' && signal.status !== 'BLOCKED_ACTIVE') {
           continue;
         }
         await this.handleStopLoss(signal, update.price);
@@ -281,7 +284,7 @@ export class TradeTracker {
 
       // Trailing Stop Logic (Step-based after TP1)
       const tp1 = signal.take_profits.find(t => t.level === 1);
-      if (tp1 && tp1.hit && !hitAnyTP && signal.status === 'ACTIVE') {
+      if (tp1 && tp1.hit && !hitAnyTP && (signal.status === 'ACTIVE' || signal.status === 'BLOCKED_ACTIVE')) {
          await this.processTrailingStop(signal, update.price);
       }
     }
@@ -833,6 +836,23 @@ export class TradeTracker {
       
       // Remover da memória
       this.removeSignalFromMemory(oldSignal.id, pair);
+    }
+  }
+
+  /**
+   * Cancela em memória sinais antigos inativados pelo Cleanup Job
+   */
+  public cancelStaleSignalsInMemory(staleIds: string[]) {
+    console.log(`[TradeTracker] Cancelando em memória ${staleIds.length} sinais expirados...`);
+    for (const id of staleIds) {
+      for (const [pair, signals] of this.activeSignals.entries()) {
+        const found = signals.find(s => s.id === id);
+        if (found) {
+          found.status = 'CANCELLED';
+          this.removeSignalFromMemory(id, pair);
+          console.log(`[TradeTracker] ✅ Sinal expirado ${id} removido da memória`);
+        }
+      }
     }
   }
 

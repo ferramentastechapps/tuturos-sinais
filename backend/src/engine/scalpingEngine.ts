@@ -3,6 +3,7 @@
 
 import { logger } from '../lib/logger.js';
 import { config } from '../lib/config.js';
+import { db } from '../lib/dbClient.js';
 import { bybitConnector } from '../exchange/bybitConnector.js';
 import { predictSignal, isModelLoaded } from '../ml/mlPredictionService.js';
 import {
@@ -537,9 +538,44 @@ async function runScalpingCycle(): Promise<void> {
             }
 
             const symStats = await getSymbolStats(symbol);
-            const isBadCoin = symStats.total >= 5 && symStats.winRate < 0.20;
-            if (isBadCoin) {
-                logger.info(`[Scalping] Símbolo ${symbol} identificado com baixo WR histórico (${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais), prosseguindo apenas para análise.`);
+            
+            // Check if coin was previously quarantined
+            const lastSignal = await db.tradeSignal.findFirst({
+                where: { pair: symbol },
+                orderBy: { created_at: 'desc' }
+            });
+            
+            const wasQuarantined = lastSignal && (
+                lastSignal.status === 'BLOCKED' ||
+                lastSignal.status === 'BLOCKED_ACTIVE' ||
+                (lastSignal.indicators && lastSignal.indicators.includes('⚠️ Moeda Ruim'))
+            );
+            
+            let isBadCoin = false;
+            if (wasQuarantined) {
+                // If it was quarantined, it remains quarantined unless its recent WR is >= 30%
+                isBadCoin = symStats.total < 5 || symStats.winRate < 0.30;
+                if (!isBadCoin) {
+                    logger.info(`[Scalping] Símbolo ${symbol} PROMOVIDO da quarentena! WR recente: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais.`);
+                    try {
+                        const { telegramService } = await import('../notifications/telegramService.js');
+                        if (telegramService.isEnabled) {
+                            const promoMsg = `📈 <b>Moeda Recuperada (Scalping): ${symbol}</b>\n\n` +
+                                             `O par acumulou um Win Rate de <b>${(symStats.winRate * 100).toFixed(1)}%</b> nos últimos ${symStats.total} sinais e foi promovido de volta ao fluxo principal de sinais!`;
+                            telegramService.send(promoMsg, 'daily_summary').catch(e => logger.warn(`[Scalping] Failed to send promotion notification`, e));
+                        }
+                    } catch (err) {
+                        logger.warn(`[Scalping] Erro ao carregar telegramService para notificar promoção`, err);
+                    }
+                } else {
+                    logger.info(`[Scalping] Símbolo ${symbol} continua em quarentena (WR recente: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais).`);
+                }
+            } else {
+                // If it was NOT quarantined, it enters quarentine if its WR is < 20%
+                isBadCoin = symStats.total >= 5 && symStats.winRate < 0.20;
+                if (isBadCoin) {
+                    logger.info(`[Scalping] Símbolo ${symbol} ENTRANDO em quarentena! WR recente: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais.`);
+                }
             }
 
             const [ohlc5m, ohlc15m] = await Promise.all([
@@ -655,10 +691,10 @@ async function runScalpingCycle(): Promise<void> {
             if (config.scalpingBot.chatId) {
                 try {
                     const { telegramService } = await import('../notifications/telegramService.js');
-                    if (telegramService.isEnabled && (signal.status === 'BLOCKED' || signal.confidence >= config.telegram.minScore)) {
+                    if (telegramService.isEnabled && signal.status !== 'BLOCKED' && signal.confidence >= config.telegram.minScore) {
                         await telegramService.sendScalpingSignal(signal);
                         scalpingSignalsSent++;
-                        logger.info(`[Scalping] Sinal enviado (${signal.status}): ${signal.type.toUpperCase()} ${symbol} | score=${signal.confidence}`);
+                        logger.info(`[Scalping] Sinal enviado: ${signal.type.toUpperCase()} ${symbol} | score=${signal.confidence}`);
                     }
                 } catch (tError) {
                     logger.warn(`[Scalping] Falha ao enviar telegram para ${symbol}`, { error: tError });

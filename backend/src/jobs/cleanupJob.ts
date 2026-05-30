@@ -5,6 +5,7 @@ import cron from 'node-cron';
 import { db } from '../lib/dbClient.js';
 import { logger } from '../lib/logger.js';
 import { telegramService } from '../notifications/telegramService.js';
+import { tradeTracker } from '../trading/tradeTracker.js';
 
 const JOB_TAG = '[CleanupJob]';
 
@@ -21,7 +22,7 @@ export function startCleanupJob() {
 }
 
 /**
- * Cancela sinais PENDING ou ACTIVE que não foram resolvidos no dia anterior.
+ * Cancela sinais PENDING, ACTIVE, BLOCKED ou BLOCKED_ACTIVE que não foram resolvidos no dia anterior.
  * "Inativo" = criado antes de 00:00 UTC de hoje e ainda com status aberto.
  */
 async function cancelStaleSignals() {
@@ -38,10 +39,10 @@ async function cancelStaleSignals() {
 
         logger.info(`${JOB_TAG} Buscando sinais abertos criados antes de ${todayStart.toISOString()}...`);
 
-        // Buscar sinais PENDING ou ACTIVE criados antes de hoje
+        // Buscar sinais PENDING, ACTIVE, BLOCKED ou BLOCKED_ACTIVE criados antes de hoje
         const staleSignals = await db.activeSignal.findMany({
             where: {
-                status: { in: ['PENDING', 'ACTIVE'] },
+                status: { in: ['PENDING', 'ACTIVE', 'BLOCKED', 'BLOCKED_ACTIVE'] },
                 created_at: { lt: todayStart }
             }
         });
@@ -53,10 +54,10 @@ async function cancelStaleSignals() {
 
         logger.info(`${JOB_TAG} Encontrados ${staleSignals.length} sinais inativos para cancelar.`);
 
-        // Cancelar todos de uma vez
+        // Cancelar todos de uma vez no activeSignal
         const result = await db.activeSignal.updateMany({
             where: {
-                status: { in: ['PENDING', 'ACTIVE'] },
+                status: { in: ['PENDING', 'ACTIVE', 'BLOCKED', 'BLOCKED_ACTIVE'] },
                 created_at: { lt: todayStart }
             },
             data: {
@@ -64,6 +65,24 @@ async function cancelStaleSignals() {
                 updated_at: now
             }
         });
+
+        // Cancelar também no tradeSignal (histórico/analytics)
+        await db.tradeSignal.updateMany({
+            where: {
+                id: { in: staleSignals.map(s => s.id) }
+            },
+            data: {
+                status: 'CANCELLED',
+                updated_at: now
+            }
+        }).catch((e: Error) => logger.warn(`${JOB_TAG} Falha ao atualizar histórico no tradeSignal:`, e.message));
+
+        // Remover da memória RAM do tradeTracker
+        try {
+            tradeTracker.cancelStaleSignalsInMemory(staleSignals.map(s => s.id));
+        } catch (e: any) {
+            logger.error(`${JOB_TAG} Falha ao sincronizar cancelamento na memória do tradeTracker:`, e.message);
+        }
 
         logger.info(`${JOB_TAG} ✅ ${result.count} sinais cancelados com sucesso.`);
 
@@ -82,3 +101,4 @@ async function cancelStaleSignals() {
         logger.error(`${JOB_TAG} Falha ao executar limpeza de sinais:`, err);
     }
 }
+

@@ -492,8 +492,32 @@ class TelegramService {
 
 export const telegramService = new TelegramService();
 
-export const sendTPNotification = (signal: any, tp: any, currentPrice: number) => telegramService.sendTakeProfitNotification(signal, tp, currentPrice);
-export const sendSLNotification = (signal: any, currentPrice: number) => telegramService.sendStopLossNotification(signal, currentPrice);
-export const sendTrailingStopUpdate = (signal: any, currentPrice: number, oldSl: number, newSl: number, customMessage?: string) => telegramService.sendTrailingStopUpdate(signal, currentPrice, oldSl, newSl, customMessage);
-export const sendActivationNotification = (signal: any, currentPrice: number) => telegramService.sendActivationNotification(signal, currentPrice);
+export const sendTPNotification = (signal: any, tp: any, currentPrice: number) => {
+    if (signal.status === 'BLOCKED' || signal.status === 'BLOCKED_ACTIVE') {
+        logger.debug(`[Telegram] Skipping TP notification for BLOCKED signal ${signal.pair}`);
+        return Promise.resolve({ success: true, messageId: -1 });
+    }
+    return telegramService.sendTakeProfitNotification(signal, tp, currentPrice);
+};
+export const sendSLNotification = (signal: any, currentPrice: number) => {
+    if (signal.status === 'BLOCKED' || signal.status === 'BLOCKED_ACTIVE') {
+        logger.debug(`[Telegram] Skipping SL notification for BLOCKED signal ${signal.pair}`);
+        return Promise.resolve({ success: true, messageId: -1 });
+    }
+    return telegramService.sendStopLossNotification(signal, currentPrice);
+};
+export const sendTrailingStopUpdate = (signal: any, currentPrice: number, oldSl: number, newSl: number, customMessage?: string) => {
+    if (signal.status === 'BLOCKED' || signal.status === 'BLOCKED_ACTIVE') {
+        logger.debug(`[Telegram] Skipping Trailing Stop update notification for BLOCKED signal ${signal.pair}`);
+        return Promise.resolve({ success: true, messageId: -1 });
+    }
+    return telegramService.sendTrailingStopUpdate(signal, currentPrice, oldSl, newSl, customMessage);
+};
+export const sendActivationNotification = (signal: any, currentPrice: number) => {
+    if (signal.status === 'BLOCKED' || signal.status === 'BLOCKED_ACTIVE') {
+        logger.debug(`[Telegram] Skipping Activation notification for BLOCKED signal ${signal.pair}`);
+        return Promise.resolve({ success: true, messageId: -1 });
+    }
+    return telegramService.sendActivationNotification(signal, currentPrice);
+};
 

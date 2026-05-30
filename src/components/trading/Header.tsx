@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { Settings, Settings2, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun, BarChart3, Receipt, FileText, BrainCircuit, Activity } from 'lucide-react';
+import { Settings, Settings2, TrendingUp, Shield, Briefcase, ClipboardList, Menu, Moon, Sun, BarChart3, Receipt, FileText, BrainCircuit, Activity, Ban } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import {
@@ -127,6 +127,12 @@ export const Header = ({
             </Button>
           </Link>
 
+          <Link to="/blocked-signals">
+            <Button variant="ghost" size="icon" title="Quarentena" className="text-destructive/80 hover:text-destructive hover:bg-destructive/10">
+              <Ban className="w-5 h-5" />
+            </Button>
+          </Link>
+
           <Link to="/transactions">
             <Button variant="ghost" size="icon" title="Transações">
               <Receipt className="w-5 h-5" />
@@ -246,6 +252,13 @@ export const Header = ({
                   <Button variant="ghost" className="w-full justify-start gap-3">
                     <BrainCircuit className="w-5 h-5" />
                     ML Analytics
+                  </Button>
+                </Link>
+
+                <Link to="/blocked-signals" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-3 text-destructive/80 hover:text-destructive hover:bg-destructive/10">
+                    <Ban className="w-5 h-5" />
+                    Quarentena
                   </Button>
                 </Link>
 

@@ -28,6 +28,7 @@ const StrategyConfig = lazy(() => import("./pages/StrategyConfig")); // Heavy (3
 const SymbolAnalysis = lazy(() => import("./pages/SymbolAnalysis"));
 const SignalHistory = lazy(() => import("./pages/SignalHistory"));
 const SignalsGallery = lazy(() => import("./pages/SignalsGallery"));
+const BlockedSignals = lazy(() => import("./pages/BlockedSignals"));
 
 import { BottomNav } from "@/components/layout/BottomNav";
 import { useEffect } from "react";
@@ -89,6 +90,7 @@ const App = () => (
               <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
               <Route path="/sinais" element={<PrivateRoute><SignalHistory /></PrivateRoute>} />
               <Route path="/signals-gallery" element={<PrivateRoute><SignalsGallery /></PrivateRoute>} />
+              <Route path="/blocked-signals" element={<PrivateRoute><BlockedSignals /></PrivateRoute>} />
               <Route path="/risk-management" element={<PrivateRoute><RiskManagement /></PrivateRoute>} />
               <Route path="/backtesting" element={<PrivateRoute><Backtesting /></PrivateRoute>} />
               <Route path="/ml-analytics" element={<PrivateRoute><MLAnalytics /></PrivateRoute>} />
