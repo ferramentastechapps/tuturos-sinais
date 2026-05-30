@@ -27,6 +27,7 @@ import {
 import { initBot } from './bot.js';
 import { startSummaryJobs } from './jobs/summaryJobs.js';
 import { startMLRetrainJob } from './jobs/mlRetrainJob.js';
+import { startCleanupJob } from './jobs/cleanupJob.js';
 import { priceStream } from './trading/priceStream.js';
 
 const app = express();
@@ -170,7 +171,10 @@ async function bootstrap(): Promise<void> {
     // 9. Iniciar job agendado para retroalimentar o modelo de Machine Learning
     startMLRetrainJob();
 
-    // 10. Start Trade Tracker (Telegram Babá)
+    // 10. Cancelar sinais inativos todo dia à meia-noite UTC
+    startCleanupJob();
+
+    // 11. Start Trade Tracker (Telegram Babá)
     await tradeTracker.initialize();
 }
 
