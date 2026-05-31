@@ -46,6 +46,7 @@ export interface TelegramSendResult {
 }
 
 export interface SignalNotificationData {
+    signal_number?: number;
     type: 'long' | 'short';
     symbol: string;
     score: number;

@@ -687,21 +687,8 @@ async function runScalpingCycle(): Promise<void> {
             lastScalpingSignalAt = new Date().toISOString();
             scalpingCooldowns.set(symbol, now);
 
-            // Envia para o canal de scalping
-            if (config.scalpingBot.chatId) {
-                try {
-                    const { telegramService } = await import('../notifications/telegramService.js');
-                    if (telegramService.isEnabled && signal.status !== 'BLOCKED' && signal.confidence >= config.telegram.minScore) {
-                        await telegramService.sendScalpingSignal(signal);
-                        scalpingSignalsSent++;
-                        logger.info(`[Scalping] Sinal enviado: ${signal.type.toUpperCase()} ${symbol} | score=${signal.confidence}`);
-                    }
-                } catch (tError) {
-                    logger.warn(`[Scalping] Falha ao enviar telegram para ${symbol}`, { error: tError });
-                }
-            }
-
             // Injeta no Gestor de Posições (Trade Tracker Principal)
+            let registeredSignal;
             try {
                 const tps: { level: number, price: number, hit: boolean }[] = [];
                 if (signal.takeProfit1) tps.push({ level: 1, price: signal.takeProfit1, hit: false });
@@ -709,7 +696,7 @@ async function runScalpingCycle(): Promise<void> {
                 if (signal.takeProfit3) tps.push({ level: 3, price: signal.takeProfit3, hit: false });
                 if (tps.length === 0) tps.push({ level: 1, price: signal.takeProfit, hit: false });
 
-                tradeTracker.registerNewSignal({
+                registeredSignal = await tradeTracker.registerNewSignal({
                     id: signal.id,
                     pair: signal.pair,
                     type: signal.type.toUpperCase() as 'LONG' | 'SHORT',
@@ -724,9 +711,36 @@ async function runScalpingCycle(): Promise<void> {
                     score: signal.confidence,
                     indicators: signal.indicators,
                     mlData: signal.mlData,
-                }).catch((e: unknown) => logger.warn(`[Scalping/TradeTracker] Erro ao registrar: ${e instanceof Error ? e.message : String(e)}`));
+                });
+
+                if (registeredSignal && registeredSignal.signal_number) {
+                    signal.signal_number = registeredSignal.signal_number;
+                }
             } catch (trackError) {
                 logger.warn(`[Scalping] Falha ao injetar no TradeTracker para ${symbol}`, { error: trackError });
+            }
+
+            // Envia para o canal de scalping
+            if (config.scalpingBot.chatId) {
+                try {
+                    const { telegramService } = await import('../notifications/telegramService.js');
+                    if (telegramService.isEnabled && signal.status !== 'BLOCKED' && signal.confidence >= config.telegram.minScore) {
+                        const tgResult = await telegramService.sendScalpingSignal(signal);
+                        scalpingSignalsSent++;
+                        logger.info(`[Scalping] Sinal enviado: ${signal.type.toUpperCase()} ${symbol} | score=${signal.confidence}`);
+
+                        // Atualiza o telegram_message_id se foi enviado com sucesso
+                        if (tgResult?.messageId && registeredSignal) {
+                            registeredSignal.telegram_message_id = tgResult.messageId.toString();
+                            await db.activeSignal.update({
+                                where: { id: registeredSignal.id },
+                                data: { telegram_message_id: tgResult.messageId.toString() }
+                            }).catch((e: any) => logger.warn(`[Scalping] Falha ao atualizar telegram_message_id na DB: ${e.message}`));
+                        }
+                    }
+                } catch (tError) {
+                    logger.warn(`[Scalping] Falha ao enviar telegram para ${symbol}`, { error: tError });
+                }
             }
 
         } catch (error) {

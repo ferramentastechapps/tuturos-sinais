@@ -192,10 +192,11 @@ class TelegramService {
             logger.warn('Error fetching rank for telegram', (e as Error).message);
         }
 
+        const numPrefix = data.signal_number ? `[Sinal #${data.signal_number}] ` : '';
         const textLines = [
             data.isAnalysisOnly
-                ? `⚠️ <b>SINAL APENAS PARA ANÁLISE — ${data.symbol}</b>`
-                : `${emoji} <b>ORDEM PENDENTE ${dir} — ${data.symbol}</b>`,
+                ? `⚠️ <b>SINAL APENAS PARA ANÁLISE — ${numPrefix}${data.symbol}</b>`
+                : `${emoji} <b>ORDEM PENDENTE ${dir} — ${numPrefix}${data.symbol}</b>`,
             data.isAnalysisOnly
                 ? `⚠️ <i>Este sinal foi filtrado pela IA ou possui histórico ruim. NÃO OPERAR, apenas para estudos!</i>`
                 : `⚠️ <i>Aguardando entrada na zona...</i>`,
@@ -457,10 +458,11 @@ class TelegramService {
         }
 
         const isAnalysisOnly = signal.status === 'BLOCKED' || signal.isAnalysisOnly === true;
+        const numPrefix = signal.signal_number ? `[Sinal #${signal.signal_number}] ` : '';
         const lines = [
             isAnalysisOnly
-                ? `⚠️ <b>SCALPING PARA ANÁLISE — ${signal.pair}</b>`
-                : `⚡ <b>SCALPING ${dir} — ${signal.pair}</b>`,
+                ? `⚠️ <b>SCALPING PARA ANÁLISE — ${numPrefix}${signal.pair}</b>`
+                : `⚡ <b>SCALPING ${dir} — ${numPrefix}${signal.pair}</b>`,
             isAnalysisOnly
                 ? `⚠️ <i>Este sinal de Scalping foi filtrado pela IA ou possui histórico ruim. NÃO OPERAR!</i>`
                 : `📊 Score: ${signal.confidence}/100 | TF: 5m | Aprox. 15–60 min`,

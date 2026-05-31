@@ -1218,10 +1218,39 @@ async function runSignalCycle(): Promise<void> {
                     break;
                 }
 
+                // --- ATIVAR O GESTOR DE POSIÇÕES (TODOS OS SINAIS, INCLUINDO BLOQUEADOS E BAIXOS CORES) ---
+                let registeredSignal;
+                try {
+                    registeredSignal = await tradeTracker.registerNewSignal({
+                        id: signal.id,
+                        pair: signal.pair,
+                        type: signal.type.toUpperCase() as 'LONG' | 'SHORT',
+                        trade_type: anySignal.tradeType,
+                        entry_range_low: signal.entry_range_low,
+                        entry_range_high: signal.entry_range_high,
+                        stop_loss: signal.stopLoss,
+                        initial_stop_loss: signal.stopLoss,
+                        take_profits: signal.take_profits,
+                        status: signal.status as 'PENDING' | 'BLOCKED',
+                        expected_duration: anySignal.expectedDuration,
+                        score: signal.quality.score,
+                        indicators: signal.indicators,
+                        mlData: anySignal.mlData,
+                    });
+
+                    // Retorna com o signal_number atribuído
+                    if (registeredSignal && registeredSignal.signal_number) {
+                        signal.signal_number = registeredSignal.signal_number;
+                    }
+                } catch (e: any) {
+                    logger.warn(`[TradeTracker] erro ao registrar sinal ${signal.pair}: ${e.message}`);
+                }
+
                 // Send Telegram notification — ONLY if not blocked
                 if (telegramService.isEnabled && (signal.status as string) !== 'BLOCKED' && signal.quality.score >= config.telegram.minScore) {
                     try {
                         const tgResult = await telegramService.sendNewSignal({
+                            signal_number: signal.signal_number,
                             type: signal.type,
                             symbol: signal.pair,
                             score: signal.quality.score,
@@ -1252,24 +1281,14 @@ async function runSignalCycle(): Promise<void> {
                         });
                         signalsSent++;
 
-                        // --- ATIVAR O GESTOR DE POSIÇÕES ---
-                        tradeTracker.registerNewSignal({
-                            id: signal.id,
-                            pair: signal.pair,
-                            type: signal.type.toUpperCase() as 'LONG' | 'SHORT',
-                            trade_type: anySignal.tradeType,
-                            entry_range_low: signal.entry_range_low,
-                            entry_range_high: signal.entry_range_high,
-                            stop_loss: signal.stopLoss,
-                            initial_stop_loss: signal.stopLoss,
-                            take_profits: signal.take_profits,
-                            status: signal.status as 'PENDING' | 'BLOCKED',
-                            telegram_message_id: tgResult?.messageId?.toString() || undefined,
-                            expected_duration: anySignal.expectedDuration,
-                            score: signal.quality.score,
-                            indicators: signal.indicators,
-                            mlData: anySignal.mlData,
-                        }).catch((e: any) => logger.warn(`[TradeTracker] erro ao registrar: ${e.message}`));
+                        // Atualiza o telegram_message_id se foi enviado com sucesso
+                        if (tgResult?.messageId && registeredSignal) {
+                            registeredSignal.telegram_message_id = tgResult.messageId.toString();
+                            await db.activeSignal.update({
+                                where: { id: registeredSignal.id },
+                                data: { telegram_message_id: tgResult.messageId.toString() }
+                            }).catch((e: any) => logger.warn(`[Engine] Falha ao atualizar telegram_message_id na DB: ${e.message}`));
+                        }
 
                     } catch (telegramError) {
                         logger.warn(`Telegram notification failed for ${symbol}`, { error: telegramError });
@@ -1298,6 +1317,7 @@ async function runSignalCycle(): Promise<void> {
         try {
             const rows = newSignals.map(s => ({
                 id: s.id,
+                signal_number: s.signal_number ?? null,
                 pair: s.pair,
                 type: s.type,
                 trade_type: s.tradeType || 'Day Trade',

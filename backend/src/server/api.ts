@@ -118,6 +118,7 @@ router.get('/signals', (req: Request, res: Response) => {
     // Convert to frontend compatible format
     let signals = active.map(s => ({
         id: s.id,
+        signal_number: s.signal_number,
         pair: s.pair,
         type: s.type,
         trade_type: s.trade_type,
@@ -423,6 +424,7 @@ router.get('/signals/blocked', async (req: Request, res: Response) => {
                 try { inds = s.indicators ? JSON.parse(s.indicators) : []; } catch(e) {}
                 return {
                     id: s.id,
+                    signal_number: s.signal_number,
                     pair: s.pair,
                     type: s.type.toUpperCase(),
                     trade_type: s.trade_type,
@@ -850,6 +852,7 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
 
             return {
                 id: h.id,
+                signal_number: origSignal.signal_number,
                 symbol: h.symbol,
                 result,
                 profit_percent: h.outcome_pnl || 0,

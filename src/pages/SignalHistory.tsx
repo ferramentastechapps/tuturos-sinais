@@ -189,6 +189,11 @@ const SignalHistory = () => {
                       {format(new Date(sig.createdAt), 'dd MMM yyyy, HH:mm')}
                     </TableCell>
                     <TableCell className="font-bold">
+                      {sig.signal_number && (
+                        <span className="font-mono text-[10px] text-orange-500 font-bold bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20 leading-none mr-1.5">
+                          #{sig.signal_number}
+                        </span>
+                      )}
                       {sig.pair}
                     </TableCell>
                     <TableCell>

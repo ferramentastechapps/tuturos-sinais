@@ -20,6 +20,7 @@ export interface TakeProfit {
 
 export interface ActiveSignal {
   id: string;
+  signal_number?: number;
   pair: string;
   type: 'LONG' | 'SHORT';
   trade_type: string;
@@ -129,6 +130,28 @@ export class TradeTracker {
         fullSignal.id = `${signal.pair}-${Date.now()}`;
     }
 
+    // Get next sequential signal number
+    let nextSignalNumber: number | null = null;
+    try {
+        const lastSignal = await db.tradeSignal.findFirst({
+            orderBy: { created_at: 'desc' },
+            select: { signal_number: true }
+        });
+        nextSignalNumber = lastSignal?.signal_number ? lastSignal.signal_number + 1 : 1;
+    } catch (e: any) {
+        console.warn('[TradeTracker] Error getting next signal number, using count fallback', e.message);
+        try {
+            const count = await db.tradeSignal.count();
+            nextSignalNumber = count + 1;
+        } catch (err: any) {
+            console.error('[TradeTracker] Fallback also failed', err.message);
+        }
+    }
+
+    if (nextSignalNumber) {
+        fullSignal.signal_number = nextSignalNumber;
+    }
+
     // Inicializar flags de TP e campos de trailing stop por nível
     if (fullSignal.tp1Hit === undefined) fullSignal.tp1Hit = false;
     if (fullSignal.tp2Hit === undefined) fullSignal.tp2Hit = false;
@@ -143,6 +166,7 @@ export class TradeTracker {
     try {
         const inputData = { 
             id: fullSignal.id,
+            signal_number: fullSignal.signal_number ?? null,
             pair: fullSignal.pair,
             type: fullSignal.type,
             trade_type: fullSignal.trade_type,
@@ -175,6 +199,7 @@ export class TradeTracker {
             update: { status: fullSignal.status },
             create: {
                 id: fullSignal.id,
+                signal_number: fullSignal.signal_number ?? null,
                 pair: fullSignal.pair,
                 type: fullSignal.type.toLowerCase(),
                 trade_type: fullSignal.trade_type || 'Scalping',

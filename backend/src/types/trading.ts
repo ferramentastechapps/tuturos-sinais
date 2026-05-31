@@ -39,6 +39,7 @@ export interface TechnicalIndicator {
 
 export interface TradeSignal {
     id: string;
+    signal_number?: number;
     pair: string;
     type: 'long' | 'short';
     entry: number;
