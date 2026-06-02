@@ -134,7 +134,8 @@ export class TradeTracker {
     let nextSignalNumber: number | null = null;
     try {
         const lastSignal = await db.tradeSignal.findFirst({
-            orderBy: { created_at: 'desc' },
+            where: { signal_number: { not: null } },
+            orderBy: { signal_number: 'desc' },
             select: { signal_number: true }
         });
         nextSignalNumber = lastSignal?.signal_number ? lastSignal.signal_number + 1 : 1;

@@ -846,8 +846,27 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
                 try {
                     parsedIndicators = typeof origSignal.indicators === 'string' ? JSON.parse(origSignal.indicators) : origSignal.indicators;
                 } catch(e) {}
-            } else {
-                parsedIndicators = parsedFeatures;
+            }
+            
+            // If parsedIndicators is still not a valid non-empty array, fallback to formatting parsedFeatures as key-value indicators list
+            if (!Array.isArray(parsedIndicators) || parsedIndicators.length === 0) {
+                parsedIndicators = [];
+                if (parsedFeatures && typeof parsedFeatures === 'object') {
+                    Object.entries(parsedFeatures).forEach(([k, v]) => {
+                        // Skip internal/meta fields to keep it clean
+                        if (k === 'predictedClass' || k === 'probability' || k === 'confidence' || k === 'isFiltered' || k === 'symbol_weight') return;
+                        
+                        const keyLabel = k.replace(/_/g, ' ').toUpperCase();
+                        if (typeof v === 'number') {
+                            const formattedVal = Math.abs(v) < 1.0 ? v.toFixed(4) : v.toFixed(2);
+                            parsedIndicators.push(`${keyLabel}: ${formattedVal}`);
+                        } else if (typeof v === 'boolean') {
+                            parsedIndicators.push(`${keyLabel}: ${v ? 'SIM' : 'NÃO'}`);
+                        } else if (v) {
+                            parsedIndicators.push(`${keyLabel}: ${String(v)}`);
+                        }
+                    });
+                }
             }
 
             return {

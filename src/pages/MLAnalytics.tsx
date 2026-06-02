@@ -70,6 +70,7 @@ const MLAnalytics = () => {
     const [dateFilter, setDateFilter] = useState<DateFilter>('all');
     const [robotFilter, setRobotFilter] = useState<RobotFilter>('all');
     const [symbolFilter, setSymbolFilter] = useState<string>('all');
+    const [limitFilter, setLimitFilter] = useState<number>(50); // Default to 50 items
     const [monitoredSymbols, setMonitoredSymbols] = useState<string[]>([]);
 
     useEffect(() => {
@@ -127,7 +128,7 @@ const MLAnalytics = () => {
             
             const [statsRes, historyRes] = await Promise.all([
                 fetch(`${API_BASE}/api/ml/stats${queryString ? `?${queryString}` : ''}`),
-                fetch(`${API_BASE}/api/ml/learning-history?limit=10${queryString ? `&${queryString}` : ''}`),
+                fetch(`${API_BASE}/api/ml/learning-history?limit=${limitFilter}${queryString ? `&${queryString}` : ''}`),
             ]);
             if (statsRes.ok) setStats(await statsRes.json());
             if (historyRes.ok) setHistory(await historyRes.json());
@@ -136,7 +137,7 @@ const MLAnalytics = () => {
         } finally {
             setLoading(false);
         }
-    }, [dateFilter, robotFilter, symbolFilter]);
+    }, [dateFilter, robotFilter, symbolFilter, limitFilter]);
 
     useEffect(() => {
         loadData();
@@ -292,7 +293,24 @@ const MLAnalytics = () => {
                             </Select>
                         </div>
 
-                        {(dateFilter !== 'all' || robotFilter !== 'all' || symbolFilter !== 'all') && (
+                        <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <Select value={limitFilter.toString()} onValueChange={(v) => setLimitFilter(parseInt(v))}>
+                                <SelectTrigger className="w-[130px] h-9">
+                                    <SelectValue placeholder="Qtd. Linhas" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="10">Mostrar 10</SelectItem>
+                                    <SelectItem value="20">Mostrar 20</SelectItem>
+                                    <SelectItem value="50">Mostrar 50</SelectItem>
+                                    <SelectItem value="100">Mostrar 100</SelectItem>
+                                    <SelectItem value="500">Mostrar 500</SelectItem>
+                                    <SelectItem value="1000">Mostrar 1000</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {(dateFilter !== 'all' || robotFilter !== 'all' || symbolFilter !== 'all' || limitFilter !== 50) && (
                             <Button 
                                 variant="ghost" 
                                 size="sm" 
@@ -300,6 +318,7 @@ const MLAnalytics = () => {
                                     setDateFilter('all');
                                     setRobotFilter('all');
                                     setSymbolFilter('all');
+                                    setLimitFilter(50);
                                 }}
                                 className="text-xs"
                             >
@@ -460,7 +479,9 @@ const MLAnalytics = () => {
                                                     : <XCircle className="h-5 w-5 text-red-500 shrink-0" />}
                                                 <div>
                                                     <div className="flex items-center gap-2">
-                                                        <p className="font-medium text-sm group-hover:text-purple-400 transition-colors">{item.symbol}</p>
+                                                        <p className="font-medium text-sm group-hover:text-purple-400 transition-colors">
+                                                            {item.signal_number && `#${item.signal_number} `}{item.symbol}
+                                                        </p>
                                                         {item.trade_type && (
                                                             <Badge variant="outline" className="text-[10px] h-4 px-1">{item.trade_type}</Badge>
                                                         )}
@@ -491,7 +512,7 @@ const MLAnalytics = () => {
                 <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-xl">
-                            {selectedLearning?.symbol} 
+                            {selectedLearning?.signal_number && `#${selectedLearning.signal_number} `}{selectedLearning?.symbol} 
                             <Badge variant={selectedLearning?.result === 'WIN' ? 'default' : 'destructive'}>
                                 {selectedLearning?.result}
                             </Badge>
