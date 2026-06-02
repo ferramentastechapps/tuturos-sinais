@@ -297,6 +297,11 @@ export default function SignalsGallery() {
                 <DialogContent className="sm:max-w-[600px] border-border/80 shadow-2xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
+                            {selectedSignal?.signal_number && (
+                                <span className="font-mono text-xs text-orange-500 font-bold bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20 leading-none">
+                                    #{selectedSignal.signal_number}
+                                </span>
+                            )}
                             <span className="text-xl">{selectedSignal?.pair}</span>
                             <Badge
                                 variant={selectedSignal?.type === 'long' ? 'default' : 'destructive'}

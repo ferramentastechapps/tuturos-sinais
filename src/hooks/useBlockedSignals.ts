@@ -38,6 +38,7 @@ interface BlockedSignalsResponse {
 // Map backend DB rows to TradeSignal interface
 const mapBackendSignal = (raw: any): TradeSignal => ({
   id: raw.id,
+  signal_number: raw.signal_number ?? raw.signalId ?? raw.number ?? undefined,
   pair: raw.pair,
   type: raw.type,
   entry: raw.entry,

@@ -48,12 +48,12 @@ export function SignalCard({ signal, onAnalyze, onExecute }: SignalCardProps) {
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                     <div className={cn("w-2 h-2 rounded-full", isLong ? "bg-signal-buy" : "bg-signal-sell")} />
+                    <span className="font-bold text-[15px] text-foreground tracking-tight leading-none">{signal.pair}</span>
                     {signal.signal_number && (
                         <span className="font-mono text-[10px] text-orange-500 font-bold bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20 leading-none">
                             #{signal.signal_number}
                         </span>
                     )}
-                    <span className="font-bold text-[15px] text-foreground tracking-tight leading-none">{signal.pair}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                     <Badge variant="outline" className={cn(
