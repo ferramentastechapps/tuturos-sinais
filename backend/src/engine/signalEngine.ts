@@ -891,6 +891,16 @@ export function generateSignalFromData(
         contextNarrative += `Atenção: Operação contra a tendência macro (4H). Alvos reduzidos para Day Trade com R:R de 1:${riskReward.toFixed(1)}.`;
     }
 
+    const tfMap: Record<string, string> = {
+        '5': '5m',
+        '15': '15m',
+        '30': '30m',
+        '60': '1h',
+        '240': '4h',
+        'D': '1d'
+    };
+    const mappedTf = tfMap[symConfig.timeframe] || '1h';
+
     return {
         id: `SWING-${symbol}-${Date.now()}`,
         pair: symbol,
@@ -905,7 +915,7 @@ export function generateSignalFromData(
         dynamicLeverage,
         positionSizePercent: marginPercent,
         riskPercent: accountRiskLevel,
-        timeframe: '1h',
+        timeframe: mappedTf,
         status: 'PENDING',
         confidence: finalScore,
         createdAt: new Date(),
@@ -1371,6 +1381,16 @@ export async function loadPersistedSignals(): Promise<void> {
             let mlData: any = undefined;
             try { if (s.ml_data) mlData = JSON.parse(s.ml_data); } catch (e) {}
 
+            const tfMap: Record<string, string> = {
+                '5': '5m',
+                '15': '15m',
+                '30': '30m',
+                '60': '1h',
+                '240': '4h',
+                'D': '1d'
+            };
+            const mappedTf = tfMap[getSymbolConfig(s.pair).timeframe] || '1h';
+
             return {
                 id: s.id,
                 pair: s.pair,
@@ -1383,7 +1403,7 @@ export async function loadPersistedSignals(): Promise<void> {
                 takeProfit3: tps[2]?.price || undefined,
                 stopLoss: s.stop_loss,
                 riskReward: s.risk_reward || 0,
-                timeframe: '1h',
+                timeframe: mappedTf,
                 status: s.status as any,
                 confidence: s.confidence || 0,
                 createdAt: new Date(s.created_at),

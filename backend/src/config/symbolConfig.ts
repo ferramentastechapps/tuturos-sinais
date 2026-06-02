@@ -38,8 +38,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     },
 
     ETHUSDT: {
-        timeframe: '60',           // 1H
-        primaryIntervalMinutes: 60,
+        timeframe: '30',           // 30M
+        primaryIntervalMinutes: 30,
         lookback: 50,
         minVolumeRatio: 1.3,
         levelSpacing: 0.015,       // 1.5%
@@ -48,8 +48,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     },
 
     SOLUSDT: {
-        timeframe: '60',
-        primaryIntervalMinutes: 60,
+        timeframe: '30',
+        primaryIntervalMinutes: 30,
         lookback: 40,
         minVolumeRatio: 1.4,
         levelSpacing: 0.01,        // 1%
@@ -58,8 +58,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     },
 
     BNBUSDT: {
-        timeframe: '60',
-        primaryIntervalMinutes: 60,
+        timeframe: '30',
+        primaryIntervalMinutes: 30,
         lookback: 45,
         minVolumeRatio: 1.3,
         levelSpacing: 0.012,
@@ -68,8 +68,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     },
 
     XRPUSDT: {
-        timeframe: '60',
-        primaryIntervalMinutes: 60,
+        timeframe: '30',
+        primaryIntervalMinutes: 30,
         lookback: 45,
         minVolumeRatio: 1.3,
         levelSpacing: 0.01,
@@ -78,8 +78,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     },
 
     ADAUSDT: {
-        timeframe: '60',
-        primaryIntervalMinutes: 60,
+        timeframe: '30',
+        primaryIntervalMinutes: 30,
         lookback: 40,
         minVolumeRatio: 1.4,
         levelSpacing: 0.008,
@@ -88,8 +88,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     },
 
     TRXUSDT: {
-        timeframe: '60',
-        primaryIntervalMinutes: 60,
+        timeframe: '30',
+        primaryIntervalMinutes: 30,
         lookback: 40,
         minVolumeRatio: 1.4,
         levelSpacing: 0.008,
@@ -98,8 +98,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     },
 
     LTCUSDT: {
-        timeframe: '60',
-        primaryIntervalMinutes: 60,
+        timeframe: '30',
+        primaryIntervalMinutes: 30,
         lookback: 40,
         minVolumeRatio: 1.4,
         levelSpacing: 0.01,
@@ -108,8 +108,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     },
 
     ATOMUSDT: {
-        timeframe: '60',
-        primaryIntervalMinutes: 60,
+        timeframe: '30',
+        primaryIntervalMinutes: 30,
         lookback: 35,
         minVolumeRatio: 1.5,
         levelSpacing: 0.012,
@@ -118,8 +118,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     },
 
     MATICUSDT: {
-        timeframe: '60',
-        primaryIntervalMinutes: 60,
+        timeframe: '30',
+        primaryIntervalMinutes: 30,
         lookback: 35,
         minVolumeRatio: 1.5,
         levelSpacing: 0.01,
@@ -131,8 +131,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
     // Liquidez moderada: timeframes menores, mais exigência de volume
 
     LINKUSDT: {
-        timeframe: '60',
-        primaryIntervalMinutes: 60,
+        timeframe: '30',
+        primaryIntervalMinutes: 30,
         lookback: 35,
         minVolumeRatio: 1.5,
         levelSpacing: 0.015,
@@ -341,8 +341,8 @@ export const symbolConfigs: Record<string, SymbolConfig> = {
 // Usada para qualquer símbolo não listado acima
 
 export const DEFAULT_SYMBOL_CONFIG: SymbolConfig = {
-    timeframe: '60',
-    primaryIntervalMinutes: 60,
+    timeframe: '30',
+    primaryIntervalMinutes: 30,
     lookback: 50,
     minVolumeRatio: 1.5,
     levelSpacing: 0.015,
