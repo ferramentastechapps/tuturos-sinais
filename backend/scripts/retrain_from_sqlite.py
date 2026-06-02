@@ -8,6 +8,17 @@ Usage:
 
 import os
 import sys
+import io
+
+# Force UTF-8 encoding for standard output on Windows to prevent UnicodeEncodeError
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import json
 import sqlite3
 import argparse
@@ -47,6 +58,41 @@ if MISSING:
     print(f"\n❌ Missing: {', '.join(MISSING)}")
     print(f"   pip install {' '.join(MISSING)}\n")
     sys.exit(1)
+
+# --- Suporte Opcional ao XGBoost com Fallback robusto ---
+HAS_XGBOOST = False
+try:
+    import xgboost as xgb
+    import onnxmltools
+    from onnxmltools.convert.common.data_types import FloatTensorType as XGBFloatTensorType
+    import onnx
+    import onnx.helper
+    HAS_XGBOOST = True
+except ImportError:
+    pass
+
+# --- ONNX VERSION FIX (Monkeypatch para onnxmltools + onnx modernos) ---
+if HAS_XGBOOST:
+    import sys
+    if 'pkg_resources' not in sys.modules:
+        import types
+        try:
+            from packaging.version import parse as parse_version
+        except ImportError:
+            parse_version = lambda x: x
+        _pkg = types.ModuleType('pkg_resources')
+        class MockDist:
+            version = '1.15.0'
+            parsed_version = parse_version('1.15.0')
+        _pkg.get_distribution = lambda x: MockDist()
+        _pkg.parse_version = parse_version
+        sys.modules['pkg_resources'] = _pkg
+
+    if not hasattr(onnx, 'mapping'):
+        onnx.mapping = getattr(onnx, '_mapping', None)
+    if not hasattr(onnx.helper, 'split_complex_to_pairs'):
+        onnx.helper.split_complex_to_pairs = lambda x: ([], [])
+# --------------------------------------------------------------------
 
 FEATURE_COLUMNS = [
     'rsi', 'adx', 'atr_rel', 'dist_ema20', 'dist_ema50', 'dist_ema200', 'dist_vwap',
@@ -118,18 +164,47 @@ def train(X, y):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
-    pipeline = Pipeline([
-        ('scaler', StandardScaler()),
-        ('clf', RandomForestClassifier(
-            n_estimators=200, max_depth=8, min_samples_leaf=5,
-            class_weight='balanced', random_state=42, n_jobs=-1,
-        ))
-    ])
-    print("\n🏋️  Treinando RandomForest...")
-    pipeline.fit(X_train, y_train)
-
-    y_pred  = pipeline.predict(X_test)
-    y_proba = pipeline.predict_proba(X_test)[:, 1]
+    
+    if HAS_XGBOOST:
+        print("\n🏋️  Treinando XGBoost Classifier...")
+        # Calcular scale_pos_weight
+        win_rate = float(y_train.mean()) if len(y_train) > 0 else 0.5
+        scale_pos_weight = 1.0
+        if 0 < win_rate < 0.5:
+            scale_pos_weight = (1.0 - win_rate) / win_rate
+            
+        model = xgb.XGBClassifier(
+            n_estimators=150,
+            max_depth=6,
+            learning_rate=0.08,
+            objective='binary:logistic',
+            scale_pos_weight=scale_pos_weight,
+            random_state=42,
+            n_jobs=-1,
+            eval_metric='logloss'
+        )
+        model.fit(X_train, y_train)
+        
+        y_pred = model.predict(X_test)
+        y_proba = model.predict_proba(X_test)[:, 1]
+        
+        clf = model
+    else:
+        print("\n🏋️  Treinando RandomForest (XGBoost/onnxmltools não disponíveis)...")
+        pipeline = Pipeline([
+            ('scaler', StandardScaler()),
+            ('clf', RandomForestClassifier(
+                n_estimators=200, max_depth=8, min_samples_leaf=5,
+                class_weight='balanced', random_state=42, n_jobs=-1,
+            ))
+        ])
+        pipeline.fit(X_train, y_train)
+        
+        y_pred = pipeline.predict(X_test)
+        y_proba = pipeline.predict_proba(X_test)[:, 1]
+        
+        clf = pipeline
+        
     acc  = accuracy_score(y_test, y_pred)
     prec = precision_score(y_test, y_pred, zero_division=0)
     rec  = recall_score(y_test, y_pred, zero_division=0)
@@ -145,29 +220,43 @@ def train(X, y):
     print()
     print(classification_report(y_test, y_pred, target_names=['Loss', 'Win']))
 
-    clf = pipeline.named_steps['clf']
-    feat_imp = sorted(zip(FEATURE_COLUMNS, clf.feature_importances_), key=lambda x: x[1], reverse=True)
+    # Feature Importance
+    importances = clf.feature_importances_ if HAS_XGBOOST else clf.named_steps['clf'].feature_importances_
+    feat_imp = sorted(zip(FEATURE_COLUMNS, importances), key=lambda x: x[1], reverse=True)
     print("🔍 Top 10 features mais importantes:")
     for feat, imp in feat_imp[:10]:
         print(f"   {feat:<25} {'█'*int(imp*50)} {imp:.4f}")
 
-    cv = cross_val_score(pipeline, X, y, cv=5, scoring='roc_auc')
+    # Cross-validation
+    cv = cross_val_score(clf, X, y, cv=5, scoring='roc_auc')
     print(f"\n🔄 Cross-validation AUC: {cv.mean():.4f} ± {cv.std():.4f}")
 
-    return pipeline, {'accuracy': acc, 'precision': prec, 'recall': rec, 'f1': f1, 'auc': auc}
+    return clf, {'accuracy': acc, 'precision': prec, 'recall': rec, 'f1': f1, 'auc': auc}
 
 
-def export_onnx(pipeline, output_path, n_features):
-    initial_type = [('float_input', FloatTensorType([None, n_features]))]
-    onnx_model = convert_sklearn(
-        pipeline, initial_types=initial_type,
-        options={type(pipeline.named_steps['clf']): {'zipmap': False}},
-        target_opset=17,
-    )
+def export_onnx(model_or_pipeline, output_path, n_features):
+    if HAS_XGBOOST:
+        print(f"\n   📦 Convertendo modelo XGBoost para ONNX...")
+        initial_type = [('float_input', XGBFloatTensorType([None, n_features]))]
+        onnx_model = onnxmltools.convert_xgboost(
+            model_or_pipeline,
+            initial_types=initial_type,
+            target_opset=12
+        )
+    else:
+        print(f"\n   📦 Convertendo pipeline RandomForest para ONNX...")
+        initial_type = [('float_input', FloatTensorType([None, n_features]))]
+        onnx_model = convert_sklearn(
+            model_or_pipeline,
+            initial_types=initial_type,
+            options={type(model_or_pipeline.named_steps['clf']): {'zipmap': False}},
+            target_opset=17,
+        )
+        
     with open(output_path, 'wb') as f:
         f.write(onnx_model.SerializeToString())
     size_kb = os.path.getsize(output_path) / 1024
-    print(f"\n✅ Modelo salvo: {output_path} ({size_kb:.1f} KB)")
+    print(f"✅ ONNX model saved to: {output_path} ({size_kb:.1f} KB)")
 
 
 def save_report(metrics, output_dir, n_samples):
@@ -177,6 +266,7 @@ def save_report(metrics, output_dir, n_samples):
         'n_training_samples': n_samples,
         'n_features': len(FEATURE_COLUMNS),
         'features': FEATURE_COLUMNS,
+        'model': 'XGBoostClassifier' if HAS_XGBOOST else 'RandomForestClassifier',
         'metrics': metrics,
     }
     path = os.path.join(output_dir, 'model_report.json')
