@@ -298,19 +298,19 @@ export async function validateSignalContext(
     // 1. Buscar contexto de mercado
     const context = await getMarketContext();
     
-    // 2. VETO: Fear & Greed < 20 (pânico extremo) → bloquear TODOS os sinais
-    if (context.fearGreedIndex < 20) {
+    // 2. VETO: Fear & Greed < config.fearGreedMinLimit (pânico extremo) → bloquear TODOS os sinais
+    if (context.fearGreedIndex < config.fearGreedMinLimit) {
         return {
             allowed: false,
-            reason: `Fear & Greed ${context.fearGreedIndex} < 20 (pânico extremo - mercado instável)`,
+            reason: `Fear & Greed ${context.fearGreedIndex} < ${config.fearGreedMinLimit} (pânico extremo - mercado instável)`,
         };
     }
     
-    // 3. VETO: Fear & Greed > 80 (ganância extrema) → bloquear LONGs
-    if (type === 'long' && context.fearGreedIndex > 80) {
+    // 3. VETO: Fear & Greed > config.fearGreedMaxLimit (ganância extrema) → bloquear LONGs
+    if (type === 'long' && context.fearGreedIndex > config.fearGreedMaxLimit) {
         return {
             allowed: false,
-            reason: `Fear & Greed ${context.fearGreedIndex} > 80 (ganância extrema - topo provável)`,
+            reason: `Fear & Greed ${context.fearGreedIndex} > ${config.fearGreedMaxLimit} (ganância extrema - topo provável)`,
         };
     }
     

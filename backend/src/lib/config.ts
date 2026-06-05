@@ -10,6 +10,10 @@ export const config = {
     corsOrigin: process.env.CORS_ORIGIN || 'https://sinaiscripto.ftech-apps.com.br,http://212.85.10.239,http://localhost:5173,http://localhost:3000,http://192.168.15.35:8080,http://192.168.18.209:8080,http://localhost:8080',
     allowCounterTrend: process.env.ALLOW_COUNTER_TREND === 'true',
 
+    // Fear & Greed limits for signal vetoes (0 and 100 effectively disable the vetoes)
+    fearGreedMinLimit: parseInt(process.env.FEAR_GREED_MIN_LIMIT || '0', 10),
+    fearGreedMaxLimit: parseInt(process.env.FEAR_GREED_MAX_LIMIT || '100', 10),
+
     // Bybit
     bybit: {
         apiKey: process.env.BYBIT_API_KEY || '',
