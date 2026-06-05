@@ -24,8 +24,8 @@ export default defineConfig(({ mode }) => ({
         config: true,
       },
       manifest: {
-        name: 'Sinais Cripto Pro',
-        short_name: 'SinaisPro',
+        name: 'Certeiro TA Sinais Cripto Pro',
+        short_name: 'Certeiro',
         description: 'Plataforma Profissional de Sinais e Trading',
         theme_color: '#0A0E27',
         background_color: '#0A0E27',

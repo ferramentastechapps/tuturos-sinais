@@ -142,7 +142,7 @@ export default function Login() {
             color: '#f8fafc',
             margin: '0 0 0.375rem',
             letterSpacing: '-0.02em',
-          }}>TUTUROS SINAIS</h1>
+          }}>CERTEIRO</h1>
           <p style={{
             fontSize: '0.8rem',
             color: 'rgba(148,163,184,0.8)',

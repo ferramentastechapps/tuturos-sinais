@@ -50,7 +50,7 @@ router.post('/subscribe', async (req: Request, res: Response) => {
         // Send a welcome notification
         if (!existing) {
             await sendPushNotification(subscription, {
-                title: 'Sinais Cripto Pro',
+                title: 'Certeiro TA Sinais Cripto Pro',
                 body: 'Notificações ativadas com sucesso. Você receberá os trades em tempo real!',
                 icon: '/icon.svg',
                 data: { url: '/' }

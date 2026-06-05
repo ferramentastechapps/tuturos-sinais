@@ -631,8 +631,8 @@ router.get('/ml/stats', async (req: Request, res: Response) => {
         // Filtro de tipo de robô (case-insensitive)
         if (robotType && robotType !== 'all') {
             const typePattern = robotType === 'swing' 
-                ? { contains: 'swing', mode: 'insensitive' as const }
-                : { contains: 'scalp', mode: 'insensitive' as const };
+                ? { contains: 'swing' }
+                : { contains: 'scalp' };
             whereClause.trade_type = typePattern;
         }
 
@@ -761,8 +761,8 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
         // Filtro de tipo de robô (case-insensitive)
         if (robotType && robotType !== 'all') {
             const typePattern = robotType === 'swing' 
-                ? { contains: 'swing', mode: 'insensitive' as const }
-                : { contains: 'scalp', mode: 'insensitive' as const };
+                ? { contains: 'swing' }
+                : { contains: 'scalp' };
             whereClause.trade_type = typePattern;
         }
 
@@ -905,8 +905,8 @@ router.get('/ml/learning-history', async (req: Request, res: Response) => {
         }
         if (robotType && robotType !== 'all') {
             const typePattern = robotType === 'swing' 
-                ? { contains: 'swing', mode: 'insensitive' as const }
-                : { contains: 'scalp', mode: 'insensitive' as const };
+                ? { contains: 'swing' }
+                : { contains: 'scalp' };
             whereClauseForAcc.trade_type = typePattern;
         }
         
@@ -1001,8 +1001,8 @@ router.get('/ml/export', async (req: Request, res: Response) => {
         // Robot type filter
         if (robotType && robotType !== 'all') {
             const typePattern = robotType === 'swing' 
-                ? { contains: 'swing', mode: 'insensitive' as const }
-                : { contains: 'scalp', mode: 'insensitive' as const };
+                ? { contains: 'swing' }
+                : { contains: 'scalp' };
             whereClause.trade_type = typePattern;
         }
 
