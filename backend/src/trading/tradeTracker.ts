@@ -8,6 +8,8 @@ import { calculateTrailingStop, calculatePartialProfit, formatTrailingStopMessag
 import { bybitConnector } from '../exchange/bybitConnector.js';
 import { calculateATR } from '../engine/signalEngine.js';
 import { analisarStopPrematuro, ajustarMultiplicadorPorPar } from './stopCalibrationService.js';
+import { RestClientV5 } from 'bybit-api'; // [ARB-SCALP #2]
+import { config } from '../lib/config.js'; // [ARB-SCALP #2]
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -627,15 +629,24 @@ export class TradeTracker {
         ? ((currentPrice - entryAvg) / entryAvg) * 100 
         : ((entryAvg - currentPrice) / entryAvg) * 100;
 
+      // // [ARB-SCALP #2] Validar antes de fechar o trade
+      const validated = await this.closeTrade(signal.id, {
+        status: 'CLOSED_TP',
+        take_profits: JSON.stringify(signal.take_profits || []),
+        stop_loss: signal.stop_loss,
+        pnl: pnl,
+        outcome: 'WIN'
+      });
+
       // Upsert no histórico (upsert garante que funciona mesmo se o registro não existia)
       db.tradeSignal.upsert({
         where: { id: signal.id },
         update: { 
-          status: 'CLOSED_TP',
-          take_profits: JSON.stringify(signal.take_profits || []),
-          stop_loss: signal.stop_loss,
-          pnl: pnl,
-          outcome: 'WIN',
+          status: validated.status,
+          take_profits: validated.take_profits,
+          stop_loss: validated.stop_loss,
+          pnl: validated.pnl,
+          outcome: validated.outcome,
           exit_time: new Date()
         },
         create: {
@@ -645,15 +656,15 @@ export class TradeTracker {
           trade_type: signal.trade_type || 'Scalping',
           entry_range_low: signal.entry_range_low,
           entry_range_high: signal.entry_range_high,
-          stop_loss: signal.stop_loss,
+          stop_loss: validated.stop_loss,
           initial_stop_loss: signal.initial_stop_loss,
-          take_profits: JSON.stringify(signal.take_profits || []),
-          status: 'CLOSED_TP',
+          take_profits: validated.take_profits,
+          status: validated.status,
           confidence: signal.score ?? null,
           indicators: signal.indicators ? JSON.stringify(signal.indicators) : null,
           ml_data: signal.mlData ? JSON.stringify(signal.mlData) : null,
-          pnl: pnl,
-          outcome: 'WIN',
+          pnl: validated.pnl,
+          outcome: validated.outcome,
           exit_time: new Date()
         }
       }).catch((e: Error) => console.error('[TradeTracker] Error upsert CLOSED_TP:', e.message));
@@ -721,16 +732,25 @@ export class TradeTracker {
     // ML Feedback Loop
     this.submitFeedbackToML(signal, outcomeLabel, currentPrice).catch(e => console.error('[TradeTracker] Error ML Feedback', e.message));
 
-    // Upsert no histórico (upsert garante que funciona mesmo se o registro não existia)
+    // // [ARB-SCALP #2] Validar antes de fechar o trade
     const dbStatus = isWin ? 'CLOSED_TP' : 'CLOSED_SL';
+    const validated = await this.closeTrade(signal.id, {
+      status: dbStatus,
+      take_profits: JSON.stringify(signal.take_profits || []),
+      stop_loss: signal.stop_loss,
+      pnl: pnl,
+      outcome: outcomeText
+    });
+
+    // Upsert no histórico (upsert garante que funciona mesmo se o registro não existia)
     db.tradeSignal.upsert({
       where: { id: signal.id },
       update: { 
-        status: dbStatus,
-        stop_loss: signal.stop_loss,
-        take_profits: JSON.stringify(signal.take_profits || []),
-        pnl: pnl,
-        outcome: isWin ? 'WIN' : 'LOSS',
+        status: validated.status,
+        stop_loss: validated.stop_loss,
+        take_profits: validated.take_profits,
+        pnl: validated.pnl,
+        outcome: validated.outcome,
         exit_time: new Date()
       },
       create: {
@@ -740,15 +760,15 @@ export class TradeTracker {
         trade_type: signal.trade_type || 'Scalping',
         entry_range_low: signal.entry_range_low,
         entry_range_high: signal.entry_range_high,
-        stop_loss: signal.stop_loss,
+        stop_loss: validated.stop_loss,
         initial_stop_loss: signal.initial_stop_loss,
-        take_profits: JSON.stringify(signal.take_profits || []),
-        status: dbStatus,
+        take_profits: validated.take_profits,
+        status: validated.status,
         confidence: signal.score ?? null,
         indicators: signal.indicators ? JSON.stringify(signal.indicators) : null,
         ml_data: signal.mlData ? JSON.stringify(signal.mlData) : null,
-        pnl: pnl,
-        outcome: isWin ? 'WIN' : 'LOSS',
+        pnl: validated.pnl,
+        outcome: validated.outcome,
         exit_time: new Date()
       }
     }).catch((e: Error) => console.error('[TradeTracker] Error upsert SL status:', e.message));
@@ -949,6 +969,26 @@ export class TradeTracker {
         features: features
       };
 
+      // // [ARB-SCALP #1] Corrigir logging quebrado (31/32 trades sem dados)
+      // Validar dados críticos antes de gravar em MLTrainingData
+      const criticalFields = {
+        rsi: features.rsi,
+        adx: features.adx,
+        atr_rel: features.atr_rel,
+        dist_ema20: features.dist_ema20,
+        dist_ema200: features.dist_ema200,
+        btc_trend: features.btc_trend,
+        fear_greed: features.fear_greed,
+        confidence: features.confidence,
+      };
+
+      const nullCount = Object.values(criticalFields).filter(v => v === null || v === undefined).length;
+
+      if (nullCount > 2) {
+        console.warn(`[ML][${activeSignal.pair}] Sinal descartado do treino: ${nullCount} campos críticos nulos`);
+        return; // NÃO gravar no banco com dados incompletos
+      }
+
       // 2. Insert into training table
       const dbRowSave = {
         ...rowToSave,
@@ -1039,6 +1079,87 @@ export class TradeTracker {
     } catch (err) {
       console.error(`[TradeTracker] Unhandled error submitting ML feedback:`, err);
     }
+  }
+
+  // // [ARB-SCALP #2] Buscar resultado real na exchange Bybit em caso de falha de sincronização
+  private async fetchTradeResultFromExchange(tradeId: string): Promise<{ outcome: 'WIN' | 'LOSS' | 'NEEDS_REVIEW', pnl: number }> {
+    try {
+      const signal = await db.tradeSignal.findUnique({ where: { id: tradeId } });
+      if (!signal) return { outcome: 'NEEDS_REVIEW', pnl: 0 };
+
+      // Se a API da Bybit estiver configurada, podemos tentar buscar a ordem
+      if (bybitConnector.isConnected() && config.bybit.apiKey && config.bybit.apiSecret) {
+        const client = new RestClientV5({
+          key: config.bybit.apiKey || undefined,
+          secret: config.bybit.apiSecret || undefined,
+          testnet: config.bybit.testnet,
+        });
+        const response = await client.getClosedPnL({
+          category: 'linear',
+          symbol: signal.pair,
+          limit: 10
+        });
+
+        if (response.retCode === 0 && response.result?.list?.length > 0) {
+          // Encontrar o trade com base no ID ou no tempo aproximado
+          const closedTrade = response.result.list.find((t: any) => 
+            t.orderId === signal.id || Math.abs(new Date(parseInt(t.createdTime)).getTime() - Date.now()) < 600000
+          ) || response.result.list[0];
+
+          if (closedTrade) {
+            const closedPnl = parseFloat(closedTrade.closedPnl);
+            const outcome = closedPnl > 0 ? 'WIN' : 'LOSS';
+            const pnlPct = parseFloat(closedTrade.closedSize) > 0 
+              ? (closedPnl / (parseFloat(closedTrade.avgEntryPrice) * parseFloat(closedTrade.closedSize)) * 100) 
+              : 0;
+            return { outcome, pnl: pnlPct || closedPnl };
+          }
+        }
+      }
+
+      // Se for paper trading ou se a busca na Bybit falhar, recalcular com base no preço atual do feed
+      const entryAvg = (signal.entry_range_low + signal.entry_range_high) / 2;
+      const ticker = bybitConnector.getTicker(signal.pair);
+      const currentPrice = ticker?.lastPrice || entryAvg;
+      if (entryAvg > 0 && currentPrice > 0) {
+        const pnl = signal.type === 'long' 
+          ? ((currentPrice - entryAvg) / entryAvg) * 100 
+          : ((entryAvg - currentPrice) / entryAvg) * 100;
+        const outcome = pnl > 0 ? 'WIN' : 'LOSS';
+        return { outcome, pnl };
+      }
+    } catch (err) {
+      console.error(`[TRACKER] Erro ao buscar resultado na exchange para ${tradeId}:`, err);
+    }
+    return { outcome: 'NEEDS_REVIEW', pnl: 0 };
+  }
+
+  // // [ARB-SCALP #2] Validar antes de gravar o fechamento do trade
+  private async closeTrade(
+    tradeId: string, 
+    result: { status: string, stop_loss: number, take_profits: string, pnl: number, outcome: string }
+  ): Promise<{ status: string, stop_loss: number, take_profits: string, pnl: number, outcome: string }> {
+    if (!result.outcome || result.pnl === 0) {
+      console.error(`[TRACKER] Tentativa de fechar trade ${tradeId} com dados inválidos`, result);
+      // Aguardar 500ms e tentar buscar o resultado real na exchange
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const exchangeResult = await this.fetchTradeResultFromExchange(tradeId);
+      
+      result.outcome = exchangeResult.outcome;
+      result.pnl = exchangeResult.pnl;
+      if (result.outcome === 'WIN') {
+        result.status = 'CLOSED_TP';
+      } else if (result.outcome === 'LOSS') {
+        result.status = 'CLOSED_SL';
+      }
+    }
+
+    if (!result.outcome || result.outcome === 'NEEDS_REVIEW') {
+      console.error(`[TRACKER] Não foi possível obter outcome para ${tradeId} — marcando como NEEDS_REVIEW`);
+      result.outcome = 'NEEDS_REVIEW';
+    }
+
+    return result;
   }
 
   // Retreinamento agora é gerenciado pelo mlRetrainJob (diário às 23:55 UTC)

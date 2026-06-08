@@ -300,6 +300,47 @@ def main():
     try:
         df = fetch_from_sqlite(db_path)
         
+        # // [ARB-SCALP #6] Filtrar trades com dados inválidos antes do treino XGBoost
+        # Expandir as features do JSON em colunas individuais para poder aplicar o null_count
+        features_list = []
+        for _, row in df.iterrows():
+            feats = row.get('features', {})
+            if isinstance(feats, str):
+                try:
+                    feats = json.loads(feats)
+                except Exception:
+                    feats = {}
+            if not isinstance(feats, dict):
+                feats = {}
+            features_list.append(feats)
+            
+        df_feats = pd.DataFrame(features_list, index=df.index)
+        df_expanded = pd.concat([df, df_feats], axis=1)
+        
+        # Mapear pnl e outcome para corresponder às colunas da DB
+        if 'pnl' not in df_expanded.columns and 'outcome_pnl' in df_expanded.columns:
+            df_expanded['pnl'] = df_expanded['outcome_pnl']
+        if 'outcome' not in df_expanded.columns and 'outcome_label' in df_expanded.columns:
+            df_expanded['outcome'] = df_expanded['outcome_label'].map({1: 'WIN', 0: 'LOSS'})
+            
+        # Remover linhas com mais de 3 campos críticos nulos (ou seja, null_count <= 2)
+        critical_cols = ['rsi', 'adx', 'atr_rel', 'dist_ema200', 'btc_trend', 'fear_greed', 'confidence']
+        # Adicionar colunas que faltam no dataframe com NaN caso não tenham sido decodificadas do JSON
+        for col in critical_cols:
+            if col not in df_expanded.columns:
+                df_expanded[col] = np.nan
+                
+        df_expanded['null_count'] = df_expanded[critical_cols].isnull().sum(axis=1)
+        df_clean = df_expanded[df_expanded['null_count'] <= 2].copy()
+        
+        # Garantir tipo numérico para pnl
+        df_clean['pnl'] = pd.to_numeric(df_clean['pnl'], errors='coerce')
+        df_clean = df_clean[df_clean['pnl'] != 0]  # remover pnl zerado
+        df_clean = df_clean[df_clean['outcome'].isin(['WIN', 'LOSS'])]  # só outcomes válidos
+        
+        print(f"[CLEAN] {len(df)} → {len(df_clean)} trades após limpeza")
+        df = df_clean
+        
         # 1. Treinar Modelo Global
         print("\n=== 🌍 TREINANDO MODELO GLOBAL FALLBACK ===")
         X, y = build_feature_matrix(df)

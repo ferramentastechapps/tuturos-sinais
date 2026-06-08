@@ -167,7 +167,8 @@ export function generateScalpingSignal(
     high24h: number,
     low24h: number,
     fundingRate: number,
-    indicatorPerf?: Record<string, { winRate: number, avgPnl: number, totalTrades: number }>
+    indicatorPerf?: Record<string, { winRate: number, avgPnl: number, totalTrades: number }>,
+    btcTrend?: number // [ARB-SCALP #5]
 ): TradeSignal | null {
     if (ohlc5m.length < 50) return null;
 
@@ -186,6 +187,23 @@ export function generateScalpingSignal(
     const rvol = calculateRVOL(ohlc5m, 20);
     const vwap = calculateVWAP(ohlc5m.slice(-50));
     const stochRsi = calculateStochRSI(closes5m);
+
+    // // [ARB-SCALP #3] Threshold dinâmico por par — altcoins exigem ADX maior
+    const adxThreshold = symbol === 'BTCUSDT' ? 28 : 32;
+    if (adx < adxThreshold) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO: ADX=${adx.toFixed(1)} abaixo de ${adxThreshold} para ${symbol}`);
+        return null;
+    }
+
+    // // [ARB-SCALP #4] Filtro de horário premium obrigatório para altcoins
+    const PREMIUM_HOURS_UTC = [1, 2, 6, 7, 8, 9, 14, 15, 16, 17]; // Londres + NY
+    const isAltcoin = !['BTCUSDT', 'ETHUSDT'].includes(symbol);
+    const currentHour = new Date().getUTCHours();
+
+    if (isAltcoin && !PREMIUM_HOURS_UTC.includes(currentHour)) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO HORÁRIO: Fora de horário premium para altcoin (${currentHour}h UTC)`);
+        return null;
+    }
 
     // ── VETO BÁSICO ABSOLUTO: Volatilidade Morta ──
     // Se o ativo não tem variação alguma, scalping resultará apenas no pagamento de taxas (spread).
@@ -230,6 +248,12 @@ export function generateScalpingSignal(
     } else {
         // Se as EMAs estão emboladas, mercado está em consolidação/ruído
         logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO DIREÇÃO: Sem EMA Ribbon alinhada (Mercado Lateral)`);
+        return null;
+    }
+
+    // // [ARB-SCALP #5] Bloquear LONG no ARB quando btc_trend !== 1
+    if (symbol !== 'BTCUSDT' && type === 'long' && btcTrend !== undefined && btcTrend !== 1) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO BTC TREND: LONG em altcoin vetado: btc_trend=${btcTrend}`);
         return null;
     }
 
@@ -593,7 +617,14 @@ async function runScalpingCycle(): Promise<void> {
 
             const perf = await indicatorLearner.getPairPerformance(symbol);
 
-            const signal = generateScalpingSignal(symbol, ohlc5m, ohlc15m, currentPrice, high24h, low24h, fundingRate, perf);
+            // // [ARB-SCALP #1] Garantir que o contexto foi aguardado e está preenchido
+            let currentCtx = globalCtx;
+            if (!currentCtx || currentCtx.btcTrend === undefined) {
+                logger.error('[ML][ARB] Contexto externo undefined — aguardando refetch');
+                currentCtx = await marketContextService.getGlobalContext();
+            }
+
+            const signal = generateScalpingSignal(symbol, ohlc5m, ohlc15m, currentPrice, high24h, low24h, fundingRate, perf, currentCtx.btcTrend);
 
             if (!signal) continue;
 
@@ -640,9 +671,9 @@ async function runScalpingCycle(): Promise<void> {
                     risk_reward: signal.riskReward,
                     hour_of_day: new Date().getHours(),
                     day_of_week: new Date().getDay(),
-                    btc_trend: globalCtx.btcTrend,
-                    dominance_btc: globalCtx.dominanceBtc,
-                    fear_greed: globalCtx.fearGreed,
+                    btc_trend: currentCtx.btcTrend,
+                    dominance_btc: currentCtx.dominanceBtc,
+                    fear_greed: currentCtx.fearGreed,
                 };
                 signal.mlData = { ...features };
             }
