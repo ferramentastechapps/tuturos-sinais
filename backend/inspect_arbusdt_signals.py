@@ -41,17 +41,8 @@ def run_ssh_cmd(cmd):
         client.close()
 
 if __name__ == "__main__":
-    node_cmd = (
-        "cd /var/www/signal-dashboard/backend && "
-        "node --input-type=module -e \""
-        "import { createClient } from '@supabase/supabase-js';"
-        "const s = createClient('https://owchjtzucnhsvlkwdapn.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93Y2hqdHp1Y25oc3Zsa3dkYXBuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODgyNzI0NCwiZXhwIjoyMDg0NDAzMjQ0fQ.rPk-VmP35j-7BiFQgkTkG99yVgVExWc3xF3G-yPUbVg');"
-        "s.from('ml_training_data').select('*').limit(1).then(r => console.log(JSON.stringify(r.data)));"
-        "\""
-    )
-    out, err = run_ssh_cmd(node_cmd)
-    print("OUT:")
+    out, err = run_ssh_cmd("grep -i 'SWING-AVAXUSDT-1780720561555' /var/www/signal-dashboard/backend/logs/signal-engine-out.log")
+    print("LOG FOR SWING-AVAXUSDT-1780720561555:")
     print(out)
     if err:
-        print("ERR:")
-        print(err)
+        print("ERR:", err)

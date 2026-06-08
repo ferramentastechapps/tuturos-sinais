@@ -1243,7 +1243,7 @@ async function runSignalCycle(): Promise<void> {
                 }
 
                 // Se já tiver qualquer sinal ativo (ou pendente) da moeda, não gera outro
-                const existingActive = activeSignals.find(s => s.pair === symbol);
+                const existingActive = tradeTracker.getAllActiveSignals().find(s => s.pair === symbol && s.trade_type !== 'Scalping');
                 if (existingActive) {
                     logger.debug(`Skipping signal for ${symbol} - already has an active/pending signal (${existingActive.id})`);
                     continue;
@@ -1574,7 +1574,8 @@ export function stopEngine(): void {
 }
 
 export function getActiveSignals(): TradeSignal[] {
-    return activeSignals;
+    const trackerIds = new Set(tradeTracker.getAllActiveSignals().map(s => s.id));
+    return activeSignals.filter(s => trackerIds.has(s.id));
 }
 
 export function getSignalHistory(): TradeSignal[] {
@@ -1591,7 +1592,7 @@ export function getEngineStats() {
         signalsToday,
         signalsSent,
         lastSignalAt,
-        activeCount: activeSignals.length,
+        activeCount: getActiveSignals().length,
         historyCount: signalHistory.length,
     };
 }

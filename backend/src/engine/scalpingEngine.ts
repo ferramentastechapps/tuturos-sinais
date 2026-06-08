@@ -710,7 +710,7 @@ async function runScalpingCycle(): Promise<void> {
                 }
             }
 
-            const existingActive = scalpingActiveSignals.find(s => s.pair === symbol);
+            const existingActive = tradeTracker.getAllActiveSignals().find(s => s.pair === symbol && s.trade_type === 'Scalping');
             if (existingActive) {
                 logger.debug(`[Scalping] Skipping signal for ${symbol} - already has an active scalping signal (${existingActive.id})`);
                 continue;
@@ -819,7 +819,8 @@ export function stopScalpingEngine(): void {
 }
 
 export function getActiveScalpingSignals(): TradeSignal[] {
-    return scalpingActiveSignals;
+    const trackerIds = new Set(tradeTracker.getAllActiveSignals().map(s => s.id));
+    return scalpingActiveSignals.filter(s => trackerIds.has(s.id));
 }
 
 export function getScalpingStats() {
@@ -828,7 +829,7 @@ export function getScalpingStats() {
         signalsToday: scalpingSignalsToday,
         signalsSent: scalpingSignalsSent,
         lastSignalAt: lastScalpingSignalAt,
-        activeCount: scalpingActiveSignals.length,
+        activeCount: getActiveScalpingSignals().length,
         cooldownCount: scalpingCooldowns.size,
         config: {
             intervalMs: config.scalpingBot.intervalMs,
