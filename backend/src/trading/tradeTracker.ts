@@ -188,7 +188,9 @@ export class TradeTracker {
         if (data) {
             fullSignal = {
               ...data,
-              take_profits: JSON.parse(data.take_profits)
+              take_profits: JSON.parse(data.take_profits),
+              indicators: fullSignal.indicators,
+              mlData: fullSignal.mlData
             } as any as ActiveSignal;
         }
     } catch (e: any) {
@@ -1018,6 +1020,7 @@ export class TradeTracker {
         const { supabase } = await import('../lib/supabaseClient.js');
         if (supabase) {
           const rowSupabase = {
+            user_id: '671adabc-be38-4db5-af4a-2630a62fe1ec',
             signal_id: rowToSave.signal_id,
             symbol: rowToSave.symbol,
             outcome_label: rowToSave.outcome_label,

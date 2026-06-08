@@ -480,6 +480,71 @@ function detectReversalCandles(ohlc: OHLCPoint[], type: 'long' | 'short'): { isE
     return { isEngulfing, isPinBar };
 }
 
+// [ARB-SWING #5] Price Level Context
+export async function fetchPriceLevelContext(
+    symbol: string,
+    currentPrice: number,
+): Promise<{ touchCount: number; rejectionRate: number; volumeRatio: number }> {
+    try {
+        const lookbackMs = 31 * 24 * 60 * 60 * 1000; // ~31 dias (aprox. 3000 candles de 15m)
+        let currentStart = Math.floor((Date.now() - lookbackMs) / 1000);
+        let allCandles: OHLCPoint[] = [];
+
+        for (let page = 0; page < 3; page++) {
+            const pageCandles = await bybitConnector.fetchKlines(symbol, '15', 1000, currentStart);
+            if (!pageCandles || pageCandles.length === 0) break;
+            allCandles = allCandles.concat(pageCandles);
+            const lastTs = pageCandles[pageCandles.length - 1].timestamp;
+            currentStart = Math.floor((lastTs + 15 * 60 * 1000) / 1000);
+        }
+
+        if (allCandles.length === 0) {
+            return { touchCount: 0, rejectionRate: 0, volumeRatio: 0 };
+        }
+
+        // Remover duplicados por timestamp e ordenar
+        const uniqueCandlesMap = new Map<number, OHLCPoint>();
+        for (const c of allCandles) {
+            uniqueCandlesMap.set(c.timestamp, c);
+        }
+        const candles = Array.from(uniqueCandlesMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+
+        const zoneMin = currentPrice * 0.985;
+        const zoneMax = currentPrice * 1.015;
+
+        let totalVolume = 0;
+        for (const c of candles) {
+            totalVolume += c.volume || 0;
+        }
+        const avgGlobalVolume = totalVolume / candles.length;
+
+        let touchCount = 0;
+        let rejectionCount = 0;
+        let touchVolumeSum = 0;
+
+        for (const c of candles) {
+            if (c.high >= zoneMin && c.low <= zoneMax) {
+                touchCount++;
+                touchVolumeSum += c.volume || 0;
+                if (c.close < zoneMin || c.close > zoneMax) {
+                    rejectionCount++;
+                }
+            }
+        }
+
+        const rejectionRate = touchCount > 0 ? (rejectionCount / touchCount) : 0;
+        const avgTouchVolume = touchCount > 0 ? (touchVolumeSum / touchCount) : 0;
+        const volumeRatio = avgGlobalVolume > 0 ? (avgTouchVolume / avgGlobalVolume) : 0;
+
+        logger.debug(`[PRICE-LEVEL] ${symbol} touches=${touchCount} rejection=${rejectionRate.toFixed(2)} volRatio=${volumeRatio.toFixed(2)}`);
+
+        return { touchCount, rejectionRate, volumeRatio };
+    } catch (error) {
+        logger.error(`Error in fetchPriceLevelContext for ${symbol}`, { error });
+        return { touchCount: 0, rejectionRate: 0, volumeRatio: 0 };
+    }
+}
+
 export function generateSignalFromData(
     symbol: string,
     ohlc: OHLCPoint[], // 1h data
@@ -494,6 +559,8 @@ export function generateSignalFromData(
     indicatorPerf?: Record<string, { winRate: number, avgPnl: number, totalTrades: number }>,
     stopMultiplierPar: number = 1.0,    // Lido de BotConfigStop antes de chamar esta função
     distanciaResistencia: number = 0,   // Calculado async antes de chamar esta função
+    globalCtx: any = null,
+    levelCtx: any = null,
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
@@ -543,6 +610,34 @@ export function generateSignalFromData(
     let type: 'long' | 'short';
     if (lastEma20 > lastEma50) type = 'long';
     else type = 'short';
+
+    // [ARB-SWING #1] Dynamic ADX Threshold Filter
+    const swingAdxThreshold = symbol === 'BTCUSDT' ? 28 : (symbol === 'ARBUSDT' ? 30 : 33);
+    if (adx < swingAdxThreshold) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ADX SWING: ${adx.toFixed(1)} < ${swingAdxThreshold}`);
+        return null;
+    }
+
+    // [ARB-SWING #2] RSI Momentum Filter
+    if (symbol !== 'BTCUSDT') {
+        if (type === 'long' && rsi < 48) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: LONG com RSI ${rsi.toFixed(1)} < 48`);
+            return null;
+        }
+        if (type === 'short' && rsi > 52) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: SHORT com RSI ${rsi.toFixed(1)} > 52`);
+            return null;
+        }
+    }
+
+    // [ARB-SWING #3] BTC Trend Veto
+    if (symbol !== 'BTCUSDT' && type === 'long') {
+        const btcTrendValue = globalCtx ? (globalCtx.btcTrend ?? globalCtx.btc_trend) : undefined;
+        if (btcTrendValue !== undefined && btcTrendValue !== 1) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO BTC TREND: LONG em altcoin com BTC trend ${btcTrendValue} !== 1`);
+            return null;
+        }
+    }
 
     const mtfContext = { macro: [] as string[], medium: [] as string[], micro: [] as string[] };
     let macroTrend: 'long' | 'short' | 'neutral' = 'neutral';
@@ -733,6 +828,18 @@ export function generateSignalFromData(
         }
     }
 
+    // [ARB-SWING #5] Price Level Context Score Adjustments
+    if (levelCtx && levelCtx.touchCount >= 2) {
+        if (type === 'long' && levelCtx.rejectionRate > 0.65) {
+            rawScore += 1.5;
+            confluences.push('Suporte histórico forte +1.5');
+        }
+        if (levelCtx.volumeRatio > 2.0) {
+            rawScore += 1;
+            confluences.push('Zona de liquidez extrema +1');
+        }
+    }
+
     // Cap global: Limita o score cru em 10 pontos
     rawScore = Math.max(0, Math.min(rawScore, 10));
 
@@ -740,6 +847,24 @@ export function generateSignalFromData(
     let scoreThreshold = customMinScore !== undefined ? Math.floor(customMinScore / 10) : 7;
     if (strongContradict4H) {
         scoreThreshold = 8;
+    }
+
+    // [ARB-SWING #4] Fear & Greed Filters
+    if (symbol !== 'BTCUSDT') {
+        const fearGreedVal = globalCtx ? (globalCtx.fearGreed ?? globalCtx.fear_greed) : undefined;
+        if (fearGreedVal !== undefined) {
+            if (type === 'long' && fearGreedVal < 38) {
+                logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO FEAR & GREED: LONG em altcoin com Fear & Greed ${fearGreedVal} < 38`);
+                return null;
+            }
+            if (fearGreedVal < 45) {
+                const oldThreshold = scoreThreshold;
+                scoreThreshold = Math.max(scoreThreshold, 7);
+                if (scoreThreshold !== oldThreshold) {
+                    logger.debug(`[SIGNAL-DIAG] ${symbol} Fear & Greed ${fearGreedVal} < 45. Aumentando scoreThreshold de ${oldThreshold} para ${scoreThreshold}`);
+                }
+            }
+        }
     }
     
     if (rawScore < scoreThreshold) {
@@ -1064,13 +1189,14 @@ async function runSignalCycle(): Promise<void> {
 
             const perf = await indicatorLearner.getPairPerformance(symbol);
 
-            // MELHORIA STOP v2: busca async (paralela) do multiplicador calibrado e das distâncias de resistência
+            // MELHORIA STOP v2 + [ARB-SWING #5] busca async (paralela) do multiplicador, resistências e price level context
             // A direção real só é determinada dentro de generateSignalFromData (alinhamento EMAs),
             // por isso calculamos para long e short e usamos o mínimo (nível mais próximo do preço)
-            const [stopMultiplierPar, distResLong, distResShort] = await Promise.all([
+            const [stopMultiplierPar, distResLong, distResShort, levelCtx] = await Promise.all([
                 getStopMultiplierPorPar(symbol),
                 calcularDistanciaResistencia({ pair: symbol, preco_entrada: currentPrice, is_long: true }),
                 calcularDistanciaResistencia({ pair: symbol, preco_entrada: currentPrice, is_long: false }),
+                fetchPriceLevelContext(symbol, currentPrice),
             ]);
             // Usa o menor dos dois (suporte ou resistência mais próximo)
             const distanciaResistencia = Math.min(
@@ -1082,7 +1208,7 @@ async function runSignalCycle(): Promise<void> {
 
             const signal = generateSignalFromData(
                 symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, undefined, perf,
-                stopMultiplierPar, distResistenciaFinal
+                stopMultiplierPar, distResistenciaFinal, globalCtx, levelCtx
             );
 
             if (signal && signal.quality && signal.quality.score >= 60) {

@@ -196,11 +196,14 @@ export function generateScalpingSignal(
     }
 
     // // [ARB-SCALP #4] Filtro de horário premium obrigatório para altcoins
-    const PREMIUM_HOURS_UTC = [1, 2, 6, 7, 8, 9, 14, 15, 16, 17]; // Londres + NY
+    let premiumHours = [1, 2, 6, 7, 8, 9, 14, 15, 16, 17]; // Londres + NY
+    if (symbol === 'ARBUSDT') {
+        premiumHours = [1, 2, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17]; // Inclui 10h e 13h UTC
+    }
     const isAltcoin = !['BTCUSDT', 'ETHUSDT'].includes(symbol);
     const currentHour = new Date().getUTCHours();
 
-    if (isAltcoin && !PREMIUM_HOURS_UTC.includes(currentHour)) {
+    if (isAltcoin && !premiumHours.includes(currentHour)) {
         logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO HORÁRIO: Fora de horário premium para altcoin (${currentHour}h UTC)`);
         return null;
     }

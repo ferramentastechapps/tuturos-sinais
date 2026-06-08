@@ -160,25 +160,53 @@ def validate(X, y, min_samples):
         raise ValueError(f"Desequilíbrio extremo: {wr*100:.1f}% wins")
 
 
-def train(X, y):
+def train(X, y, symbol=None):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
     
     if HAS_XGBOOST:
         print("\n🏋️  Treinando XGBoost Classifier...")
-        # Calcular scale_pos_weight
-        win_rate = float(y_train.mean()) if len(y_train) > 0 else 0.5
-        scale_pos_weight = 1.0
-        if 0 < win_rate < 0.5:
-            scale_pos_weight = (1.0 - win_rate) / win_rate
+        # [ARB-SWING #6] scale_pos_weight calculado dinamicamente pelo desbalanceamento WIN/LOSS
+        n_zeros = int(np.sum(y_train == 0))
+        n_ones = int(np.sum(y_train == 1))
+        scale_pos_weight = float(n_zeros) / float(n_ones) if n_ones > 0 else 1.0
+        
+        # Determinar hiperparâmetros com base no tamanho das amostras (para altcoins)
+        max_depth = 6
+        n_estimators = 150  # valor default original
+        min_child_weight = 1
+        subsample = 1.0     # valor default
+        
+        if symbol is not None and symbol != 'BTCUSDT':
+            n_samples = len(X)
+            if n_samples < 50:
+                max_depth = 4
+                n_estimators = 200
+                min_child_weight = 2
+                subsample = 0.8
+                print(f"   [XGBoost Tuning] Tamanho amostral {n_samples} < 50: max_depth=4, n_estimators=200, min_child_weight=2, subsample=0.8")
+            else:
+                max_depth = 6
+                n_estimators = 300
+                min_child_weight = 1
+                subsample = 0.9
+                print(f"   [XGBoost Tuning] Tamanho amostral {n_samples} >= 50: max_depth=6, n_estimators=300, min_child_weight=1, subsample=0.9")
+        else:
+            # Para BTCUSDT ou Global, podemos usar n_estimators = 300 se samples >= 50, caso contrário manter o padrão
+            n_samples = len(X)
+            if n_samples >= 50:
+                n_estimators = 300
+                subsample = 0.9
             
         model = xgb.XGBClassifier(
-            n_estimators=150,
-            max_depth=6,
+            n_estimators=n_estimators,
+            max_depth=max_depth,
             learning_rate=0.08,
             objective='binary:logistic',
             scale_pos_weight=scale_pos_weight,
+            min_child_weight=min_child_weight,
+            subsample=subsample,
             random_state=42,
             n_jobs=-1,
             eval_metric='logloss'
@@ -345,7 +373,7 @@ def main():
         print("\n=== 🌍 TREINANDO MODELO GLOBAL FALLBACK ===")
         X, y = build_feature_matrix(df)
         validate(X, y, args.min_samples)
-        pipeline, metrics = train(X, y)
+        pipeline, metrics = train(X, y, symbol=None)
         export_onnx(pipeline, output_path, len(FEATURE_COLUMNS))
         save_report(metrics, str(Path(output_path).parent), len(y))
         
@@ -373,7 +401,7 @@ def main():
                 try:
                     sym_X, sym_y = build_feature_matrix(sym_df)
                     validate(sym_X, sym_y, 20)
-                    sym_pipeline, sym_metrics = train(sym_X, sym_y)
+                    sym_pipeline, sym_metrics = train(sym_X, sym_y, symbol=sym)
                     
                     # Salvar em ml_models/<SYMBOL>/model.onnx
                     sym_dir = ml_models_dir / sym
