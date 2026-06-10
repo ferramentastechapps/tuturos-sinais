@@ -1,0 +1,515 @@
+
+--- SIGNAL ENGINE LOGS ---
+[TAILING] Tailing last 150 lines for [signal-engine] process (change the value with --lines option)
+/var/www/signal-dashboard/backend/logs/signal-engine-error.log last 150 lines:
+0|signal-e | 2026-06-06 05:10:01: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (2fd055c2-f31e-4e58-9592-18f1b60b29e4, null, SCALP-TONUSDT-1780722260429, TONUSDT, {"confidence": 50, "risk_reward": 1.5, "symbol_weight": 1}, 0, -0.9392265193370206, 2026-06-06 05:04:21.109+00, 2026-06-06 05:10:00.970846+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:15: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (7a56a5be-9b74-4a85-ae20-30468f7e6291, null, SCALP-ETHUSDT-1780722196220, ETHUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 1}, 0, -0.8489380003970043, 2026-06-06 05:03:16.904+00, 2026-06-06 05:10:15.826739+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:25: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (bc1980f4-609d-493f-b7c5-8ba9b8976600, null, SCALP-BTCUSDT-1780722194762, BTCUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 0.7}, 0, -0.5806610267880515, 2026-06-06 05:03:15.864+00, 2026-06-06 05:10:25.892952+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:26: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (44b6dfa1-4bbe-4660-9631-af17dcd605c6, null, SCALP-1000PEPEUSDT-1780722262507, 1000PEPEUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 1}, 0, -1.15125049622866, 2026-06-06 05:04:23.193+00, 2026-06-06 05:10:26.315873+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:26: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (2bb17782-9caf-457f-a02f-ed0fdabf7b33, null, SCALP-APTUSDT-1780722213595, APTUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 1.2}, 0, -1.1810386668823771, 2026-06-06 05:03:34.274+00, 2026-06-06 05:10:26.706567+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:26: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (94b962ec-021b-4bcc-9d98-e24f4fbefc50, null, SCALP-SOLUSDT-1780722198275, SOLUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 0.7}, 0, -1.0270001656452075, 2026-06-06 05:03:18.959+00, 2026-06-06 05:10:26.745434+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:29: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (e7c3b107-aec1-4b79-bed7-408f8c2d1b0b, null, SCALP-AAVEUSDT-1780722229727, AAVEUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 1}, 0, -1.1377348732977262, 2026-06-06 05:03:50.474+00, 2026-06-06 05:10:29.234115+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:29: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (0ec037e8-43f2-4767-aa46-1919d682f992, null, SCALP-XRPUSDT-1780722200731, XRPUSDT, {"confidence": 50, "risk_reward": 1.5, "symbol_weight": 1}, 0, -0.8638693753560005, 2026-06-06 05:03:21.747+00, 2026-06-06 05:10:29.425497+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:31: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (e056ba3c-ba85-4f3d-8ca7-327b2e3a2396, null, SCALP-OPUSDT-1780722226875, OPUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 0.7}, 0, -1.493362831858427, 2026-06-06 05:03:47.594+00, 2026-06-06 05:10:31.168287+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:31: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (22faacbd-7941-4762-903d-200910941ec9, null, SCALP-ARBUSDT-1780722219621, ARBUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 0.7}, 0, -1.3580744924028654, 2026-06-06 05:03:40.333+00, 2026-06-06 05:10:31.690557+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:33: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (47ec7949-5ac9-4ca4-afb8-79c797d79db3, null, SCALP-LINKUSDT-1780722204833, LINKUSDT, {"confidence": 80, "risk_reward": 1.5, "symbol_weight": 1}, 0, -1.0389980074010874, 2026-06-06 05:03:25.512+00, 2026-06-06 05:10:33.511905+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:33: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (b89c177b-6d9f-464b-8b5d-9b0174e56da8, null, SCALP-ATOMUSDT-1780722211492, ATOMUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 0.7}, 0, -1.0421994884910473, 2026-06-06 05:03:32.178+00, 2026-06-06 05:10:33.58028+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:57: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (3a270e33-da01-47b7-9bc7-507cfc4c6dbe, null, SCALP-DOGEUSDT-1780722202773, DOGEUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 0.7}, 0, -0.9996155324875265, 2026-06-06 05:03:23.446+00, 2026-06-06 05:10:57.310101+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:10:57: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (95739f54-4513-489c-824b-ac4c88b0b751, null, SCALP-DOTUSDT-1780722206232, DOTUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 1}, 0, -1.2017070979335305, 2026-06-06 05:03:26.95+00, 2026-06-06 05:10:57.828453+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:19:49: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (a45ebbf4-0cad-4258-a930-0b1a0b6dc5fc, null, SCALP-BNBUSDT-1780722199320, BNBUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 0.7}, 0, -0.7130124777183601, 2026-06-06 05:03:20.024+00, 2026-06-06 05:19:49.932099+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:20:47: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (6321f502-514a-484d-be8c-1a21a06fe97b, null, SCALP-SUIUSDT-1780722218190, SUIUSDT, {"confidence": 60, "risk_reward": 1.5, "symbol_weight": 0.7}, 0, -1.2479326417080099, 2026-06-06 05:03:38.913+00, 2026-06-06 05:20:47.825175+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:21:10: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (bc8d23f1-ee35-44cb-9705-c4c40b8c5455, null, SCALP-LTCUSDT-1780722207682, LTCUSDT, {"confidence": 80, "risk_reward": 1.5, "symbol_weight": 1}, 0, -1.055732875030707, 2026-06-06 05:03:28.378+00, 2026-06-06 05:21:10.774167+00, Scalping).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:22:11: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (34f852c3-6b1e-42c5-8ffe-bc577c24527a, null, SWING-JUPUSDT-1780720884148, JUPUSDT, {"adx": 32.93630447689674, "rsi": 18.580505810383883, "atr_rel":..., 0, -2.469990544460607, 2026-06-06 04:41:24.148+00, 2026-06-06 05:22:11.119415+00, Swing Trade).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 05:22:11: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (96e9592e-f7f0-4d79-8b3c-1da9fe8d2101, null, SWING-UNIUSDT-1780722482132, UNIUSDT, {"adx": 34.97164343785748, "rsi": 20.88509465200667, "atr_rel": ..., 0, -2.189129684955464, 2026-06-06 05:08:02.132+00, 2026-06-06 05:22:11.149234+00, Swing Trade).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 06:00:09: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (6a7bcbd5-733f-4904-a430-11dee989640e, null, SWING-AVAXUSDT-1780720561555, AVAXUSDT, {"adx": 31.8518330986548, "rsi": 19.596677232586984, "atr_rel": ..., 0, -4.6375282685616215, 2026-06-06 04:36:01.555+00, 2026-06-06 06:00:09.730704+00, Swing Trade).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 06:04:47: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (09b2b923-afb8-466e-9fbe-27823575e2a3, null, SWING-OPUSDT-1780722786942, OPUSDT, {"adx": 34.67709219631662, "rsi": 24.269857934189787, "atr_rel":..., 0, -4.870815842593643, 2026-06-06 05:13:06.942+00, 2026-06-06 06:04:47.675456+00, Swing Trade).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 07:14:25: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (c5a0213b-7d27-4d1b-be35-f8f1f0bc2c4d, null, SWING-STXUSDT-1780723685765, STXUSDT, {"adx": 17.15436331304475, "rsi": 45.19816943655046, "atr_rel": ..., 0, -2.8237792423194574, 2026-06-06 05:28:05.765+00, 2026-06-06 07:14:25.403156+00, Swing Trade).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 07:45:20: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (546c129c-0ab9-4ae6-b823-52b323cf0fdf, null, SWING-ADAUSDT-1780723689858, ADAUSDT, {"adx": 30.398349838482773, "rsi": 36.85015701210264, "atr_rel":..., 0, -3.696793980738463, 2026-06-06 05:28:09.858+00, 2026-06-06 07:45:20.271426+00, Swing Trade).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 08:28:52: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (d21a159a-8b2f-4910-abd2-ecbfd3d97761, null, SWING-IMXUSDT-1780718788542, IMXUSDT, {"adx": 26.62725068336911, "rsi": 27.078990231592286, "atr_rel":..., 0, -1.5042108568252843, 2026-06-06 04:06:28.542+00, 2026-06-06 08:28:52.436791+00, Swing Trade).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+0|signal-e | 2026-06-06 08:28:52: [TradeTracker] Failed to insert ML feedback into Supabase: {
+0|signal-e |   code: '23502',
+0|signal-e |   details: 'Failing row contains (cf99c8c4-1dae-442f-8c9f-1009912bcf13, null, SWING-LTCUSDT-1780723367630, LTCUSDT, {"adx": 30.82734508556701, "rsi": 35.52876338290385, "atr_rel": ..., 0, -3.0497758165044218, 2026-06-06 05:22:47.63+00, 2026-06-06 08:28:52.422991+00, Swing Trade).',
+0|signal-e |   hint: null,
+0|signal-e |   message: 'null value in column "user_id" of relation "ml_training_data" violates not-null constraint'
+0|signal-e | }
+
+/var/www/signal-dashboard/backend/logs/signal-engine-out.log last 150 lines:
+0|signal-e | 2026-06-09 02:34:39: 02:34:39 [[34mdebug[39m]: [PRICE-LEVEL] IMXUSDT touches=98 rejection=0.27 volRatio=1.23 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:39: 02:34:39 [[34mdebug[39m]: [SIGNAL-DIAG] IMXUSDT ❌ VETO ADX SWING: 27.8 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:39: 02:34:39 [[32minfo[39m]: [Engine] Símbolo UNIUSDT continua em quarentena (WR recente: 10.0% em 10 sinais). {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:40: 02:34:40 [[34mdebug[39m]: [Engine] UNIUSDT usando timeframe=15 lookback=30 minVol=1.6 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:42: 02:34:42 [[34mdebug[39m]: [PRICE-LEVEL] UNIUSDT touches=178 rejection=0.29 volRatio=1.49 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:42: 02:34:42 [[34mdebug[39m]: [STRUCTURE] UNIUSDT rejeição em 2.4850 confirmada mas volume insuficiente (RVOL=0.19 < 1.6) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:42: 02:34:42 [[34mdebug[39m]: [SIGNAL-DIAG] UNIUSDT ❌ Veto volume baixo consistente: >3/5 candles com RVOL < 0.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:43: 02:34:43 [[34mdebug[39m]: [Engine] LTCUSDT usando timeframe=30 lookback=40 minVol=1.4 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:45: 02:34:45 [[34mdebug[39m]: [PRICE-LEVEL] LTCUSDT touches=227 rejection=0.17 volRatio=2.22 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:45: 02:34:45 [[34mdebug[39m]: [SIGNAL-DIAG] LTCUSDT ❌ VETO ADX SWING: 20.5 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:46: 02:34:46 [[34mdebug[39m]: [Engine] DOTUSDT usando timeframe=15 lookback=30 minVol=1.6 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:48: 02:34:48 [[34mdebug[39m]: [PRICE-LEVEL] DOTUSDT touches=234 rejection=0.15 volRatio=1.52 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:48: 02:34:48 [[34mdebug[39m]: [SIGNAL-DIAG] DOTUSDT ❌ VETO ADX SWING: 31.1 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:48: 02:34:48 [[34mdebug[39m]: [Engine] ATOMUSDT usando timeframe=30 lookback=35 minVol=1.5 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:51: 02:34:51 [[34mdebug[39m]: [PRICE-LEVEL] ATOMUSDT touches=137 rejection=0.19 volRatio=1.02 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:51: 02:34:51 [[34mdebug[39m]: [SIGNAL-DIAG] ATOMUSDT ❌ VETO ADX SWING: 28.9 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:51: 02:34:51 [[34mdebug[39m]: [Engine] BNBUSDT usando timeframe=30 lookback=45 minVol=1.3 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:53: 02:34:53 [[34mdebug[39m]: [PRICE-LEVEL] BNBUSDT touches=290 rejection=0.11 volRatio=1.22 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:53: 02:34:53 [[34mdebug[39m]: [SIGNAL-DIAG] BNBUSDT ❌ VETO ADX SWING: 21.5 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:53: 02:34:53 [[34mdebug[39m]: [Engine] 1000FLOKIUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:53: 02:34:53 [[34mdebug[39m]: [Engine] ICPUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:53: 02:34:53 [[34mdebug[39m]: [Engine] ALGOUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:53: 02:34:53 [[34mdebug[39m]: [Engine] GALAUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:53: 02:34:53 [[34mdebug[39m]: [Engine] BANDUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:53: 02:34:53 [[34mdebug[39m]: [Engine] WLDUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:53: 02:34:53 [[34mdebug[39m]: [Engine] THETAUSDT usando timeframe=15 lookback=25 minVol=1.8 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [PRICE-LEVEL] THETAUSDT touches=235 rejection=0.17 volRatio=0.85 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [STRUCTURE] THETAUSDT sem rejeição confirmada | R: Resistência não testada na janela | S: Nível nulo {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [SIGNAL-DIAG] THETAUSDT ❌ Veto volume baixo consistente: >3/5 candles com RVOL < 0.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] TONUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] MKRUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] KAVAUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] ROSEUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] LDOUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] DYDXUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] CRVUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] PYTHUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] ENAUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[34mdebug[39m]: [Engine] MANAUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:55: 02:34:55 [[32minfo[39m]: [Engine] Símbolo ADAUSDT continua em quarentena (WR recente: 10.0% em 10 sinais). {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:56: 02:34:56 [[34mdebug[39m]: [Engine] ADAUSDT usando timeframe=30 lookback=40 minVol=1.4 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:58: 02:34:58 [[34mdebug[39m]: [PRICE-LEVEL] ADAUSDT touches=106 rejection=0.25 volRatio=2.77 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:58: 02:34:58 [[34mdebug[39m]: [SIGNAL-DIAG] ADAUSDT ❌ VETO ADX SWING: 22.3 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:34:58: 02:34:58 [[34mdebug[39m]: [Engine] ETHUSDT usando timeframe=30 lookback=50 minVol=1.3 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:00: 02:35:00 [[34mdebug[39m]: [PRICE-LEVEL] ETHUSDT touches=133 rejection=0.14 volRatio=2.14 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:00: 02:35:00 [[34mdebug[39m]: [SIGNAL-DIAG] ETHUSDT ❌ VETO ADX SWING: 16.5 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:00: 02:35:00 [[34mdebug[39m]: [Engine] PENDLEUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:00: 02:35:00 [[34mdebug[39m]: [Engine] RNDRUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:00: 02:35:00 [[34mdebug[39m]: [Engine] SHIB1000USDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:01: 02:35:01 [[34mdebug[39m]: [Engine] FILUSDT usando timeframe=15 lookback=28 minVol=1.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:03: 02:35:03 [[34mdebug[39m]: [PRICE-LEVEL] FILUSDT touches=149 rejection=0.25 volRatio=1.25 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:03: 02:35:03 [[34mdebug[39m]: [SIGNAL-DIAG] FILUSDT ❌ VETO ADX SWING: 30.5 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:03: 02:35:03 [[34mdebug[39m]: [Engine] LINKUSDT usando timeframe=30 lookback=35 minVol=1.5 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:03: 02:35:03 [[32minfo[39m]: [Scalping] Running scalping signal cycle... {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:03: 02:35:03 [[32minfo[39m]: [Scalping] Limite diário de 5 sinais atingido. Aguardando próximo dia. {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:05: 02:35:05 [[34mdebug[39m]: [PRICE-LEVEL] LINKUSDT touches=152 rejection=0.18 volRatio=1.43 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:05: 02:35:05 [[34mdebug[39m]: [SIGNAL-DIAG] LINKUSDT ❌ VETO ADX SWING: 18.0 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:05: 02:35:05 [[34mdebug[39m]: [Engine] EOSUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:05: 02:35:05 [[34mdebug[39m]: [Engine] AXSUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:05: 02:35:05 [[34mdebug[39m]: [Engine] ZECUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:05: 02:35:05 [[34mdebug[39m]: [Engine] BCHUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:05: 02:35:05 [[34mdebug[39m]: [Engine] CHZUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:05: 02:35:05 [[34mdebug[39m]: [Engine] JUPUSDT usando timeframe=15 lookback=28 minVol=1.8 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:07: 02:35:07 [[34mdebug[39m]: [PRICE-LEVEL] JUPUSDT touches=227 rejection=0.17 volRatio=0.93 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:07: 02:35:07 [[34mdebug[39m]: [STRUCTURE] JUPUSDT rejeição em 0.1561 confirmada mas volume insuficiente (RVOL=0.29 < 1.8) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:07: 02:35:07 [[34mdebug[39m]: [SIGNAL-DIAG] JUPUSDT ❌ Veto volume baixo consistente: >3/5 candles com RVOL < 0.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:07: 02:35:07 [[34mdebug[39m]: [Engine] SUIUSDT usando timeframe=15 lookback=28 minVol=1.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:09: 02:35:09 [[34mdebug[39m]: [PRICE-LEVEL] SUIUSDT touches=149 rejection=0.19 volRatio=1.01 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:09: 02:35:09 [[34mdebug[39m]: [SIGNAL-DIAG] SUIUSDT ❌ VETO ADX SWING: 25.9 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:09: 02:35:09 [[34mdebug[39m]: [Engine] ZKUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:09: 02:35:09 [[34mdebug[39m]: [Engine] YFIUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:09: 02:35:09 [[34mdebug[39m]: [Engine] WIFUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:09: 02:35:09 [[34mdebug[39m]: [Engine] STXUSDT usando timeframe=15 lookback=25 minVol=2 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:12: 02:35:12 [[34mdebug[39m]: [PRICE-LEVEL] STXUSDT touches=132 rejection=0.30 volRatio=1.45 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:12: 02:35:12 [[34mdebug[39m]: [STRUCTURE] STXUSDT sem rejeição confirmada | R: Nível nulo | S: Nível nulo {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:12: 02:35:12 [[34mdebug[39m]: [SIGNAL-DIAG] STXUSDT ❌ VETO SCORE: Pontuação 6/10 < 7 (min=70). {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:12: 02:35:12 [[34mdebug[39m]: [Engine] GMTUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:12: 02:35:12 [[34mdebug[39m]: [Engine] SUSHIUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:12: 02:35:12 [[32minfo[39m]: [Engine] Símbolo OPUSDT continua em quarentena (WR recente: 10.0% em 10 sinais). {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:12: 02:35:12 [[34mdebug[39m]: [Engine] OPUSDT usando timeframe=15 lookback=30 minVol=1.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:13: 02:35:13 [[31merror[39m]: Failed to fetch klines for OPUSDT {"service":"signal-engine","error":{}}
+0|signal-e | 2026-06-09 02:35:14: 02:35:14 [[34mdebug[39m]: [PRICE-LEVEL] OPUSDT touches=100 rejection=0.33 volRatio=1.68 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:14: 02:35:14 [[34mdebug[39m]: [SIGNAL-VETO] OPUSDT ❌ Dados 4H insuficientes para validar tendência macro {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:14: 02:35:14 [[34mdebug[39m]: [Engine] XRPUSDT usando timeframe=30 lookback=45 minVol=1.3 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:17: 02:35:17 [[34mdebug[39m]: [PRICE-LEVEL] XRPUSDT touches=207 rejection=0.17 volRatio=1.43 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:17: 02:35:17 [[34mdebug[39m]: [SIGNAL-DIAG] XRPUSDT ❌ VETO ADX SWING: 20.3 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:17: 02:35:17 [[34mdebug[39m]: [Engine] EGLDUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:17: 02:35:17 [[34mdebug[39m]: [Engine] AAVEUSDT usando timeframe=15 lookback=30 minVol=1.6 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[34mdebug[39m]: [PRICE-LEVEL] AAVEUSDT touches=192 rejection=0.27 volRatio=1.61 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[34mdebug[39m]: [STRUCTURE] AAVEUSDT rejeição em 62.4200 confirmada mas volume insuficiente (RVOL=0.22 < 1.6) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[34mdebug[39m]: [SIGNAL-DIAG] AAVEUSDT ❌ Veto volume baixo consistente: >3/5 candles com RVOL < 0.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[34mdebug[39m]: [Engine] HBARUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[34mdebug[39m]: [Engine] XLMUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[34mdebug[39m]: [Engine] 1000BONKUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[34mdebug[39m]: [Engine] API3USDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[34mdebug[39m]: [Engine] FETUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[32minfo[39m]: [Engine] Símbolo BTCUSDT ENTRANDO em quarentena! WR recente: 0.0% em 10 sinais. {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:20: 02:35:20 [[34mdebug[39m]: [Engine] BTCUSDT usando timeframe=240 lookback=100 minVol=1.2 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:22: 02:35:22 [[34mdebug[39m]: [PRICE-LEVEL] BTCUSDT touches=296 rejection=0.15 volRatio=1.75 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:22: 02:35:22 [[34mdebug[39m]: [STRUCTURE] BTCUSDT sem rejeição confirmada | R: Resistência testada mas sem rejeição clara (close=62660.0000 level=62950.0000) | S: Suporte não testado na janela {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:22: 02:35:22 [[34mdebug[39m]: [SIGNAL-DIAG] BTCUSDT ❌ Veto volume baixo consistente: >3/5 candles com RVOL < 0.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:22: 02:35:22 [[34mdebug[39m]: [Engine] COMPUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:22: 02:35:22 [[34mdebug[39m]: [Engine] DASHUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:22: 02:35:22 [[32minfo[39m]: [Engine] Símbolo NEARUSDT ENTRANDO em quarentena! WR recente: 0.0% em 6 sinais. {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:23: 02:35:23 [[34mdebug[39m]: [Engine] NEARUSDT usando timeframe=15 lookback=28 minVol=1.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:24: 02:35:24 [[34mdebug[39m]: [PRICE-LEVEL] NEARUSDT touches=167 rejection=0.29 volRatio=1.40 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:24: 02:35:24 [[34mdebug[39m]: [SIGNAL-DIAG] NEARUSDT ❌ VETO ADX SWING: 29.1 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:25: 02:35:25 [[34mdebug[39m]: [Engine] DOGEUSDT usando timeframe=5 lookback=20 minVol=2.5 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:27: 02:35:27 [[34mdebug[39m]: [PRICE-LEVEL] DOGEUSDT touches=189 rejection=0.17 volRatio=1.44 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:27: 02:35:27 [[34mdebug[39m]: [SIGNAL-DIAG] DOGEUSDT ❌ VETO ATR: 0.24% < 0.4% (volatilidade morta) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:27: 02:35:27 [[34mdebug[39m]: [Engine] TAOUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:27: 02:35:27 [[32minfo[39m]: [Engine] Símbolo SOLUSDT continua em quarentena (WR recente: 10.0% em 10 sinais). {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:27: 02:35:27 [[34mdebug[39m]: [Engine] SOLUSDT usando timeframe=30 lookback=40 minVol=1.4 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:29: 02:35:29 [[34mdebug[39m]: [PRICE-LEVEL] SOLUSDT touches=189 rejection=0.21 volRatio=1.87 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:29: 02:35:29 [[34mdebug[39m]: [SIGNAL-DIAG] SOLUSDT ❌ VETO ADX SWING: 20.4 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:29: 02:35:29 [[34mdebug[39m]: [Engine] AVAXUSDT usando timeframe=15 lookback=30 minVol=1.6 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:31: 02:35:31 [[34mdebug[39m]: [PRICE-LEVEL] AVAXUSDT touches=197 rejection=0.17 volRatio=2.09 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:31: 02:35:31 [[34mdebug[39m]: [SIGNAL-DIAG] AVAXUSDT ❌ VETO ADX SWING: 26.4 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:31: 02:35:31 [[34mdebug[39m]: [Engine] INJUSDT usando timeframe=15 lookback=28 minVol=1.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: System stats {"service":"signal-engine","memoryUsedPercent":"15.1","heapUsedMB":"43.1","rssUsedMB":"213.2","uptime":"23h 31m"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [PRICE-LEVEL] INJUSDT touches=292 rejection=0.31 volRatio=1.30 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [SIGNAL-DIAG] INJUSDT ❌ VETO ADX SWING: 30.1 < 33 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] BEAMUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] GRTUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] ONDOUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] PIXELUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] 1000PEPEUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] CAKEUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] 1INCHUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] APEUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] BLURUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:33: 02:35:33 [[34mdebug[39m]: [Engine] APTUSDT usando timeframe=15 lookback=30 minVol=1.6 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:35: 02:35:35 [[34mdebug[39m]: [PRICE-LEVEL] APTUSDT touches=92 rejection=0.21 volRatio=2.03 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:35: 02:35:35 [[34mdebug[39m]: [STRUCTURE] APTUSDT rejeição em 0.6443 confirmada mas volume insuficiente (RVOL=0.24 < 1.6) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:35: 02:35:35 [[34mdebug[39m]: [SIGNAL-DIAG] APTUSDT ❌ Veto volume baixo consistente: >3/5 candles com RVOL < 0.7 {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:35: 02:35:35 [[34mdebug[39m]: [Engine] RUNEUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:35: 02:35:35 [[34mdebug[39m]: [Engine] VETUSDT ignorado - baixa liquidez (< $100M volume diário) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:35:35: 02:35:35 [[32minfo[39m]: Signal cycle complete: 0 new signals {"service":"signal-engine","totalActive":8,"signalsToday":2,"signalsSent":1}
+0|signal-e | 2026-06-09 02:36:03: 02:36:03 [[32minfo[39m]: [Scalping] Running scalping signal cycle... {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:36:03: 02:36:03 [[32minfo[39m]: [Scalping] Limite diário de 5 sinais atingido. Aguardando próximo dia. {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:36:33: 02:36:33 [[34mdebug[39m]: System stats {"service":"signal-engine","memoryUsedPercent":"15.1","heapUsedMB":"48.6","rssUsedMB":"213.6","uptime":"23h 32m"}
+0|signal-e | 2026-06-09 02:37:03: 02:37:03 [[32minfo[39m]: [Scalping] Running scalping signal cycle... {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:37:03: 02:37:03 [[32minfo[39m]: [Scalping] Limite diário de 5 sinais atingido. Aguardando próximo dia. {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:37:33: 02:37:33 [[34mdebug[39m]: System stats {"service":"signal-engine","memoryUsedPercent":"15.1","heapUsedMB":"40.2","rssUsedMB":"214.7","uptime":"23h 33m"}
+0|signal-e | 2026-06-09 02:38:03: 02:38:03 [[32minfo[39m]: [Scalping] Running scalping signal cycle... {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:38:04: 02:38:04 [[34mdebug[39m]: [MarketContext] BTC trend: -1 (price: 62582, ema200: 64932) {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:38:04: 02:38:04 [[32minfo[39m]: [Scalping] Limite diário de 5 sinais atingido. Aguardando próximo dia. {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:38:33: 02:38:33 [[34mdebug[39m]: System stats {"service":"signal-engine","memoryUsedPercent":"15.1","heapUsedMB":"49.5","rssUsedMB":"214.8","uptime":"23h 34m"}
+0|signal-e | 2026-06-09 02:39:03: 02:39:03 [[32minfo[39m]: [Scalping] Running scalping signal cycle... {"service":"signal-engine"}
+0|signal-e | 2026-06-09 02:39:03: 02:39:03 [[32minfo[39m]: [Scalping] Limite diário de 5 sinais atingido. Aguardando próximo dia. {"service":"signal-engine"}
+
+
+--- TELEGRAM BOT LOGS ---
+[TAILING] Tailing last 150 lines for [telegram-bot] process (change the value with --lines option)
+/var/www/signal-dashboard/backend/logs/telegram-bot-error.log last 150 lines:
+2|telegram | You have triggered an unhandledRejection, you may have forgotten to catch a Promise rejection:
+2|telegram | Error: Cannot find module '/var/www/signal-dashboard/backend/dist/lib/logger' imported from /var/www/signal-dashboard/backend/dist/engine/marketContext.js
+2|telegram |     at finalizeResolution (node:internal/modules/esm/resolve:283:11)
+2|telegram |     at moduleResolve (node:internal/modules/esm/resolve:952:10)
+2|telegram |     at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+2|telegram |     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:708:12)
+2|telegram |     at ModuleLoader.#cachedDefaultResolve (node:internal/modules/esm/loader:657:25)
+2|telegram |     at ModuleLoader.resolve (node:internal/modules/esm/loader:640:38)
+2|telegram |     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:264:38)
+2|telegram |     at ModuleJob._link (node:internal/modules/esm/module_job:168:49)
+2|telegram | You have triggered an unhandledRejection, you may have forgotten to catch a Promise rejection:
+2|telegram | Error: Cannot find module '/var/www/signal-dashboard/backend/dist/lib/logger' imported from /var/www/signal-dashboard/backend/dist/engine/marketContext.js
+2|telegram |     at finalizeResolution (node:internal/modules/esm/resolve:283:11)
+2|telegram |     at moduleResolve (node:internal/modules/esm/resolve:952:10)
+2|telegram |     at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+2|telegram |     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:708:12)
+2|telegram |     at ModuleLoader.#cachedDefaultResolve (node:internal/modules/esm/loader:657:25)
+2|telegram |     at ModuleLoader.resolve (node:internal/modules/esm/loader:640:38)
+2|telegram |     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:264:38)
+2|telegram |     at ModuleJob._link (node:internal/modules/esm/module_job:168:49)
+2|telegram | You have triggered an unhandledRejection, you may have forgotten to catch a Promise rejection:
+2|telegram | Error: Cannot find module '/var/www/signal-dashboard/backend/dist/lib/logger' imported from /var/www/signal-dashboard/backend/dist/engine/marketContext.js
+2|telegram |     at finalizeResolution (node:internal/modules/esm/resolve:283:11)
+2|telegram |     at moduleResolve (node:internal/modules/esm/resolve:952:10)
+2|telegram |     at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+2|telegram |     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:708:12)
+2|telegram |     at ModuleLoader.#cachedDefaultResolve (node:internal/modules/esm/loader:657:25)
+2|telegram |     at ModuleLoader.resolve (node:internal/modules/esm/loader:640:38)
+2|telegram |     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:264:38)
+2|telegram |     at ModuleJob._link (node:internal/modules/esm/module_job:168:49)
+2|telegram | You have triggered an unhandledRejection, you may have forgotten to catch a Promise rejection:
+2|telegram | Error: Cannot find module '/var/www/signal-dashboard/backend/dist/lib/logger' imported from /var/www/signal-dashboard/backend/dist/engine/marketContext.js
+2|telegram |     at finalizeResolution (node:internal/modules/esm/resolve:283:11)
+2|telegram |     at moduleResolve (node:internal/modules/esm/resolve:952:10)
+2|telegram |     at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+2|telegram |     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:708:12)
+2|telegram |     at ModuleLoader.#cachedDefaultResolve (node:internal/modules/esm/loader:657:25)
+2|telegram |     at ModuleLoader.resolve (node:internal/modules/esm/loader:640:38)
+2|telegram |     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:264:38)
+2|telegram |     at ModuleJob._link (node:internal/modules/esm/module_job:168:49)
+
+/var/www/signal-dashboard/backend/logs/telegram-bot-out.log last 150 lines:
+2|telegram | 2026-06-06 01:46:00: 01:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 01:46:05: 01:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 486 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 02:46:00: 02:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 02:46:07: 02:46:07 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 486 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 03:46:00: 03:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 03:46:06: 03:46:06 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 486 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 04:46:00: 04:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 04:46:03: 04:46:03 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 498 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 05:46:00: 05:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 05:46:04: 05:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 504 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 06:46:00: 06:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 06:46:04: 06:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 506 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 07:46:00: 07:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 07:46:06: 07:46:06 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 517 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 08:46:00: 08:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 08:46:04: 08:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 09:46:00: 09:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 09:46:06: 09:46:06 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 10:46:00: 10:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 10:46:05: 10:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 11:46:00: 11:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 11:46:05: 11:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 12:46:00: 12:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 12:46:04: 12:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 13:46:00: 13:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 13:46:05: 13:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 14:46:00: 14:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 14:46:05: 14:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 15:46:00: 15:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 15:46:04: 15:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 16:46:00: 16:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 16:46:04: 16:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 17:46:00: 17:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 17:46:04: 17:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 18:46:00: 18:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 18:46:04: 18:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 19:46:00: 19:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 19:46:05: 19:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 20:46:00: 20:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 20:46:03: 20:46:03 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 21:46:00: 21:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 21:46:04: 21:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 22:46:00: 22:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 22:46:04: 22:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-06 23:46:00: 23:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-06 23:46:03: 23:46:03 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 00:46:00: 00:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 00:46:05: 00:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 01:46:00: 01:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 01:46:04: 01:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 02:46:00: 02:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 02:46:03: 02:46:03 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 03:46:00: 03:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 03:46:04: 03:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 04:46:00: 04:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 04:46:04: 04:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 05:46:00: 05:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 05:46:04: 05:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 06:46:00: 06:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 06:46:03: 06:46:03 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 07:46:00: 07:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 07:46:03: 07:46:03 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 08:46:00: 08:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 08:46:03: 08:46:03 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 09:46:00: 09:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 09:46:04: 09:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 10:46:00: 10:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 10:46:04: 10:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 11:46:00: 11:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 11:46:04: 11:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 12:46:00: 12:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 12:46:05: 12:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 13:46:00: 13:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 13:46:05: 13:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 14:46:00: 14:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 14:46:04: 14:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 15:46:00: 15:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 15:46:05: 15:46:05 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 16:46:00: 16:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 16:46:04: 16:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 17:46:00: 17:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 17:46:04: 17:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 18:46:00: 18:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 18:46:03: 18:46:03 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 19:46:00: 19:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 19:46:04: 19:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 20:46:00: 20:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 20:46:07: 20:46:07 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 21:46:00: 21:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 21:46:03: 21:46:03 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 22:46:00: 22:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 22:46:04: 22:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-07 23:46:00: 23:46:00 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-07 23:46:04: 23:46:04 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 00:30:27: 00:30:27 [[32minfo[39m]: [Database] Conexão Prisma instanciada (SQLite). {"service":"signal-engine"}
+2|telegram | 2026-06-08 00:30:27: 00:30:27 [[32minfo[39m]: VAPID Web Push configured successfully. {"service":"signal-engine"}
+2|telegram | 2026-06-08 01:30:27: 01:30:27 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 01:30:30: 01:30:30 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 02:14:33: 02:14:33 [[32minfo[39m]: [Database] Conexão Prisma instanciada (SQLite). {"service":"signal-engine"}
+2|telegram | 2026-06-08 02:14:33: 02:14:33 [[32minfo[39m]: VAPID Web Push configured successfully. {"service":"signal-engine"}
+2|telegram | 2026-06-08 02:21:07: 02:21:07 [[32minfo[39m]: [Database] Conexão Prisma instanciada (SQLite). {"service":"signal-engine"}
+2|telegram | 2026-06-08 02:21:07: 02:21:07 [[32minfo[39m]: VAPID Web Push configured successfully. {"service":"signal-engine"}
+2|telegram | 2026-06-08 03:04:32: 03:04:32 [[32minfo[39m]: [Database] Conexão Prisma instanciada (SQLite). {"service":"signal-engine"}
+2|telegram | 2026-06-08 03:04:32: 03:04:32 [[32minfo[39m]: VAPID Web Push configured successfully. {"service":"signal-engine"}
+2|telegram | 2026-06-08 04:04:32: 04:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 04:04:35: 04:04:35 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 05:04:32: 05:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 05:04:35: 05:04:35 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 06:04:32: 06:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 06:04:36: 06:04:36 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 527 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 07:04:32: 07:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 07:04:39: 07:04:39 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 537 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 08:04:32: 08:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 08:04:37: 08:04:37 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 09:04:32: 09:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 09:04:35: 09:04:35 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 10:04:32: 10:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 10:04:39: 10:04:39 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 11:04:32: 11:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 11:04:35: 11:04:35 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 12:04:32: 12:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 12:04:38: 12:04:38 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 13:04:32: 13:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 13:04:41: 13:04:41 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 14:04:32: 14:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 14:04:39: 14:04:39 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 15:04:32: 15:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 15:04:38: 15:04:38 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 16:04:32: 16:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 16:04:38: 16:04:38 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 17:04:32: 17:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 17:04:39: 17:04:39 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 18:04:32: 18:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 18:04:42: 18:04:42 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 19:04:32: 19:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 19:04:35: 19:04:35 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 20:04:32: 20:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 20:04:39: 20:04:39 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 21:04:32: 21:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 21:04:39: 21:04:39 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 22:04:32: 22:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 22:04:37: 22:04:37 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-08 23:04:32: 23:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-08 23:04:35: 23:04:35 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-09 00:04:32: 00:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-09 00:04:41: 00:04:41 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-09 01:04:32: 01:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-09 01:04:39: 01:04:39 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+2|telegram | 2026-06-09 02:04:32: 02:04:32 [[32minfo[39m]: [IndicatorLearner] Iniciando recalculo de performance dos indicadores por moeda... {"service":"signal-engine"}
+2|telegram | 2026-06-09 02:04:39: 02:04:39 [[32minfo[39m]: [IndicatorLearner] Recalculo finalizado! 540 registros de performance atualizados/criados. {"service":"signal-engine"}
+
+
+--- PM2 STATUS ---
+┌────┬───────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name                  │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 3  │ affiliate-listener    │ default     │ 0.1.0   │ fork    │ 2512409  │ 24h    │ 1    │ online    │ 0%       │ 63.0mb   │ root     │ disabled │
+│ 1  │ affiliate-scraper     │ default     │ 0.1.0   │ fork    │ 2512381  │ 24h    │ 1    │ online    │ 0%       │ 93.6mb   │ root     │ disabled │
+│ 4  │ nextjs                │ default     │ N/A     │ fork    │ 2512401  │ 24h    │ 1    │ online    │ 0%       │ 59.8mb   │ root     │ disabled │
+│ 0  │ signal-engine         │ default     │ 1.0.0   │ cluster │ 2514141  │ 23h    │ 10   │ online    │ 0%       │ 215.3mb  │ root     │ disabled │
+│ 2  │ telegram-bot          │ default     │ 1.0.0   │ cluster │ 2514142  │ 23h    │ 6    │ online    │ 0%       │ 109.0mb  │ root     │ disabled │
+└────┴───────────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
