@@ -43,6 +43,7 @@ let scalpingRunning = false;
 let scalpingInterval: NodeJS.Timeout | null = null;
 let lastScalpingSignalAt: string | null = null;
 let enginePausedUntil = 0;
+let lastDayReset: string = new Date().toDateString();
 
 // Cooldown por par: evita spam no mesmo par (30 min por padrão)
 const scalpingCooldowns = new Map<string, number>();
@@ -196,11 +197,11 @@ export function generateScalpingSignal(
     }
 
     // // [ARB-SCALP #4] Filtro de horário premium obrigatório para altcoins
+    const isAltcoin = !['BTCUSDT', 'ETHUSDT'].includes(symbol);
     let premiumHours = [1, 2, 6, 7, 8, 9, 14, 15, 16, 17]; // Londres + NY
-    if (symbol === 'ARBUSDT') {
+    if (isAltcoin) {
         premiumHours = [1, 2, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17]; // Inclui 10h e 13h UTC
     }
-    const isAltcoin = !['BTCUSDT', 'ETHUSDT'].includes(symbol);
     const currentHour = new Date().getUTCHours();
 
     if (isAltcoin && !premiumHours.includes(currentHour)) {
@@ -528,6 +529,12 @@ export function generateScalpingSignal(
 async function runScalpingCycle(): Promise<void> {
     logger.info('[Scalping] Running scalping signal cycle...');
     const globalCtx = await marketContextService.getGlobalContext();
+
+    const today = new Date().toDateString();
+    if (today !== lastDayReset) {
+        scalpingSignalsToday = 0;
+        lastDayReset = today;
+    }
 
     // FASE 1: Limite diário reduzido de 8 para 5 (qualidade > quantidade)
     if (scalpingSignalsToday >= 5) {

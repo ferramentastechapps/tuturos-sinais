@@ -612,16 +612,37 @@ export function generateSignalFromData(
     else type = 'short';
 
     // [ARB-SWING #1] Dynamic ADX Threshold Filter
+    // [BTC-SWING #3] Garantido pelo limiar de 28 para BTCUSDT abaixo
     const swingAdxThreshold = symbol === 'BTCUSDT' ? 28 : (symbol === 'ARBUSDT' ? 30 : 33);
     if (adx < swingAdxThreshold) {
         logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ADX SWING: ${adx.toFixed(1)} < ${swingAdxThreshold}`);
         return null;
     }
 
+    // [BTC-SWING #1] RSI máximo 56 para LONG no BTCUSDT
+    if (symbol === 'BTCUSDT' && type === 'long' && rsi > 56) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ [BTC-Swing] LONG bloqueado: RSI=${rsi.toFixed(1)} sobrecomprado (máx 56)`);
+        return null;
+    }
+
+    // [BTC-SWING #2] Filtro de dist_ema200 para LONG no BTCUSDT
+    if (symbol === 'BTCUSDT' && type === 'long') {
+        const ema200dist = currentPrice > 0 ? (currentPrice - lastEma200) / currentPrice : 0;
+        if (ema200dist > 0.030) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ [BTC-Swing] LONG bloqueado: dist_ema200=${(ema200dist * 100).toFixed(2)}% acima de 3% — reversão à média provável`);
+            return null;
+        }
+    }
+
     // [ARB-SWING #2] RSI Momentum Filter
     if (symbol !== 'BTCUSDT') {
         if (type === 'long' && rsi < 48) {
             logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: LONG com RSI ${rsi.toFixed(1)} < 48`);
+            return null;
+        }
+        // [OP-SWING #2] RSI máximo 56 para LONG em altcoin
+        if (type === 'long' && rsi > 56) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: LONG bloqueado: RSI=${rsi.toFixed(1)} sobrecomprado para altcoin (máx 56)`);
             return null;
         }
         if (type === 'short' && rsi > 52) {
@@ -850,11 +871,19 @@ export function generateSignalFromData(
     }
 
     // [ARB-SWING #4] Fear & Greed Filters
-    if (symbol !== 'BTCUSDT') {
-        const fearGreedVal = globalCtx ? (globalCtx.fearGreed ?? globalCtx.fear_greed) : undefined;
-        if (fearGreedVal !== undefined) {
-            if (type === 'long' && fearGreedVal < 38) {
-                logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO FEAR & GREED: LONG em altcoin com Fear & Greed ${fearGreedVal} < 38`);
+    const fearGreedVal = globalCtx ? (globalCtx.fearGreed ?? globalCtx.fear_greed) : undefined;
+    
+    if (fearGreedVal !== undefined) {
+        if (symbol !== 'BTCUSDT') {
+            // [OP-SWING #3] F&G mínimo dinâmico por liquidez do par
+            const fgLongMin = ['BTCUSDT', 'ETHUSDT', 'ARBUSDT'].includes(symbol) ? 38 : 42;
+            if (type === 'long' && fearGreedVal < fgLongMin) {
+                logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO FEAR & GREED: LONG bloqueado: F&G=${fearGreedVal} < ${fgLongMin} para ${symbol}`);
+                return null;
+            }
+            // [OP-SWING #1] Bloquear SHORT quando F&G < 25 em qualquer altcoin
+            if (type === 'short' && fearGreedVal < 25) {
+                logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO FEAR & GREED: SHORT bloqueado: F&G=${fearGreedVal} — pânico extremo, risco de reversão`);
                 return null;
             }
             if (fearGreedVal < 45) {
@@ -863,6 +892,13 @@ export function generateSignalFromData(
                 if (scoreThreshold !== oldThreshold) {
                     logger.debug(`[SIGNAL-DIAG] ${symbol} Fear & Greed ${fearGreedVal} < 45. Aumentando scoreThreshold de ${oldThreshold} para ${scoreThreshold}`);
                 }
+            }
+        } else {
+            // [BTC-SWING #4] Revisar lógica de SHORT no BTC com btcTrend=-1
+            // Para BTC SHORT: só aceitar se F&G > 40 (mercado não está em pânico já)
+            if (type === 'short' && fearGreedVal < 40) {
+                logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ [BTC-Swing] SHORT bloqueado: F&G=${fearGreedVal} — mercado em pânico, risco de reversão`);
+                return null;
             }
         }
     }

@@ -10,6 +10,7 @@ FILES_TO_DEPLOY = [
     ("src/trading/tradeTracker.ts", "backend/src/trading/tradeTracker.ts"),
     ("src/engine/scalpingEngine.ts", "backend/src/engine/scalpingEngine.ts"),
     ("src/engine/signalEngine.ts", "backend/src/engine/signalEngine.ts"),
+    ("src/engine/marketContext.ts", "backend/src/engine/marketContext.ts"),
 ]
 
 def deploy():
