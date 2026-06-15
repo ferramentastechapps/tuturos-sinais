@@ -1223,3 +1223,22 @@ export async function getDailyStats(): Promise<{ wins: number, losses: number, w
     winRate: total > 0 ? wins / total : 0
   };
 }
+
+/** Verifica se o símbolo teve algum prejuízo (loss) em scalping no dia atual (UTC) */
+export async function hasSymbolLossToday(symbol: string): Promise<boolean> {
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+
+  const lossToday = await db.tradeSignal.findFirst({
+    where: {
+      pair: symbol,
+      trade_type: 'Scalping',
+      outcome: 'LOSS',
+      exit_time: { gte: startOfDay }
+    },
+    select: { id: true }
+  });
+
+  return !!lossToday;
+}
+

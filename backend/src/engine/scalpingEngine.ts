@@ -22,7 +22,7 @@ import {
 } from './signalEngine.js';
 import type { TradeSignal, OHLCPoint } from '../types/trading.js';
 import { indicatorLearner } from '../ml/indicatorLearner.js';
-import { tradeTracker, getDailyStats, getSymbolStats } from '../trading/tradeTracker.js';
+import { tradeTracker, getDailyStats, getSymbolStats, hasSymbolLossToday } from '../trading/tradeTracker.js';
 import { validateSignalContext, getDailyConfirmation } from './marketContext.js'; // FASE 3
 import { volatilityTracker } from '../services/volatilityTracker.js';
 import { marketContextService } from '../lib/marketContextService.js';
@@ -565,6 +565,13 @@ async function runScalpingCycle(): Promise<void> {
         }
 
         try {
+            // Verificar se o par teve prejuízo (loss) hoje
+            const hasLossToday = await hasSymbolLossToday(symbol);
+            if (hasLossToday) {
+                logger.info(`[Scalping] ${symbol} ignorado no ciclo: gerou prejuízo (loss) hoje.`);
+                continue;
+            }
+
             const lastSignalTime = scalpingCooldowns.get(symbol) || 0;
             if (now - lastSignalTime < config.scalpingBot.cooldownMs) {
                 logger.debug(`[Scalping] ${symbol} em cooldown (${Math.round((config.scalpingBot.cooldownMs - (now - lastSignalTime)) / 60000)}min restante)`);
@@ -587,22 +594,22 @@ async function runScalpingCycle(): Promise<void> {
             
             let isBadCoin = false;
             if (wasQuarantined) {
-                // If it was quarantined, it remains quarantined unless its recent WR is >= 30%
-                isBadCoin = symStats.total < 5 || symStats.winRate < 0.30;
+                // A moeda fica na quarentena até gerar um sinal com WIN
+                isBadCoin = lastSignal.outcome !== 'WIN';
                 if (!isBadCoin) {
-                    logger.info(`[Scalping] Símbolo ${symbol} PROMOVIDO da quarentena! WR recente: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais.`);
+                    logger.info(`[Scalping] Símbolo ${symbol} PROMOVIDO da quarentena! Último sinal gerou WIN.`);
                     try {
                         const { telegramService } = await import('../notifications/telegramService.js');
                         if (telegramService.isEnabled) {
                             const promoMsg = `📈 <b>Moeda Recuperada (Scalping): ${symbol}</b>\n\n` +
-                                             `O par acumulou um Win Rate de <b>${(symStats.winRate * 100).toFixed(1)}%</b> nos últimos ${symStats.total} sinais e foi promovido de volta ao fluxo principal de sinais!`;
+                                             `O par gerou um sinal de WIN e foi promovido de volta ao fluxo principal de sinais!`;
                             telegramService.send(promoMsg, 'daily_summary').catch(e => logger.warn(`[Scalping] Failed to send promotion notification`, e));
                         }
                     } catch (err) {
                         logger.warn(`[Scalping] Erro ao carregar telegramService para notificar promoção`, err);
                     }
                 } else {
-                    logger.info(`[Scalping] Símbolo ${symbol} continua em quarentena (WR recente: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais).`);
+                    logger.info(`[Scalping] Símbolo ${symbol} continua em quarentena (aguardando sinal com WIN).`);
                 }
             } else {
                 // If it was NOT quarantined, it enters quarentine if its WR is < 20%

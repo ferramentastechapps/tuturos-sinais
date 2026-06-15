@@ -71,6 +71,9 @@ def train():
         print("Dados insuficientes após o filtro de qualidade.")
         return
 
+    # Reset index to align symbol indexing with weights
+    df = df.reset_index(drop=True)
+
     X = df[FEATURE_COLUMNS]
     y = df['label']
     
