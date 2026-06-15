@@ -598,6 +598,34 @@ async function runScalpingCycle(): Promise<void> {
                 isBadCoin = lastSignal.outcome !== 'WIN';
                 if (!isBadCoin) {
                     logger.info(`[Scalping] Símbolo ${symbol} PROMOVIDO da quarentena! Último sinal gerou WIN.`);
+                    
+                    // Atualiza a DB para marcar como PROMOVIDO e evitar spam de notificações
+                    try {
+                        let updatedIndicators = lastSignal.indicators || '[]';
+                        if (updatedIndicators.includes('⚠️ Moeda Ruim')) {
+                            try {
+                                const parsed = JSON.parse(updatedIndicators);
+                                if (Array.isArray(parsed)) {
+                                    const cleaned = parsed.filter((ind: string) => !ind.includes('⚠️ Moeda Ruim'));
+                                    updatedIndicators = JSON.stringify(cleaned);
+                                }
+                            } catch (e) {
+                                updatedIndicators = updatedIndicators.replace(/\"⚠️ Moeda Ruim[^\"]*\"/g, '').replace(/⚠️ Moeda Ruim[^\,\"\']*/g, '');
+                            }
+                        }
+
+                        await db.tradeSignal.update({
+                            where: { id: lastSignal.id },
+                            data: { 
+                                status: 'BLOCKED_PROMOTED',
+                                indicators: updatedIndicators
+                            }
+                        });
+                        logger.info(`[Scalping] Símbolo ${symbol} atualizado para status BLOCKED_PROMOTED no banco.`);
+                    } catch (dbErr: any) {
+                        logger.error(`[Scalping] Erro ao atualizar status de quarentena de ${symbol} no banco: ${dbErr.message}`);
+                    }
+
                     try {
                         const { telegramService } = await import('../notifications/telegramService.js');
                         if (telegramService.isEnabled) {

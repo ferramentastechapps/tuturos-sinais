@@ -1183,6 +1183,34 @@ async function runSignalCycle(): Promise<void> {
                 isBadCoin = symStats.total < 5 || symStats.winRate < 0.30;
                 if (!isBadCoin) {
                     logger.info(`[Engine] Símbolo ${symbol} PROMOVIDO da quarentena! WR recente: ${(symStats.winRate * 100).toFixed(1)}% em ${symStats.total} sinais.`);
+                    
+                    // Atualiza a DB para marcar como PROMOVIDO e evitar spam de notificações
+                    try {
+                        let updatedIndicators = lastSignal.indicators || '[]';
+                        if (updatedIndicators.includes('⚠️ Moeda Ruim')) {
+                            try {
+                                const parsed = JSON.parse(updatedIndicators);
+                                if (Array.isArray(parsed)) {
+                                    const cleaned = parsed.filter((ind: string) => !ind.includes('⚠️ Moeda Ruim'));
+                                    updatedIndicators = JSON.stringify(cleaned);
+                                }
+                            } catch (e) {
+                                updatedIndicators = updatedIndicators.replace(/\"⚠️ Moeda Ruim[^\"]*\"/g, '').replace(/⚠️ Moeda Ruim[^\,\"\']*/g, '');
+                            }
+                        }
+
+                        await db.tradeSignal.update({
+                            where: { id: lastSignal.id },
+                            data: { 
+                                status: 'BLOCKED_PROMOTED',
+                                indicators: updatedIndicators
+                            }
+                        });
+                        logger.info(`[Engine] Símbolo ${symbol} atualizado para status BLOCKED_PROMOTED no banco.`);
+                    } catch (dbErr: any) {
+                        logger.error(`[Engine] Erro ao atualizar status de quarentena de ${symbol} no banco: ${dbErr.message}`);
+                    }
+
                     if (telegramService.isEnabled) {
                         const promoMsg = `📈 <b>Moeda Recuperada: ${symbol}</b>\n\n` +
                                          `O par acumulou um Win Rate de <b>${(symStats.winRate * 100).toFixed(1)}%</b> nos últimos ${symStats.total} sinais e foi promovido de volta ao fluxo principal de sinais!`;
