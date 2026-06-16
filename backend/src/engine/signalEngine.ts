@@ -13,7 +13,15 @@ import { indicatorLearner } from '../ml/indicatorLearner.js';
 import { validateSignalContext } from './marketContext.js'; // FASE 3
 import { isHighLiquidity } from '../config/highLiquiditySymbols.js'; // CORREÇÃO 5
 import { getSymbolConfig, getDynamicSymbolConfig } from '../config/symbolConfig.js';
-import { generateStructureSignal, getStructureScore, getStructureConfluences } from './structureEngine.js';
+import {
+    generateStructureSignal,
+    getStructureScore,
+    getStructureConfluences,
+    detectBrokenZonePullback,
+    detectDoublePattern,
+    detectInsideBar,
+    detectTrendlineTouch,
+} from './structureEngine.js';
 import { volatilityTracker } from '../services/volatilityTracker.js';
 import {
     aplicarMultiplicadoresStop,
@@ -22,6 +30,19 @@ import {
     analisarStopPrematuro,
     ajustarMultiplicadorPorPar,
 } from '../trading/stopCalibrationService.js';
+
+// Cache global de klines por timeframe (1h e 4h) para o ciclo atual
+export const klineCache1h4h = new Map<string, OHLCPoint[]>();
+
+export async function fetchKlinesWithCache(symbol: string, timeframe: string, limit: number): Promise<OHLCPoint[]> {
+    const key = `${symbol}_${timeframe}_${limit}`;
+    if (klineCache1h4h.has(key)) {
+        return klineCache1h4h.get(key)!;
+    }
+    const data = await bybitConnector.fetchKlines(symbol, timeframe, limit);
+    klineCache1h4h.set(key, data);
+    return data;
+}
 
 const BLOCKED_HOURS = [4, 7, 9, 10, 20, 21, 23];
 const GOOD_HOURS = [3, 6, 12, 13, 14];
@@ -561,6 +582,7 @@ export function generateSignalFromData(
     distanciaResistencia: number = 0,   // Calculado async antes de chamar esta função
     globalCtx: any = null,
     levelCtx: any = null,
+    ohlc1h?: OHLCPoint[],
 ): TradeSignal | null {
     if (ohlc.length < 50) return null;
 
@@ -737,6 +759,85 @@ export function generateSignalFromData(
     const structureScore  = getStructureScore(structureResult);
     const structureLabels = getStructureConfluences(structureResult ?? { direction: null, level: null, levelTest: { level: null, tested: false, confirmed: false, distancePct: Infinity, direction: null, reason: '' }, volumeConfirmed: false, rvol: 0, allLevels: [], confluenceLabel: '' });
 
+    // --- PRICE ACTION & CONFLUENCE ANALYSIS ---
+    const allLevels = structureResult?.allLevels || [];
+
+    // 1. Pullback on 15m
+    let pullbackConfirmed = false;
+    let pullbackLevelPrice: number | null = null;
+    if (ohlc15m && ohlc15m.length >= 20 && allLevels.length > 0) {
+        const pbRes = detectBrokenZonePullback(ohlc15m, allLevels, atr);
+        if (pbRes.isConfirmedPullback && pbRes.direction === type) {
+            pullbackConfirmed = true;
+            pullbackLevelPrice = pbRes.levelPrice;
+        }
+    }
+
+    // Breakout check
+    let isBreakout = false;
+    let breakoutLevelPrice: number | null = null;
+    if (ohlc15m && ohlc15m.length >= 20 && allLevels.length > 0) {
+        for (const lvl of allLevels) {
+            if (type === 'long' && lvl.kind === 'resistance') {
+                const wasBroken = ohlc15m.slice(-10).some((c, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    return prev && prev.close <= lvl.price && c.close > lvl.price;
+                });
+                if (wasBroken) {
+                    isBreakout = true;
+                    breakoutLevelPrice = lvl.price;
+                }
+            } else if (type === 'short' && lvl.kind === 'support') {
+                const wasBroken = ohlc15m.slice(-10).some((c, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    return prev && prev.close >= lvl.price && c.close < lvl.price;
+                });
+                if (wasBroken) {
+                    isBreakout = true;
+                    breakoutLevelPrice = lvl.price;
+                }
+            }
+        }
+    }
+
+    // 2. Double Pattern on 1H/4H
+    const ohlcDouble = (ohlc1h && ohlc1h.length >= 30) ? ohlc1h : ohlc4h;
+    let hasDoubleTop = false;
+    let hasDoubleBottom = false;
+    if (ohlcDouble && ohlcDouble.length >= 30) {
+        const dbRes = detectDoublePattern(ohlcDouble, atr);
+        hasDoubleTop = dbRes.doubleTop;
+        hasDoubleBottom = dbRes.doubleBottom;
+    }
+
+    // 3. Inside Bar on 15m
+    let hasInsideBar = false;
+    if (ohlc15m && ohlc15m.length >= 2) {
+        const ibRes = detectInsideBar(ohlc15m);
+        hasInsideBar = ibRes.isInside;
+    }
+
+    // 4. Trendline Touch on 1H/4H
+    let trendlineTouched: 'lta' | 'ltb' | null = null;
+    if (ohlcDouble && ohlcDouble.length >= 30) {
+        const tlRes = detectTrendlineTouch(ohlcDouble, atr);
+        if (tlRes.touched === 'lta' && type === 'long') {
+            trendlineTouched = 'lta';
+        } else if (tlRes.touched === 'ltb' && type === 'short') {
+            trendlineTouched = 'ltb';
+        }
+    }
+
+    // --- ABSOLUTE VETOS (Price Action Reversals) ---
+    if (type === 'long' && hasDoubleTop) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO TOPO DUPLO: LONG com Topo Duplo no macro`);
+        return null;
+    }
+    if (type === 'short' && hasDoubleBottom) {
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO FUNDO DUPLO: SHORT com Fundo Duplo no macro`);
+        return null;
+    }
+
     // Aviso se a estrutura contradiz o trend das EMAs (não veta, apenas loga)
     if (structureResult?.direction && structureResult.direction !== type) {
         logger.debug(`[STRUCTURE] ${symbol} ⚠️ Estrutura (${structureResult.direction}) contra EMA trend (${type}) — mantendo EMA como direção`);
@@ -830,6 +931,40 @@ export function generateSignalFromData(
         confluences.push(...structureLabels);
         rawScore += Math.min(structureScore, 2);
     }
+
+    // 10. Bônus de Price Action (Pullback, Topo/Fundo Duplo, Inside Bar, LTA/LTB)
+    let priceActionScore = 0;
+    if (type === 'long' && hasDoubleBottom) {
+        priceActionScore += 1.5;
+        confluences.push('Fundo Duplo Macro +1.5');
+    }
+    if (type === 'short' && hasDoubleTop) {
+        priceActionScore += 1.5;
+        confluences.push('Topo Duplo Macro +1.5');
+    }
+    if (hasInsideBar) {
+        const isNearOB = type === 'long' ? priceInBullishOB : priceInBearishOB;
+        if (isNearOB) {
+            priceActionScore += 1.5;
+            confluences.push('Inside Bar em Order Block +1.5');
+        } else {
+            priceActionScore += 1.0;
+            confluences.push('Inside Bar 15m +1');
+        }
+    }
+    if (trendlineTouched === 'lta' && type === 'long') {
+        priceActionScore += 1.5;
+        confluences.push('Rejeição LTA Macro +1.5');
+    }
+    if (trendlineTouched === 'ltb' && type === 'short') {
+        priceActionScore += 1.5;
+        confluences.push('Rejeição LTB Macro +1.5');
+    }
+    if (pullbackConfirmed) {
+        priceActionScore += 1.5;
+        confluences.push('Pullback Zona Rompida +1.5');
+    }
+    rawScore += Math.min(priceActionScore, 3);
 
     // --- LÓGICA DE APRENDIZADO (INDICATOR LEARNER) ---
     if (indicatorPerf) {
@@ -1061,6 +1196,13 @@ export function generateSignalFromData(
     };
     const mappedTf = tfMap[symConfig.timeframe] || '1h';
 
+    let signalStatus = 'PENDING';
+    if (isBreakout && !pullbackConfirmed) {
+        signalStatus = 'BLOCKED';
+        confluences.push('Veto Breakout Sem Pullback (Bloqueado) ❌');
+        logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO BREAKOUT: Sem Pullback confirmado no 15M`);
+    }
+
     return {
         id: `SWING-${symbol}-${Date.now()}`,
         pair: symbol,
@@ -1076,7 +1218,7 @@ export function generateSignalFromData(
         positionSizePercent: marginPercent,
         riskPercent: accountRiskLevel,
         timeframe: mappedTf,
-        status: 'PENDING',
+        status: signalStatus as any,
         confidence: finalScore,
         createdAt: new Date(),
         indicators: confluences,
@@ -1113,6 +1255,7 @@ export function generateSignalFromData(
 
 async function runSignalCycle(): Promise<void> {
     logger.info('Running signal generation cycle...');
+    klineCache1h4h.clear();
 
     if (Date.now() < enginePausedUntil) {
         logger.info(`[Engine] Pausado temporariamente (Restam ${Math.round((enginePausedUntil - Date.now()) / 60000)} min)`);
@@ -1234,14 +1377,19 @@ async function runSignalCycle(): Promise<void> {
             // Get OHLC data — usa o timeframe calibrado por símbolo
             let ohlc = bybitConnector.getKlineData(symbol);
             if (ohlc.length < 50) {
-                ohlc = await bybitConnector.fetchKlines(symbol, klineInterval, klineLimit);
+                if (klineInterval === '60' || klineInterval === '240') {
+                    ohlc = await fetchKlinesWithCache(symbol, klineInterval, klineLimit);
+                } else {
+                    ohlc = await bybitConnector.fetchKlines(symbol, klineInterval, klineLimit);
+                }
             }
             if (ohlc.length < 50) continue;
 
             logger.debug(`[Engine] ${symbol} usando timeframe=${klineInterval} lookback=${symCfg.lookback} minVol=${symCfg.minVolumeRatio}`);
 
             const ohlc15m = await bybitConnector.fetchKlines(symbol, '15', 50);
-            const ohlc4h  = await bybitConnector.fetchKlines(symbol, '240', 200);
+            const ohlc1h  = await fetchKlinesWithCache(symbol, '60', 100);
+            const ohlc4h  = await fetchKlinesWithCache(symbol, '240', 200);
 
             const ticker = bybitConnector.getTicker(symbol);
             const currentPrice = ticker?.lastPrice || ohlc[ohlc.length - 1].close;
@@ -1271,7 +1419,7 @@ async function runSignalCycle(): Promise<void> {
 
             const signal = generateSignalFromData(
                 symbol, ohlc, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, undefined, perf,
-                stopMultiplierPar, distResistenciaFinal, globalCtx, levelCtx
+                stopMultiplierPar, distResistenciaFinal, globalCtx, levelCtx, ohlc1h
             );
 
             if (signal && signal.quality && signal.quality.score >= 60) {

@@ -26,7 +26,16 @@ import { tradeTracker, getDailyStats, getSymbolStats, hasSymbolLossToday } from 
 import { validateSignalContext, getDailyConfirmation } from './marketContext.js'; // FASE 3
 import { volatilityTracker } from '../services/volatilityTracker.js';
 import { marketContextService } from '../lib/marketContextService.js';
-import { generateStructureSignal, getStructureScore, getStructureConfluences } from './structureEngine.js';
+import {
+    generateStructureSignal,
+    getStructureScore,
+    getStructureConfluences,
+    detectBrokenZonePullback,
+    detectDoublePattern,
+    detectInsideBar,
+    detectTrendlineTouch,
+} from './structureEngine.js';
+import { fetchKlinesWithCache, klineCache1h4h } from './signalEngine.js';
 
 // FASE 3: Apenas pares de alta liquidez para scalping
 const SCALPING_SYMBOLS = config.scalpingSymbols;
@@ -169,7 +178,8 @@ export function generateScalpingSignal(
     low24h: number,
     fundingRate: number,
     indicatorPerf?: Record<string, { winRate: number, avgPnl: number, totalTrades: number }>,
-    btcTrend?: number // [ARB-SCALP #5]
+    btcTrend?: number,
+    ohlc1h?: OHLCPoint[],
 ): TradeSignal | null {
     if (ohlc5m.length < 50) return null;
 
@@ -369,6 +379,89 @@ export function generateScalpingSignal(
         rawScore += Math.min(structureScore5m, 2);
     }
 
+    // --- PRICE ACTION & CONFLUENCE ANALYSIS (Scalping) ---
+    const allLevels = structureResult5m?.allLevels || [];
+
+    // 1. Pullback on 15m
+    let pullbackConfirmed = false;
+    if (ohlc15m && ohlc15m.length >= 20 && allLevels.length > 0) {
+        const pbRes = detectBrokenZonePullback(ohlc15m, allLevels, atr);
+        if (pbRes.isConfirmedPullback && pbRes.direction === type) {
+            pullbackConfirmed = true;
+        }
+    }
+
+    // 2. Double Pattern on 1H
+    let hasDoubleTop = false;
+    let hasDoubleBottom = false;
+    if (ohlc1h && ohlc1h.length >= 30) {
+        const dbRes = detectDoublePattern(ohlc1h, atr);
+        hasDoubleTop = dbRes.doubleTop;
+        hasDoubleBottom = dbRes.doubleBottom;
+    }
+
+    // 3. Inside Bar on 15m
+    let hasInsideBar = false;
+    if (ohlc15m && ohlc15m.length >= 2) {
+        const ibRes = detectInsideBar(ohlc15m);
+        hasInsideBar = ibRes.isInside;
+    }
+
+    // 4. Trendline Touch on 1H
+    let trendlineTouched: 'lta' | 'ltb' | null = null;
+    if (ohlc1h && ohlc1h.length >= 30) {
+        const tlRes = detectTrendlineTouch(ohlc1h, atr);
+        if (tlRes.touched === 'lta' && type === 'long') {
+            trendlineTouched = 'lta';
+        } else if (tlRes.touched === 'ltb' && type === 'short') {
+            trendlineTouched = 'ltb';
+        }
+    }
+
+    // --- ABSOLUTE VETOS (Price Action Reversals) ---
+    if (type === 'long' && hasDoubleTop) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO TOPO DUPLO: LONG com Topo Duplo no macro`);
+        return null;
+    }
+    if (type === 'short' && hasDoubleBottom) {
+        logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO FUNDO DUPLO: SHORT com Fundo Duplo no macro`);
+        return null;
+    }
+
+    // ── Bônus 5: Price Action Scores (Capped em +3) ──
+    let priceActionScore = 0;
+    if (pullbackConfirmed) {
+        priceActionScore += 2.0; // Ajuste #1 do usuário
+        confluences.push('Pullback Confirmado 15m +2');
+    }
+    if (type === 'long' && hasDoubleBottom) {
+        priceActionScore += 1.5;
+        confluences.push('Fundo Duplo Macro +1.5');
+    }
+    if (type === 'short' && hasDoubleTop) {
+        priceActionScore += 1.5;
+        confluences.push('Topo Duplo Macro +1.5');
+    }
+    if (hasInsideBar) {
+        const isNearOB = type === 'long' ? priceInBullishOB : priceInBearishOB;
+        if (isNearOB) {
+            priceActionScore += 1.5;
+            confluences.push('Inside Bar em Order Block +1.5');
+        } else {
+            priceActionScore += 1.0;
+            confluences.push('Inside Bar 15m +1');
+        }
+    }
+    if (trendlineTouched === 'lta' && type === 'long') {
+        priceActionScore += 1.5;
+        confluences.push('Rejeição LTA Macro +1.5');
+    }
+    if (trendlineTouched === 'ltb' && type === 'short') {
+        priceActionScore += 1.5;
+        confluences.push('Rejeição LTB Macro +1.5');
+    }
+    rawScore += Math.min(priceActionScore, 3);
+
     // --- Lógica de Aprendizado de Máquina Dinâmica ---
     // (Bônus/Penalidade baseada na eficácia histórica do indicador, agora ponderado em +/- 1 ponto)
     if (indicatorPerf) {
@@ -528,6 +621,7 @@ export function generateScalpingSignal(
 
 async function runScalpingCycle(): Promise<void> {
     logger.info('[Scalping] Running scalping signal cycle...');
+    klineCache1h4h.clear();
     const globalCtx = await marketContextService.getGlobalContext();
 
     const today = new Date().toDateString();
@@ -647,9 +741,10 @@ async function runScalpingCycle(): Promise<void> {
                 }
             }
 
-            const [ohlc5m, ohlc15m] = await Promise.all([
+            const [ohlc5m, ohlc15m, ohlc1h] = await Promise.all([
                 bybitConnector.fetchKlines(symbol, '5', 100),
                 bybitConnector.fetchKlines(symbol, '15', 50),
+                fetchKlinesWithCache(symbol, '60', 100),
             ]);
 
             if (ohlc5m.length < 50) continue;
@@ -669,7 +764,7 @@ async function runScalpingCycle(): Promise<void> {
                 currentCtx = await marketContextService.getGlobalContext();
             }
 
-            const signal = generateScalpingSignal(symbol, ohlc5m, ohlc15m, currentPrice, high24h, low24h, fundingRate, perf, currentCtx.btcTrend);
+            const signal = generateScalpingSignal(symbol, ohlc5m, ohlc15m, currentPrice, high24h, low24h, fundingRate, perf, currentCtx.btcTrend, ohlc1h);
 
             if (!signal) continue;
 

@@ -447,3 +447,261 @@ export function getStructureScore(result: StructureSignalResult | null): number 
     if (result.level && result.level.touches >= 3) score += 1;
     return Math.min(score, 3);
 }
+
+// ──── Price Action Patterns ────────────────────────────────
+
+export interface SwingPoint {
+    price: number;
+    index: number;
+    kind: 'high' | 'low';
+}
+
+/**
+ * findSwingPoints
+ * Identifica pivôs (topos e fundos) nos dados de candles.
+ */
+export function findSwingPoints(ohlc: OHLCPoint[], windowSize = 3): SwingPoint[] {
+    const swings: SwingPoint[] = [];
+    if (ohlc.length < windowSize * 2 + 1) return swings;
+
+    for (let i = windowSize; i < ohlc.length - windowSize; i++) {
+        const candle = ohlc[i];
+        const leftHighs  = ohlc.slice(i - windowSize, i).map(c => c.high);
+        const rightHighs = ohlc.slice(i + 1, i + 1 + windowSize).map(c => c.high);
+        const leftLows   = ohlc.slice(i - windowSize, i).map(c => c.low);
+        const rightLows  = ohlc.slice(i + 1, i + 1 + windowSize).map(c => c.low);
+
+        if (candle.high > Math.max(...leftHighs) && candle.high > Math.max(...rightHighs)) {
+            swings.push({ price: candle.high, index: i, kind: 'high' });
+        }
+        if (candle.low < Math.min(...leftLows) && candle.low < Math.min(...rightLows)) {
+            swings.push({ price: candle.low, index: i, kind: 'low' });
+        }
+    }
+    return swings;
+}
+
+/**
+ * detectBrokenZonePullback
+ * Detecta se o preço rompeu recentemente uma zona de S/R e depois realizou um pullback
+ * confirmando o teste e rejeitando a zona.
+ */
+export function detectBrokenZonePullback(
+    ohlc: OHLCPoint[],
+    levels: StructureLevel[],
+    atr: number,
+    lookback = 12,
+): { isConfirmedPullback: boolean; direction: 'long' | 'short' | null; levelPrice: number | null } {
+    if (ohlc.length < lookback + 2) return { isConfirmedPullback: false, direction: null, levelPrice: null };
+
+    const tolerance = atr > 0 ? atr * 0.5 : ohlc[ohlc.length - 1].close * 0.002;
+
+    for (const level of levels) {
+        let breakoutIndex = -1;
+        
+        // Procura por um rompimento nos últimos 'lookback' candles (excluindo a vela atual)
+        for (let i = ohlc.length - lookback; i < ohlc.length - 1; i++) {
+            const candle = ohlc[i];
+            const prevCandle = ohlc[i - 1];
+            if (!prevCandle) continue;
+
+            if (level.kind === 'resistance' && prevCandle.close <= level.price && candle.close > level.price) {
+                breakoutIndex = i;
+                break;
+            }
+            if (level.kind === 'support' && prevCandle.close >= level.price && candle.close < level.price) {
+                breakoutIndex = i;
+                break;
+            }
+        }
+
+        if (breakoutIndex !== -1) {
+            let testConfirmed = false;
+            let rejectionConfirmed = false;
+
+            // Verifica as velas após o rompimento até o candle atual
+            for (let j = breakoutIndex + 1; j < ohlc.length; j++) {
+                const candle = ohlc[j];
+                if (level.kind === 'resistance') {
+                    // Teste de pullback na antiga resistência (que agora atua como suporte)
+                    if (candle.low <= level.price + tolerance && candle.low >= level.price - tolerance * 2) {
+                        testConfirmed = true;
+                        if (candle.close > level.price) {
+                            rejectionConfirmed = true;
+                        }
+                    }
+                } else {
+                    // Teste de pullback no antigo suporte (que agora atua como resistência)
+                    if (candle.high >= level.price - tolerance && candle.high <= level.price + tolerance * 2) {
+                        testConfirmed = true;
+                        if (candle.close < level.price) {
+                            rejectionConfirmed = true;
+                        }
+                    }
+                }
+            }
+
+            if (testConfirmed && rejectionConfirmed) {
+                return {
+                    isConfirmedPullback: true,
+                    direction: level.kind === 'resistance' ? 'long' : 'short',
+                    levelPrice: level.price,
+                };
+            }
+        }
+    }
+
+    return { isConfirmedPullback: false, direction: null, levelPrice: null };
+}
+
+/**
+ * detectDoublePattern
+ * Detecta topos e fundos duplos comparando a proximidade dos dois últimos pivôs de alta/baixa.
+ */
+export function detectDoublePattern(
+    ohlc: OHLCPoint[],
+    atr: number,
+): { doubleTop: boolean; doubleBottom: boolean; doubleTopPrice: number | null; doubleBottomPrice: number | null } {
+    const swings = findSwingPoints(ohlc, 2);
+    const highs = swings.filter(s => s.kind === 'high');
+    const lows = swings.filter(s => s.kind === 'low');
+
+    let doubleTop = false;
+    let doubleBottom = false;
+    let doubleTopPrice: number | null = null;
+    let doubleBottomPrice: number | null = null;
+
+    const currentPrice = ohlc[ohlc.length - 1].close;
+    const tolerance = atr > 0 ? atr * 0.8 : currentPrice * 0.005;
+
+    if (lows.length >= 2) {
+        const lastLow = lows[lows.length - 1];
+        const prevLow = lows[lows.length - 2];
+        const indexDiff = lastLow.index - prevLow.index;
+        
+        if (indexDiff >= 5 && indexDiff <= 40 && Math.abs(lastLow.price - prevLow.price) <= tolerance) {
+            if (currentPrice > lastLow.price && (currentPrice - lastLow.price) / lastLow.price < 0.03) {
+                doubleBottom = true;
+                doubleBottomPrice = (lastLow.price + prevLow.price) / 2;
+            }
+        }
+    }
+
+    if (highs.length >= 2) {
+        const lastHigh = highs[highs.length - 1];
+        const prevHigh = highs[highs.length - 2];
+        const indexDiff = lastHigh.index - prevHigh.index;
+
+        if (indexDiff >= 5 && indexDiff <= 40 && Math.abs(lastHigh.price - prevHigh.price) <= tolerance) {
+            if (currentPrice < lastHigh.price && (lastHigh.price - currentPrice) / lastHigh.price < 0.03) {
+                doubleTop = true;
+                doubleTopPrice = (lastHigh.price + prevHigh.price) / 2;
+            }
+        }
+    }
+
+    return { doubleTop, doubleBottom, doubleTopPrice, doubleBottomPrice };
+}
+
+/**
+ * detectInsideBar
+ * Identifica se a última vela está contida inteiramente na variação da vela anterior.
+ */
+export function detectInsideBar(ohlc: OHLCPoint[]): { isInside: boolean; motherHigh: number; motherLow: number } {
+    if (ohlc.length < 2) return { isInside: false, motherHigh: 0, motherLow: 0 };
+    const current = ohlc[ohlc.length - 1];
+    const mother = ohlc[ohlc.length - 2];
+
+    const isInside = current.high <= mother.high && current.low >= mother.low;
+    return { isInside, motherHigh: mother.high, motherLow: mother.low };
+}
+
+/**
+ * detectTrendlineTouch
+ * Conecta os dois últimos pivôs para traçar LTA/LTB e verifica se a vela atual tocou e rejeitou a reta.
+ */
+export function detectTrendlineTouch(
+    ohlc: OHLCPoint[],
+    atr: number,
+): { touched: 'lta' | 'ltb' | null; reason: string } {
+    if (ohlc.length < 30) return { touched: null, reason: 'Dados insuficientes' };
+
+    const swings = findSwingPoints(ohlc, 3);
+    const highs = swings.filter(s => s.kind === 'high');
+    const lows = swings.filter(s => s.kind === 'low');
+    const currentPrice = ohlc[ohlc.length - 1].close;
+    const currentIdx = ohlc.length - 1;
+    const tolerance = atr > 0 ? atr * 0.4 : currentPrice * 0.002;
+
+    // LTA (Linha de Tendência Ascendente)
+    if (lows.length >= 2) {
+        const p2 = lows[lows.length - 1];
+        const p1 = lows[lows.length - 2];
+
+        if (p2.price > p1.price && p2.index - p1.index >= 8) {
+            const m = (p2.price - p1.price) / (p2.index - p1.index);
+            const c = p1.price - m * p1.index;
+            const expectedPrice = m * currentIdx + c;
+
+            let validLine = true;
+            for (let i = p1.index + 1; i < currentIdx; i++) {
+                const priceOnLine = m * i + c;
+                if (ohlc[i].close < priceOnLine - tolerance * 1.5) {
+                    validLine = false;
+                    break;
+                }
+            }
+
+            if (validLine && expectedPrice > 0) {
+                const currentLow = ohlc[currentIdx].low;
+                const currentClose = ohlc[currentIdx].close;
+                const touchedLine = currentLow <= expectedPrice + tolerance && currentLow >= expectedPrice - tolerance * 2;
+                const closedAbove = currentClose > expectedPrice;
+
+                if (touchedLine && closedAbove) {
+                    return {
+                        touched: 'lta',
+                        reason: `Toque na LTA (reta p1=${p1.price.toFixed(4)} @ ${p1.index} -> p2=${p2.price.toFixed(4)} @ ${p2.index}, esperado=${expectedPrice.toFixed(4)})`,
+                    };
+                }
+            }
+        }
+    }
+
+    // LTB (Linha de Tendência Descendente)
+    if (highs.length >= 2) {
+        const p2 = highs[highs.length - 1];
+        const p1 = highs[highs.length - 2];
+
+        if (p2.price < p1.price && p2.index - p1.index >= 8) {
+            const m = (p2.price - p1.price) / (p2.index - p1.index);
+            const c = p1.price - m * p1.index;
+            const expectedPrice = m * currentIdx + c;
+
+            let validLine = true;
+            for (let i = p1.index + 1; i < currentIdx; i++) {
+                const priceOnLine = m * i + c;
+                if (ohlc[i].close > priceOnLine + tolerance * 1.5) {
+                    validLine = false;
+                    break;
+                }
+            }
+
+            if (validLine && expectedPrice > 0) {
+                const currentHigh = ohlc[currentIdx].high;
+                const currentClose = ohlc[currentIdx].close;
+                const touchedLine = currentHigh >= expectedPrice - tolerance && currentHigh <= expectedPrice + tolerance * 2;
+                const closedBelow = currentClose < expectedPrice;
+
+                if (touchedLine && closedBelow) {
+                    return {
+                        touched: 'ltb',
+                        reason: `Toque na LTB (reta p1=${p1.price.toFixed(4)} @ ${p1.index} -> p2=${p2.price.toFixed(4)} @ ${p2.index}, esperado=${expectedPrice.toFixed(4)})`,
+                    };
+                }
+            }
+        }
+    }
+
+    return { touched: null, reason: 'Sem toque em linha de tendência' };
+}

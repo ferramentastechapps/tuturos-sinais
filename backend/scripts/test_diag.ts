@@ -26,7 +26,7 @@ async function test() {
             console.log(`[+] Preço: ${currentPrice} | High: ${high24h} | Low: ${low24h}`);
 
             console.log(`\n---> Testando Scalping Engine (5m)`);
-            const scalp = generateScalpingSignal(symbol, ohlc5m, ohlc15m, currentPrice, high24h, low24h, fundingRate);
+            const scalp = generateScalpingSignal(symbol, ohlc5m, ohlc15m, currentPrice, high24h, low24h, fundingRate, undefined, undefined, ohlc1h);
             if (scalp) {
                 console.log(`🟢 Scalp Signal: ${scalp.type} | Score: ${scalp.confidence} | Status: ${scalp.status}`);
             } else {
@@ -34,7 +34,7 @@ async function test() {
             }
 
             console.log(`\n---> Testando Signal Engine (1h)`);
-            const signal = generateSignalFromData(symbol, ohlc1h, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h);
+            const signal = generateSignalFromData(symbol, ohlc1h, currentPrice, high24h, low24h, volume24h, fundingRate, ohlc15m, ohlc4h, undefined, undefined, 1.0, 0, null, null, ohlc1h);
             if (signal) {
                 console.log(`🟢 1h Signal: ${signal.type} | Score: ${signal.confidence} | Status: ${signal.status}`);
             } else {
