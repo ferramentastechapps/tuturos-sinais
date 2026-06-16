@@ -337,6 +337,32 @@ export default function SignalsGallery() {
                                         </span>
                                     </div>
                                 </div>
+                                {(selectedSignal as any).takeProfit2 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-signal-buy/80">🎯 Alvo 2 (TP2)</span>
+                                        <div className="text-right">
+                                            <span className="text-base font-mono font-semibold text-signal-buy/80">
+                                                {formatCurrency((selectedSignal as any).takeProfit2)}
+                                            </span>
+                                            <span className="text-xs text-signal-buy/60 ml-2">
+                                                +{formatPercentage(Math.abs(((selectedSignal as any).takeProfit2 - selectedSignal.entry) / selectedSignal.entry) * 100)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                                {(selectedSignal as any).takeProfit3 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-amber-400">🚀 Alvo 3 (TP3)</span>
+                                        <div className="text-right">
+                                            <span className="text-base font-mono font-semibold text-amber-400">
+                                                {formatCurrency((selectedSignal as any).takeProfit3)}
+                                            </span>
+                                            <span className="text-xs text-amber-400/60 ml-2">
+                                                +{formatPercentage(Math.abs(((selectedSignal as any).takeProfit3 - selectedSignal.entry) / selectedSignal.entry) * 100)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between pt-1 border-t border-border/50">
                                     <span className="text-sm text-signal-sell">🛡️ Stop Loss</span>
                                     <div className="text-right">

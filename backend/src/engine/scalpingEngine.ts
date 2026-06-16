@@ -189,8 +189,8 @@ export function generateScalpingSignal(
     const vwap = calculateVWAP(ohlc5m.slice(-50));
     const stochRsi = calculateStochRSI(closes5m);
 
-    // // [ARB-SCALP #3] Threshold dinâmico por par — altcoins exigem ADX maior
-    const adxThreshold = symbol === 'BTCUSDT' ? 28 : 32;
+    // // [ARB-SCALP #3] Threshold dinâmico por par — reduzido para gerar mais sinais em mercado lateral
+    const adxThreshold = symbol === 'BTCUSDT' ? 22 : 25;
     if (adx < adxThreshold) {
         logger.debug(`[SCALPING-DIAG] ${symbol} ❌ VETO: ADX=${adx.toFixed(1)} abaixo de ${adxThreshold} para ${symbol}`);
         return null;
@@ -536,9 +536,9 @@ async function runScalpingCycle(): Promise<void> {
         lastDayReset = today;
     }
 
-    // FASE 1: Limite diário reduzido de 8 para 5 (qualidade > quantidade)
-    if (scalpingSignalsToday >= 5) {
-        logger.info('[Scalping] Limite diário de 5 sinais atingido. Aguardando próximo dia.');
+    // FASE 1: Limite diário ampliado para 8 sinais
+    if (scalpingSignalsToday >= 8) {
+        logger.info('[Scalping] Limite diário de 8 sinais atingido. Aguardando próximo dia.');
         return;
     }
 

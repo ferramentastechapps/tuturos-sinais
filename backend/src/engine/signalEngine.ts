@@ -611,9 +611,8 @@ export function generateSignalFromData(
     if (lastEma20 > lastEma50) type = 'long';
     else type = 'short';
 
-    // [ARB-SWING #1] Dynamic ADX Threshold Filter
-    // [BTC-SWING #3] Garantido pelo limiar de 28 para BTCUSDT abaixo
-    const swingAdxThreshold = symbol === 'BTCUSDT' ? 28 : (symbol === 'ARBUSDT' ? 30 : 33);
+    // [ARB-SWING #1] Dynamic ADX Threshold Filter — reduzido para gerar mais sinais em mercado lateral
+    const swingAdxThreshold = symbol === 'BTCUSDT' ? 22 : (symbol === 'ARBUSDT' ? 25 : 25);
     if (adx < swingAdxThreshold) {
         logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO ADX SWING: ${adx.toFixed(1)} < ${swingAdxThreshold}`);
         return null;
@@ -634,19 +633,19 @@ export function generateSignalFromData(
         }
     }
 
-    // [ARB-SWING #2] RSI Momentum Filter
+    // [ARB-SWING #2] RSI Momentum Filter — janela ampliada para reduzir vetos excessivos
     if (symbol !== 'BTCUSDT') {
-        if (type === 'long' && rsi < 48) {
-            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: LONG com RSI ${rsi.toFixed(1)} < 48`);
+        if (type === 'long' && rsi < 44) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: LONG com RSI ${rsi.toFixed(1)} < 44`);
             return null;
         }
-        // [OP-SWING #2] RSI máximo 56 para LONG em altcoin
-        if (type === 'long' && rsi > 56) {
-            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: LONG bloqueado: RSI=${rsi.toFixed(1)} sobrecomprado para altcoin (máx 56)`);
+        // RSI máximo 62 para LONG em altcoin
+        if (type === 'long' && rsi > 62) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: LONG bloqueado: RSI=${rsi.toFixed(1)} sobrecomprado para altcoin (máx 62)`);
             return null;
         }
-        if (type === 'short' && rsi > 52) {
-            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: SHORT com RSI ${rsi.toFixed(1)} > 52`);
+        if (type === 'short' && rsi > 58) {
+            logger.debug(`[SIGNAL-DIAG] ${symbol} ❌ VETO RSI SWING: SHORT com RSI ${rsi.toFixed(1)} > 58`);
             return null;
         }
     }
